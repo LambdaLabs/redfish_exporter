@@ -18,6 +18,7 @@ var (
 	SystemProcessorLabelNames         = []string{"hostname", "resource", "processor", "processor_id"}
 	SystemVolumeLabelNames            = []string{"hostname", "resource", "volume", "volume_id"}
 	SystemDriveLabelNames             = []string{"hostname", "resource", "drive", "drive_id"}
+	SystemDriveControllerMappingLabelNames = []string{"hostname", "drive_id", "drive_name", "storage_controller_id"}
 	SystemStorageControllerLabelNames = []string{"hostname", "resource", "storage_controller", "storage_controller_id"}
 	SystemPCIeDeviceLabelNames        = []string{"hostname", "resource", "pcie_device", "pcie_device_id", "pcie_device_partnumber", "pcie_device_type", "pcie_serial_number"}
 	SystemNetworkInterfaceLabelNames  = []string{"hostname", "resource", "network_interface", "network_interface_id"}
@@ -69,6 +70,8 @@ func createSystemMetricMap() map[string]Metric {
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_drive_state", fmt.Sprintf("system storage drive state,%s", CommonStateHelp), SystemDriveLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_drive_health_state", fmt.Sprintf("system storage drive health state,%s", CommonHealthHelp), SystemDriveLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_drive_capacity", "system storage drive capacity, Bytes", SystemDriveLabelNames)
+	
+	addToMetricMap(systemMetrics, SystemSubsystem, "storage_drive_controller_mapping", "mapping of drives to storage controllers (1 = drive is attached to controller)", SystemDriveControllerMappingLabelNames)
 
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_controller_state", fmt.Sprintf("system storage controller state,%s", CommonStateHelp), SystemStorageControllerLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_controller_health_state", fmt.Sprintf("system storage controller health state,%s", CommonHealthHelp), SystemStorageControllerLabelNames)
@@ -214,12 +217,22 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) {
 			} else if storages == nil {
 				systemLogger.Info("no storage data found", slog.String("operation", "system.Storage()"))
 			} else {
+				// Collect all drive data first to minimize lock contention
+				type driveInfo struct {
+					drive       *redfish.Drive
+					controllerID string
+				}
+				allDrives := []driveInfo{}
+				driveControllerMap := make(map[string][]string) // drive.ID -> []controller.ID
+				
+				// First pass: collect all drives and their relationships
 				for _, storage := range storages {
+					storageID := storage.ID
+					
 					if volumes, err := storage.Volumes(); err != nil {
 						systemLogger.Error("error getting storage data from system", slog.String("operation", "system.Volumes()"), slog.Any("wrror", err))
 					} else {
 						wg3.Add(len(volumes))
-
 						for _, volume := range volumes {
 							go parseVolume(ch, systemHostName, volume, wg3)
 						}
@@ -231,9 +244,31 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) {
 					} else if drives == nil {
 						systemLogger.Info("no drive data found", slog.String("operation", "system.Drives()"), slog.String("storage", storage.ID))
 					} else {
-						wg4.Add(len(drives))
 						for _, drive := range drives {
-							go parseDrive(ch, systemHostName, drive, wg4)
+							allDrives = append(allDrives, driveInfo{drive: drive, controllerID: storageID})
+							driveControllerMap[drive.ID] = append(driveControllerMap[drive.ID], storageID)
+						}
+					}
+				}
+				
+				// Second pass: process all drives concurrently
+				processedDrives := make(map[string]bool)
+				for _, info := range allDrives {
+					// Create mapping metric (no goroutine needed - fast operation)
+					parseDriveControllerMapping(ch, systemHostName, info.drive, info.controllerID)
+					
+					// Only create main metrics once per unique drive
+					if !processedDrives[info.drive.ID] {
+						processedDrives[info.drive.ID] = true
+						wg4.Add(1)
+						go parseDrive(ch, systemHostName, info.drive, wg4)
+						
+						// Log if drive appears in multiple controllers
+						if len(driveControllerMap[info.drive.ID]) > 1 {
+							systemLogger.Info("drive appears in multiple controllers", 
+								slog.String("drive", info.drive.ID), 
+								slog.Int("controller_count", len(driveControllerMap[info.drive.ID])),
+								slog.Any("controllers", driveControllerMap[info.drive.ID]))
 						}
 					}
 				}
@@ -395,6 +430,14 @@ func parseDrive(ch chan<- prometheus.Metric, systemHostName string, drive *redfi
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_drive_health_state"].desc, prometheus.GaugeValue, driveHealthStateValue, systemdriveLabelValues...)
 	}
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_drive_capacity"].desc, prometheus.GaugeValue, float64(driveCapacityBytes), systemdriveLabelValues...)
+}
+
+func parseDriveControllerMapping(ch chan<- prometheus.Metric, systemHostName string, drive *redfish.Drive, storageControllerID string) {
+	driveID := drive.ID
+	driveName := drive.Name
+	mappingLabelValues := []string{systemHostName, driveID, driveName, storageControllerID}
+	// Value is always 1 to indicate the mapping exists
+	ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_drive_controller_mapping"].desc, prometheus.GaugeValue, float64(1), mappingLabelValues...)
 }
 
 func parsePcieDevice(ch chan<- prometheus.Metric, systemHostName string, pcieDevice *redfish.PCIeDevice, wg *sync.WaitGroup) {
