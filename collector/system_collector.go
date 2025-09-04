@@ -7,7 +7,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
-	"github.com/stmcginnis/gofish/common"
 	"github.com/stmcginnis/gofish/redfish"
 )
 
@@ -18,7 +17,7 @@ var (
 	SystemMemoryLabelNames            = []string{"hostname", "resource", "memory", "memory_id"}
 	SystemProcessorLabelNames         = []string{"hostname", "resource", "processor", "processor_id"}
 	SystemVolumeLabelNames            = []string{"hostname", "resource", "volume", "volume_id"}
-	SystemDriveLabelNames             = []string{"hostname", "resource", "drive", "drive_id"}
+	SystemDriveLabelNames             = []string{"hostname", "resource", "drive", "drive_id", "storage_controller_id"}
 	SystemDriveControllerMappingLabelNames = []string{"hostname", "drive_id", "drive_name", "storage_controller_id"}
 	SystemStorageControllerLabelNames = []string{"hostname", "resource", "storage_controller", "storage_controller_id"}
 	SystemPCIeDeviceLabelNames        = []string{"hostname", "resource", "pcie_device", "pcie_device_id", "pcie_device_partnumber", "pcie_device_type", "pcie_serial_number"}
@@ -226,10 +225,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) {
 				allDrives := []driveInfo{}
 				driveControllerMap := make(map[string][]string) // drive.ID -> []controller.ID
 				
-				// Track worst status for each drive (in case of disagreement between controllers)
-				worstDriveStatus := make(map[string]*redfish.Drive) // drive.ID -> drive with worst status
-				
-				// First pass: collect all drives and their relationships
+				// Collect all drives and their relationships
 				for _, storage := range storages {
 					storageID := storage.ID
 					
@@ -251,42 +247,29 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) {
 						for _, drive := range drives {
 							allDrives = append(allDrives, driveInfo{drive: drive, controllerID: storageID})
 							driveControllerMap[drive.ID] = append(driveControllerMap[drive.ID], storageID)
-							
-							// Track the worst status for each drive
-							if existing, exists := worstDriveStatus[drive.ID]; exists {
-								// Compare and keep the worst status
-								if isWorseStatus(drive.Status, existing.Status) {
-									worstDriveStatus[drive.ID] = drive
-									systemLogger.Info("drive health differs between controllers, using worst", 
-										slog.String("drive", drive.ID),
-										slog.String("worst_health", string(drive.Status.Health)),
-										slog.String("worst_state", string(drive.Status.State)),
-										slog.String("controller", storageID))
-								}
-							} else {
-								worstDriveStatus[drive.ID] = drive
-							}
 						}
 					}
 				}
 				
-				// Second pass: process all drives with worst status
+				// Process all drive+controller combinations
 				for _, info := range allDrives {
 					// Create mapping metric (no goroutine needed - fast operation)
 					parseDriveControllerMapping(ch, systemHostName, info.drive, info.controllerID)
 				}
 				
-				// Process unique drives with their worst status
-				for driveID, worstDrive := range worstDriveStatus {
+				// Process ALL drive+controller combinations (no deduplication)
+				for _, info := range allDrives {
 					wg4.Add(1)
-					go parseDrive(ch, systemHostName, worstDrive, wg4)
-					
-					// Log if drive appears in multiple controllers
-					if len(driveControllerMap[driveID]) > 1 {
+					go parseDrive(ch, systemHostName, info.drive, info.controllerID, wg4)
+				}
+				
+				// Log drives that appear in multiple controllers
+				for driveID, controllers := range driveControllerMap {
+					if len(controllers) > 1 {
 						systemLogger.Info("drive appears in multiple controllers", 
 							slog.String("drive", driveID), 
-							slog.Int("controller_count", len(driveControllerMap[driveID])),
-							slog.Any("controllers", driveControllerMap[driveID]))
+							slog.Int("controller_count", len(controllers)),
+							slog.Any("controllers", controllers))
 					}
 				}
 			}
@@ -432,14 +415,14 @@ func parseVolume(ch chan<- prometheus.Metric, systemHostName string, volume *red
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_volume_capacity"].desc, prometheus.GaugeValue, float64(volumeCapacityBytes), systemVolumeLabelValues...)
 }
 
-func parseDrive(ch chan<- prometheus.Metric, systemHostName string, drive *redfish.Drive, wg *sync.WaitGroup) {
+func parseDrive(ch chan<- prometheus.Metric, systemHostName string, drive *redfish.Drive, storageControllerID string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	driveName := drive.Name
 	driveID := drive.ID
 	driveCapacityBytes := drive.CapacityBytes
 	driveState := drive.Status.State
 	driveHealthState := drive.Status.Health
-	systemdriveLabelValues := []string{systemHostName, "drive", driveName, driveID}
+	systemdriveLabelValues := []string{systemHostName, "drive", driveName, driveID, storageControllerID}
 	if driveStateValue, ok := parseCommonStatusState(driveState); ok {
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_drive_state"].desc, prometheus.GaugeValue, driveStateValue, systemdriveLabelValues...)
 	}
@@ -457,54 +440,6 @@ func parseDriveControllerMapping(ch chan<- prometheus.Metric, systemHostName str
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_drive_controller_mapping"].desc, prometheus.GaugeValue, float64(1), mappingLabelValues...)
 }
 
-// isWorseStatus compares two drive statuses and returns true if newStatus is worse than currentStatus
-func isWorseStatus(newStatus, currentStatus common.Status) bool {
-	// First compare health (Critical > Warning > OK > empty/unknown)
-	newHealth := getHealthPriority(newStatus.Health)
-	currentHealth := getHealthPriority(currentStatus.Health)
-	
-	if newHealth > currentHealth {
-		return true
-	} else if newHealth < currentHealth {
-		return false
-	}
-	
-	// If health is the same, compare state (higher value = worse)
-	newState := getStatePriority(newStatus.State)
-	currentState := getStatePriority(currentStatus.State)
-	
-	return newState > currentState
-}
-
-// getHealthPriority returns a priority value for health status (higher = worse)
-func getHealthPriority(health common.Health) int {
-	switch string(health) {
-	case "Critical":
-		return 3
-	case "Warning":
-		return 2
-	case "OK":
-		return 1
-	default:
-		return 0 // Unknown/empty is lowest priority
-	}
-}
-
-// getStatePriority returns a priority value for state (higher = worse)  
-func getStatePriority(state common.State) int {
-	switch string(state) {
-	case "Absent":
-		return 4
-	case "Disabled":
-		return 3
-	case "StandbyOffline", "StandbySpare":
-		return 2
-	case "Enabled":
-		return 1
-	default:
-		return 0 // Unknown/empty is lowest priority
-	}
-}
 
 func parsePcieDevice(ch chan<- prometheus.Metric, systemHostName string, pcieDevice *redfish.PCIeDevice, wg *sync.WaitGroup) {
 	defer wg.Done()

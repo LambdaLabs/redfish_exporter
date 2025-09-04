@@ -13,64 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// isWorseTestStatus replicates the isWorseStatus logic for testing
-func isWorseTestStatus(a, b common.Status) bool {
-	// Compare health first
-	healthA := getTestHealthPriority(a.Health)
-	healthB := getTestHealthPriority(b.Health)
-	if healthA > healthB {
-		return true
-	}
-	if healthA < healthB {
-		return false
-	}
-	
-	// If health is the same, compare state
-	stateA := getTestStatePriority(a.State)
-	stateB := getTestStatePriority(b.State)
-	return stateA > stateB
-}
-
-func getTestHealthPriority(health common.Health) int {
-	switch string(health) {
-	case "Critical":
-		return 3
-	case "Warning":
-		return 2
-	case "OK":
-		return 1
-	default:
-		return 0
-	}
-}
-
-func getTestStatePriority(state common.State) int {
-	switch string(state) {
-	case "Absent":
-		return 10
-	case "UnavailableOffline":
-		return 9
-	case "Disabled":
-		return 8
-	case "Updating":
-		return 7
-	case "InTest":
-		return 6
-	case "Starting":
-		return 5
-	case "Deferring":
-		return 4
-	case "Quiesced":
-		return 3
-	case "StandbyOffinline", "StandbySpare":
-		return 2
-	case "Enabled":
-		return 1
-	default:
-		return 0
-	}
-}
-
 // TestParseDriveControllerMapping tests the drive-to-controller mapping metric creation
 func TestParseDriveControllerMapping(t *testing.T) {
 	ch := make(chan prometheus.Metric, 10)
@@ -106,7 +48,7 @@ func TestParseDriveControllerMapping(t *testing.T) {
 	assert.Equal(t, float64(1), metricDTO.Gauge.GetValue())
 }
 
-// TestDriveMetrics tests drive metric generation and deduplication
+// TestDriveMetrics tests drive metric generation with controller dimension
 func TestDriveMetrics(t *testing.T) {
 	// Define metric value mappings
 	stateEnabled := float64(1)
@@ -145,7 +87,7 @@ func TestDriveMetrics(t *testing.T) {
 			wantMappings: 1,
 			wantMetrics:  3,
 			wantValues: map[string]driveMetrics{
-				"Disk.Bay.0": {capacity: 1000000000000, state: stateEnabled, health: healthOK},
+				"Disk.Bay.0:RAID.Slot.1": {capacity: 1000000000000, state: stateEnabled, health: healthOK},
 			},
 		},
 		{
@@ -155,46 +97,51 @@ func TestDriveMetrics(t *testing.T) {
 				{driveID: "Disk.Bay.0", driveName: "Drive 0", controllerID: "RAID.Slot.2", capacity: 1000000000000, state: "Enabled", health: "OK"},
 			},
 			wantMappings: 2,
-			wantMetrics:  3,
+			wantMetrics:  6, // 3 metrics × 2 controllers
 			wantValues: map[string]driveMetrics{
-				"Disk.Bay.0": {capacity: 1000000000000, state: stateEnabled, health: healthOK},
+				"Disk.Bay.0:RAID.Slot.1": {capacity: 1000000000000, state: stateEnabled, health: healthOK},
+				"Disk.Bay.0:RAID.Slot.2": {capacity: 1000000000000, state: stateEnabled, health: healthOK},
 			},
 		},
 		{
-			name: "duplicate drive - worst health selected (Warning over OK)",
+			name: "duplicate drive - different health per controller",
 			drives: []driveScenario{
 				{driveID: "Disk.Bay.1", driveName: "Drive 1", controllerID: "RAID.Slot.1", capacity: 2000000000000, state: "Enabled", health: "OK"},
 				{driveID: "Disk.Bay.1", driveName: "Drive 1", controllerID: "RAID.Slot.2", capacity: 2000000000000, state: "Enabled", health: "Warning"},
 			},
 			wantMappings: 2,
-			wantMetrics:  3,
+			wantMetrics:  6, // 3 metrics × 2 controllers
 			wantValues: map[string]driveMetrics{
-				"Disk.Bay.1": {capacity: 2000000000000, state: stateEnabled, health: healthWarning},
+				"Disk.Bay.1:RAID.Slot.1": {capacity: 2000000000000, state: stateEnabled, health: healthOK},
+				"Disk.Bay.1:RAID.Slot.2": {capacity: 2000000000000, state: stateEnabled, health: healthWarning},
 			},
 		},
 		{
-			name: "duplicate drive - worst health selected (Critical over Warning)",
+			name: "duplicate drive - different health across three controllers",
 			drives: []driveScenario{
 				{driveID: "Disk.Bay.2", driveName: "Drive 2", controllerID: "RAID.Slot.1", capacity: 3000000000000, state: "Enabled", health: "Warning"},
 				{driveID: "Disk.Bay.2", driveName: "Drive 2", controllerID: "RAID.Slot.2", capacity: 3000000000000, state: "Enabled", health: "Critical"},
 				{driveID: "Disk.Bay.2", driveName: "Drive 2", controllerID: "RAID.Slot.3", capacity: 3000000000000, state: "Enabled", health: "OK"},
 			},
 			wantMappings: 3,
-			wantMetrics:  3,
+			wantMetrics:  9, // 3 metrics × 3 controllers
 			wantValues: map[string]driveMetrics{
-				"Disk.Bay.2": {capacity: 3000000000000, state: stateEnabled, health: healthCritical},
+				"Disk.Bay.2:RAID.Slot.1": {capacity: 3000000000000, state: stateEnabled, health: healthWarning},
+				"Disk.Bay.2:RAID.Slot.2": {capacity: 3000000000000, state: stateEnabled, health: healthCritical},
+				"Disk.Bay.2:RAID.Slot.3": {capacity: 3000000000000, state: stateEnabled, health: healthOK},
 			},
 		},
 		{
-			name: "duplicate drive - worst state selected (Disabled over Enabled)",
+			name: "duplicate drive - different state per controller",
 			drives: []driveScenario{
 				{driveID: "Disk.Bay.3", driveName: "Drive 3", controllerID: "RAID.Slot.1", capacity: 4000000000000, state: "Enabled", health: "OK"},
 				{driveID: "Disk.Bay.3", driveName: "Drive 3", controllerID: "RAID.Slot.2", capacity: 4000000000000, state: "Disabled", health: "OK"},
 			},
 			wantMappings: 2,
-			wantMetrics:  3,
+			wantMetrics:  6, // 3 metrics × 2 controllers
 			wantValues: map[string]driveMetrics{
-				"Disk.Bay.3": {capacity: 4000000000000, state: stateDisabled, health: healthOK},
+				"Disk.Bay.3:RAID.Slot.1": {capacity: 4000000000000, state: stateEnabled, health: healthOK},
+				"Disk.Bay.3:RAID.Slot.2": {capacity: 4000000000000, state: stateDisabled, health: healthOK},
 			},
 		},
 		{
@@ -207,9 +154,9 @@ func TestDriveMetrics(t *testing.T) {
 			wantMappings: 3,
 			wantMetrics:  9,
 			wantValues: map[string]driveMetrics{
-				"Disk.Bay.0": {capacity: 1000000000000, state: stateEnabled, health: healthOK},
-				"Disk.Bay.1": {capacity: 2000000000000, state: stateEnabled, health: healthWarning},
-				"Disk.Bay.2": {capacity: 500000000000, state: stateDisabled, health: healthCritical},
+				"Disk.Bay.0:RAID.Slot.1": {capacity: 1000000000000, state: stateEnabled, health: healthOK},
+				"Disk.Bay.1:RAID.Slot.1": {capacity: 2000000000000, state: stateEnabled, health: healthWarning},
+				"Disk.Bay.2:RAID.Slot.2": {capacity: 500000000000, state: stateDisabled, health: healthCritical},
 			},
 		},
 	}
@@ -219,10 +166,7 @@ func TestDriveMetrics(t *testing.T) {
 			ch := make(chan prometheus.Metric, 100)
 			wg := &sync.WaitGroup{}
 
-			// Simulate the worst-case selection logic from system_collector.go
-			worstDriveStatus := make(map[string]*redfish.Drive)
-			
-			// First pass: collect all drives and track worst status
+			// Process all drive+controller combinations
 			for _, d := range tt.drives {
 				drive := &redfish.Drive{
 					Entity: common.Entity{
@@ -236,21 +180,12 @@ func TestDriveMetrics(t *testing.T) {
 					},
 				}
 
-				// Create mapping metric for each occurrence
+				// Create mapping metric
 				parseDriveControllerMapping(ch, "test-host", drive, d.controllerID)
 
-				// Track worst status for each unique drive
-				if existing, exists := worstDriveStatus[d.driveID]; !exists {
-					worstDriveStatus[d.driveID] = drive
-				} else if isWorseTestStatus(drive.Status, existing.Status) {
-					worstDriveStatus[d.driveID] = drive
-				}
-			}
-
-			// Second pass: emit metrics only for unique drives with worst status
-			for _, drive := range worstDriveStatus {
+				// Create drive metrics with controller ID
 				wg.Add(1)
-				go parseDrive(ch, "test-host", drive, wg)
+				go parseDrive(ch, "test-host", drive, d.controllerID, wg)
 			}
 			wg.Wait()
 
@@ -271,23 +206,27 @@ func TestDriveMetrics(t *testing.T) {
 				} else if strings.Contains(desc, "drive") {
 					driveMetricCount++
 
-					// Get drive ID from labels
-					var driveID string
+					// Get drive ID and controller ID from labels
+					var driveID, controllerID string
 					for _, label := range metricDTO.GetLabel() {
 						if *label.Name == "drive_id" {
 							driveID = *label.Value
-							break
+						} else if *label.Name == "storage_controller_id" {
+							controllerID = *label.Value
 						}
 					}
 
-					// Initialize metrics for drive if needed
-					if _, exists := actualValues[driveID]; !exists {
-						actualValues[driveID] = driveMetrics{}
+					// Create composite key for drive+controller
+					key := driveID + ":" + controllerID
+
+					// Initialize metrics for drive+controller if needed
+					if _, exists := actualValues[key]; !exists {
+						actualValues[key] = driveMetrics{}
 					}
 
 					// Store metric value by type
 					value := metricDTO.Gauge.GetValue()
-					metrics := actualValues[driveID]
+					metrics := actualValues[key]
 					if strings.Contains(desc, "drive_capacity") {
 						metrics.capacity = value
 					} else if strings.Contains(desc, "drive_state") {
@@ -295,7 +234,7 @@ func TestDriveMetrics(t *testing.T) {
 					} else if strings.Contains(desc, "drive_health_state") {
 						metrics.health = value
 					}
-					actualValues[driveID] = metrics
+					actualValues[key] = metrics
 				}
 			}
 
@@ -304,11 +243,11 @@ func TestDriveMetrics(t *testing.T) {
 			assert.Equal(t, tt.wantMetrics, driveMetricCount)
 
 			// Validate all metrics
-			for driveID, want := range tt.wantValues {
-				actual := actualValues[driveID]
-				assert.Equal(t, want.capacity, actual.capacity, "Drive %s capacity", driveID)
-				assert.Equal(t, want.state, actual.state, "Drive %s state", driveID)
-				assert.Equal(t, want.health, actual.health, "Drive %s health", driveID)
+			for key, want := range tt.wantValues {
+				actual := actualValues[key]
+				assert.Equal(t, want.capacity, actual.capacity, "Drive+Controller %s capacity", key)
+				assert.Equal(t, want.state, actual.state, "Drive+Controller %s state", key)
+				assert.Equal(t, want.health, actual.health, "Drive+Controller %s health", key)
 			}
 		})
 	}
