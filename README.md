@@ -32,6 +32,8 @@ To build the redfish_exporter executable run the command:
 
 ```sh
 go build
+# or
+make build
 ```
 
 There is also a Docker image available. The production build is handled by [gorelaser](https://goreleaser.com/) in order to build for multiple platforms.
@@ -107,6 +109,33 @@ You can then setup Prometheus to scrape the target using something like this in 
 
 Note that port 9610 has been [reserved][4] for the redfish_exporter.
 
+## Testing and Development
+
+### Mock Server
+
+We provide a mock Redfish server for testing the exporter without requiring actual hardware:
+
+```sh
+# Test with specific captured data
+make mock-test TESTDATA=my_system/capture.txt
+```
+
+This starts both a mock Redfish server (with HTTP and HTTPS support) and the exporter configured to scrape it.
+
+### Capturing Real Hardware Data
+
+To capture data from real hardware for testing:
+
+```sh
+# Capture Redfish responses from a BMC
+make capture HOST=10.0.0.100 USER=admin PASS=password OUTPUT=my_system
+
+# Then test with the captured data
+make mock-test TESTDATA=my_system/capture.txt
+```
+
+See `tools/mock-server/README.md` and `tools/capture/README.md` for detailed documentation.
+
 ## Supported Devices (tested)
 
 Prior to the fork (should also work now):
@@ -121,6 +150,7 @@ Prior to the fork (should also work now):
 Since the fork:
 
 - GIGABYTE R263-Z32 (AMI MegaRAC SP-X)
+- NVIDIA GB200 NVL
 
 ## Why a Fork?
 
