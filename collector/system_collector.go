@@ -215,15 +215,6 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) {
 			} else if storages == nil {
 				systemLogger.Info("no storage data found", slog.String("operation", "system.Storage()"))
 			} else {
-				// Collect all drive data first to minimize lock contention
-				type driveInfo struct {
-					drive       *redfish.Drive
-					controllerID string
-				}
-				allDrives := []driveInfo{}
-				driveControllerMap := make(map[string][]string) // drive.ID -> []controller.ID
-				
-				// Collect all drives and their relationships
 				for _, storage := range storages {
 					storageID := storage.ID
 					
@@ -242,26 +233,10 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) {
 					} else if drives == nil {
 						systemLogger.Info("no drive data found", slog.String("operation", "system.Drives()"), slog.String("storage", storage.ID))
 					} else {
+						wg4.Add(len(drives))
 						for _, drive := range drives {
-							allDrives = append(allDrives, driveInfo{drive: drive, controllerID: storageID})
-							driveControllerMap[drive.ID] = append(driveControllerMap[drive.ID], storageID)
+							go parseDrive(ch, systemHostName, drive, storageID, wg4)
 						}
-					}
-				}
-				
-				// Process all drive+controller combinations
-				for _, info := range allDrives {
-					wg4.Add(1)
-					go parseDrive(ch, systemHostName, info.drive, info.controllerID, wg4)
-				}
-				
-				// Log drives that appear in multiple controllers
-				for driveID, controllers := range driveControllerMap {
-					if len(controllers) > 1 {
-						systemLogger.Info("drive appears in multiple controllers", 
-							slog.String("drive", driveID), 
-							slog.Int("controller_count", len(controllers)),
-							slog.Any("controllers", controllers))
 					}
 				}
 			}
