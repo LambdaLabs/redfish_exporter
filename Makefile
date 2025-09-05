@@ -40,10 +40,11 @@ capture:
 		echo "Usage: make capture HOST=<bmc-ip> USER=<username> PASS=<password> OUTPUT=<name>"; \
 		echo ""; \
 		echo "Optional parameters:"; \
-		echo "  TIMEOUT=30s      - Request timeout (default: 10s)"; \
-		echo "  SLEEP=100        - Sleep between requests in ms (default: 0)"; \
-		echo "  MAX=100          - Max endpoints to capture (default: unlimited)"; \
-		echo "  INSECURE=false   - Skip TLS verification (default: true)"; \
+		echo "  TIMEOUT=30s            - Request timeout (default: 10s)"; \
+		echo "  SLEEP=100              - Sleep between requests in ms (default: 0)"; \
+		echo "  MAX=100                - Max endpoints to capture (default: unlimited)"; \
+		echo "  INSECURE=false         - Skip TLS verification (default: true)"; \
+		echo "  SKIP_PATHS=Actions,Logs - Comma-separated paths to skip (default: Actions)"; \
 		exit 1; \
 	fi
 	@echo "Building capture tool..."
@@ -57,7 +58,8 @@ capture:
 		$(if $(TIMEOUT),-timeout $(TIMEOUT)) \
 		$(if $(SLEEP),-sleep $(SLEEP)) \
 		$(if $(MAX),-max $(MAX)) \
-		$(if $(filter false,$(INSECURE)),-insecure=false)
+		$(if $(filter false,$(INSECURE)),-insecure=false) \
+		$(if $(SKIP_PATHS),-skipPaths "$(SKIP_PATHS)")
 	@echo ""
 	@echo "Capture complete! To test with mock server:"
 	@echo "  make mock-test TESTDATA=$(OUTPUT)/capture.txt"

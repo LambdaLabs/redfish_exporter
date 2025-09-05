@@ -29,6 +29,10 @@ go build -o capture main.go
 
 # Capture only first 100 endpoints (useful for testing)
 ./capture -host 10.0.0.100 -user admin -pass secret -output test_system -max 100
+
+# Skip additional paths besides Actions
+./capture -host 10.0.0.100 -user admin -pass secret -output clean_system \
+  -skipPaths "Actions,Logs,Events"
 ```
 
 ## Command-line Options
@@ -43,6 +47,7 @@ go build -o capture main.go
 | `-timeout` | Per-request timeout | 10s |
 | `-sleep` | Sleep between requests in milliseconds | 0 |
 | `-max` | Maximum number of endpoints to capture (0 = unlimited) | 0 |
+| `-skipPaths` | Comma-separated list of path substrings to skip | Actions |
 
 ## Output
 
@@ -73,7 +78,7 @@ The format is compatible with the mock server:
 3. **Crawling**: Uses depth-first search to explore the Redfish tree
 4. **Link Extraction**: Finds all `@odata.id` references in JSON responses
 5. **Filtering**:
-   - Skips `/Actions/` endpoints (POST-only)
+   - Skips configurable paths (default: `/Actions/` endpoints which are POST-only)
    - Stays on the same host
    - Avoids duplicate visits
 

@@ -24,6 +24,7 @@ type Capture struct {
 	stack       []string
 	maxDocs     int
 	sleepMs     int
+	skipPaths   []string
 	outputFile  *os.File
 	count       int
 	startTime   time.Time
@@ -31,14 +32,15 @@ type Capture struct {
 
 func main() {
 	var (
-		host     = flag.String("host", "", "BMC host or IP address (required)")
-		username = flag.String("user", "", "Username (required)")
-		password = flag.String("pass", "", "Password (required)")
-		output   = flag.String("output", "", "Output directory name under testdata/ (required)")
-		insecure = flag.Bool("insecure", true, "Skip TLS certificate verification")
-		timeout  = flag.Duration("timeout", 10*time.Second, "Per-request timeout")
-		sleepMs  = flag.Int("sleep", 0, "Sleep between requests in milliseconds")
-		maxDocs  = flag.Int("max", 0, "Maximum number of documents to fetch (0 = unlimited)")
+		host      = flag.String("host", "", "BMC host or IP address (required)")
+		username  = flag.String("user", "", "Username (required)")
+		password  = flag.String("pass", "", "Password (required)")
+		output    = flag.String("output", "", "Output directory name under testdata/ (required)")
+		insecure  = flag.Bool("insecure", true, "Skip TLS certificate verification")
+		timeout   = flag.Duration("timeout", 10*time.Second, "Per-request timeout")
+		sleepMs   = flag.Int("sleep", 0, "Sleep between requests in milliseconds")
+		maxDocs   = flag.Int("max", 0, "Maximum number of documents to fetch (0 = unlimited)")
+		skipPaths = flag.String("skipPaths", "Actions", "Comma-separated list of path substrings to skip (default: Actions)")
 	)
 	flag.Parse()
 
@@ -83,6 +85,17 @@ func main() {
 		Timeout:   *timeout,
 	}
 
+	// Parse skip paths
+	var skipPathsList []string
+	if *skipPaths != "" {
+		for _, path := range strings.Split(*skipPaths, ",") {
+			trimmed := strings.TrimSpace(path)
+			if trimmed != "" {
+				skipPathsList = append(skipPathsList, trimmed)
+			}
+		}
+	}
+
 	// Create capture instance
 	c := &Capture{
 		client:     client,
@@ -92,6 +105,7 @@ func main() {
 		stack:      []string{baseURL},
 		maxDocs:    *maxDocs,
 		sleepMs:    *sleepMs,
+		skipPaths:  skipPathsList,
 		outputFile: outputFile,
 		startTime:  time.Now(),
 	}
@@ -148,8 +162,8 @@ func (c *Capture) crawl() {
 		c.visited[url] = true
 		c.visitedMu.Unlock()
 
-		// Skip action endpoints
-		if strings.Contains(url, "/Actions/") {
+		// Skip paths based on skipPaths list
+		if c.shouldSkipURL(url) {
 			continue
 		}
 
@@ -187,7 +201,7 @@ func (c *Capture) crawl() {
 			alreadyVisited := c.visited[absURL]
 			c.visitedMu.Unlock()
 			
-			if !alreadyVisited && c.sameHost(absURL) && !strings.Contains(absURL, "/Actions/") {
+			if !alreadyVisited && c.sameHost(absURL) && !c.shouldSkipURL(absURL) {
 				c.stack = append(c.stack, absURL)
 			}
 		}
@@ -276,4 +290,13 @@ func (c *Capture) sameHost(urlStr string) bool {
 	}
 	
 	return baseURL.Host == checkURL.Host
+}
+
+func (c *Capture) shouldSkipURL(urlStr string) bool {
+	for _, skipPath := range c.skipPaths {
+		if strings.Contains(urlStr, "/"+skipPath+"/") {
+			return true
+		}
+	}
+	return false
 }
