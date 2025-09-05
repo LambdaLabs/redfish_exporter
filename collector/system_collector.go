@@ -17,7 +17,7 @@ var (
 	SystemMemoryLabelNames            = []string{"hostname", "resource", "memory", "memory_id"}
 	SystemProcessorLabelNames         = []string{"hostname", "resource", "processor", "processor_id"}
 	SystemVolumeLabelNames            = []string{"hostname", "resource", "volume", "volume_id"}
-	SystemDriveLabelNames             = []string{"hostname", "resource", "drive", "drive_id"}
+	SystemDriveLabelNames             = []string{"hostname", "resource", "drive", "drive_id", "storage_controller_id"}
 	SystemStorageControllerLabelNames = []string{"hostname", "resource", "storage_controller", "storage_controller_id"}
 	SystemPCIeDeviceLabelNames        = []string{"hostname", "resource", "pcie_device", "pcie_device_id", "pcie_device_partnumber", "pcie_device_type", "pcie_serial_number"}
 	SystemNetworkInterfaceLabelNames  = []string{"hostname", "resource", "network_interface", "network_interface_id"}
@@ -69,6 +69,7 @@ func createSystemMetricMap() map[string]Metric {
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_drive_state", fmt.Sprintf("system storage drive state,%s", CommonStateHelp), SystemDriveLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_drive_health_state", fmt.Sprintf("system storage drive health state,%s", CommonHealthHelp), SystemDriveLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_drive_capacity", "system storage drive capacity, Bytes", SystemDriveLabelNames)
+	
 
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_controller_state", fmt.Sprintf("system storage controller state,%s", CommonStateHelp), SystemStorageControllerLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_controller_health_state", fmt.Sprintf("system storage controller health state,%s", CommonHealthHelp), SystemStorageControllerLabelNames)
@@ -215,11 +216,12 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) {
 				systemLogger.Info("no storage data found", slog.String("operation", "system.Storage()"))
 			} else {
 				for _, storage := range storages {
+					storageID := storage.ID
+					
 					if volumes, err := storage.Volumes(); err != nil {
 						systemLogger.Error("error getting storage data from system", slog.String("operation", "system.Volumes()"), slog.Any("wrror", err))
 					} else {
 						wg3.Add(len(volumes))
-
 						for _, volume := range volumes {
 							go parseVolume(ch, systemHostName, volume, wg3)
 						}
@@ -233,7 +235,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) {
 					} else {
 						wg4.Add(len(drives))
 						for _, drive := range drives {
-							go parseDrive(ch, systemHostName, drive, wg4)
+							go parseDrive(ch, systemHostName, drive, storageID, wg4)
 						}
 					}
 				}
@@ -380,14 +382,14 @@ func parseVolume(ch chan<- prometheus.Metric, systemHostName string, volume *red
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_volume_capacity"].desc, prometheus.GaugeValue, float64(volumeCapacityBytes), systemVolumeLabelValues...)
 }
 
-func parseDrive(ch chan<- prometheus.Metric, systemHostName string, drive *redfish.Drive, wg *sync.WaitGroup) {
+func parseDrive(ch chan<- prometheus.Metric, systemHostName string, drive *redfish.Drive, storageControllerID string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	driveName := drive.Name
 	driveID := drive.ID
 	driveCapacityBytes := drive.CapacityBytes
 	driveState := drive.Status.State
 	driveHealthState := drive.Status.Health
-	systemdriveLabelValues := []string{systemHostName, "drive", driveName, driveID}
+	systemdriveLabelValues := []string{systemHostName, "drive", driveName, driveID, storageControllerID}
 	if driveStateValue, ok := parseCommonStatusState(driveState); ok {
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_drive_state"].desc, prometheus.GaugeValue, driveStateValue, systemdriveLabelValues...)
 	}
@@ -396,6 +398,8 @@ func parseDrive(ch chan<- prometheus.Metric, systemHostName string, drive *redfi
 	}
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_drive_capacity"].desc, prometheus.GaugeValue, float64(driveCapacityBytes), systemdriveLabelValues...)
 }
+
+
 
 func parsePcieDevice(ch chan<- prometheus.Metric, systemHostName string, pcieDevice *redfish.PCIeDevice, wg *sync.WaitGroup) {
 	defer wg.Done()
