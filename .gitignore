@@ -27,3 +27,12 @@ config.yml
 node_modules/
 package.json
 package-lock.json
+
+# Mock server test data
+tools/mock-server/testdata/
+tools/mock-server/server.crt
+tools/mock-server/server.key
+tools/mock-server/exporter-config.yml
+
+# Capture binary
+tools/capture/capture

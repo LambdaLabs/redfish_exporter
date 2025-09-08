@@ -1,0 +1,6 @@
+# Authentication configuration for mock Redfish server
+# This file defines user accounts for Basic Auth and Session-based authentication
+
+users:
+  - username: admin
+    password: password
