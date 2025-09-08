@@ -32,7 +32,7 @@ func NewGPUCollector(rfClient *gofish.APIClient, logger *slog.Logger) *GPUCollec
 	return &GPUCollector{
 		rfClient: rfClient,
 		metrics:  gpuMetrics,
-		logger:   logger.With(slog.String("collecto", "GPUCollector")),
+		logger:   logger.With(slog.String("collector", "GPUCollector")),
 		collectorScrapeStatus: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Namespace: namespace,
