@@ -150,7 +150,6 @@ Prior to the fork (should also work now):
 Since the fork:
 
 - GIGABYTE R263-Z32 (AMI MegaRAC SP-X)
-- NVIDIA GB200 NVL
 
 ## Why a Fork?
 
