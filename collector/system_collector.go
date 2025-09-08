@@ -382,7 +382,7 @@ func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processo
 	// Fetch and emit ProcessorMetrics if available
 	processorMetrics, err := processor.Metrics()
 	if err != nil {
-		logger.Debug("error getting processor metrics", slog.String("processor", processorID), slog.Any("error", err))
+		logger.Error("error getting processor metrics", slog.String("processor", processorID), slog.Any("error", err))
 	} else if processorMetrics != nil {
 		// Emit PCIe error metrics
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_l0_to_recovery_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.L0ToRecoveryCount), systemProcessorLabelValues...)
