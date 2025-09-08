@@ -59,6 +59,7 @@ func createSystemMetricMap() map[string]Metric {
 
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_state", fmt.Sprintf("system processor state,%s", CommonStateHelp), SystemProcessorLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_health_state", fmt.Sprintf("system processor health state,%s", CommonHealthHelp), SystemProcessorLabelNames)
+	addToMetricMap(systemMetrics, SystemSubsystem, "processor_health_rollup", fmt.Sprintf("system processor health rollup,%s", CommonHealthHelp), SystemProcessorLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_total_threads", "system processor total threads", SystemProcessorLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_total_cores", "system processor total cores", SystemProcessorLabelNames)
 
@@ -352,6 +353,7 @@ func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processo
 	processorTotalThreads := processor.TotalThreads
 	processorState := processor.Status.State
 	processorHelathState := processor.Status.Health
+	processorHealthRollup := processor.Status.HealthRollup
 
 	systemProcessorLabelValues := []string{systemHostName, "processor", processorName, processorID}
 
@@ -360,6 +362,9 @@ func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processo
 	}
 	if processorHelathStateValue, ok := parseCommonStatusHealth(processorHelathState); ok {
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_health_state"].desc, prometheus.GaugeValue, processorHelathStateValue, systemProcessorLabelValues...)
+	}
+	if processorHealthRollupValue, ok := parseCommonStatusHealth(processorHealthRollup); ok {
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_health_rollup"].desc, prometheus.GaugeValue, processorHealthRollupValue, systemProcessorLabelValues...)
 	}
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_total_threads"].desc, prometheus.GaugeValue, float64(processorTotalThreads), systemProcessorLabelValues...)
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_total_cores"].desc, prometheus.GaugeValue, float64(processorTotalCores), systemProcessorLabelValues...)
