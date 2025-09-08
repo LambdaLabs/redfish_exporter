@@ -37,7 +37,7 @@ func NewGPUCollector(rfClient *gofish.APIClient, logger *slog.Logger) *GPUCollec
 			prometheus.GaugeOpts{
 				Namespace: namespace,
 				Name:      "collector_scrape_status",
-				Help:      "scrape status of the gpu collector",
+				Help:      "collector_scrape_status",
 			},
 			[]string{"collector"},
 		),
@@ -48,6 +48,7 @@ func (g *GPUCollector) Describe(ch chan<- *prometheus.Desc) {
 	for _, metric := range g.metrics {
 		ch <- metric.desc
 	}
+	g.collectorScrapeStatus.Describe(ch)
 }
 
 func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
@@ -58,6 +59,8 @@ func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
 			slog.Any("error", err.Error()),
 			slog.String("operation", "service.Systems()"),
 		)
+		g.collectorScrapeStatus.WithLabelValues("gpu").Set(float64(0))
+		return
 	}
 	wg := &sync.WaitGroup{}
 	for _, system := range systems {
@@ -66,6 +69,7 @@ func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
 		go collectSystemGPUMetrics(ch, system, wg, g.logger)
 	}
 	wg.Wait()
+	g.collectorScrapeStatus.WithLabelValues("gpu").Set(float64(1))
 }
 
 func collectSystemGPUMetrics(ch chan<- prometheus.Metric, system *redfish.ComputerSystem, wg *sync.WaitGroup, logger *slog.Logger) {
@@ -76,6 +80,7 @@ func collectSystemGPUMetrics(ch chan<- prometheus.Metric, system *redfish.Comput
 			slog.Any("error", err.Error()),
 			slog.String("operation", "system.Processors()"),
 		)
+		return
 	}
 
 	systemName := system.Name
