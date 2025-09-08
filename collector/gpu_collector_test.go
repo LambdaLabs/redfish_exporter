@@ -1,13 +1,14 @@
 package collector
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stmcginnis/gofish/common"
 	"github.com/stmcginnis/gofish/redfish"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCollectSystemGPUMetrics(t *testing.T) {
@@ -69,26 +70,12 @@ func TestCollectSystemGPUMetrics(t *testing.T) {
 
 			select {
 			case metric := <-outCh:
-				if !test.expectMetric {
-					t.Errorf("Expected no metric, but got one")
-				}
+				assert.True(t, test.expectMetric, "found metric when not expecting one")
+
 				dtoMetric := &dto.Metric{}
-				err := metric.Write(dtoMetric)
-				if err != nil {
-					t.Fatalf("Failed to write metric to DTO: %v", err)
-				}
-				if dtoMetric.Gauge == nil {
-					t.Errorf("Expected gauge metric, got nil")
-				} else if *dtoMetric.Gauge.Value != test.expectedValue {
-					t.Errorf("Expected value %f, got %f", test.expectedValue, *dtoMetric.Gauge.Value)
-				}
-				desc := metric.Desc()
-				if desc != nil {
-					descString := desc.String()
-					if !strings.Contains(descString, "gpu_health") {
-						t.Errorf("Expected metric name to contain 'gpu_health', got: %s", descString)
-					}
-				}
+				require.NoError(t, metric.Write(dtoMetric), "unexpected error writing DTO metric")
+				requireGaugeWithValue(t, dtoMetric, test.expectedValue)
+				requireMetricDescContains(t, metric, "gpu_health")
 			default:
 				if test.expectMetric {
 					t.Errorf("Expected metric to be emitted, but none was received")
@@ -96,4 +83,17 @@ func TestCollectSystemGPUMetrics(t *testing.T) {
 			}
 		})
 	}
+}
+
+func requireGaugeWithValue(t *testing.T, metric *dto.Metric, expected float64) {
+	t.Helper()
+	require.NotNil(t, metric.Gauge, "required a gauge")
+	require.Equal(t, expected, *metric.Gauge.Value)
+}
+
+func requireMetricDescContains(t *testing.T, m prometheus.Metric, contains string) {
+	t.Helper()
+	desc := m.Desc()
+	assert.NotNil(t, desc)
+	require.Contains(t, desc.String(), contains)
 }
