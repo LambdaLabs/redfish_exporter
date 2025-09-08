@@ -41,6 +41,7 @@ type ChassisCollector struct {
 func createChassisMetricMap() map[string]Metric {
 	chassisMetrics := make(map[string]Metric)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "health", fmt.Sprintf("health of chassis,%s", CommonHealthHelp), ChassisLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "health_rollup", fmt.Sprintf("health rollup of chassis,%s", CommonHealthHelp), ChassisLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "state", fmt.Sprintf("state of chassis,%s", CommonStateHelp), ChassisLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "model_info", "organization responsible for producing the chassis, the name by which the manufacturer generally refers to the chassis, and a part number and sku assigned by the organization that is responsible for producing or manufacturing the chassis", ChassisModel)
 
@@ -133,9 +134,13 @@ func (c *ChassisCollector) Collect(ch chan<- prometheus.Metric) {
 			chassisStatus := chassis.Status
 			chassisStatusState := chassisStatus.State
 			chassisStatusHealth := chassisStatus.Health
+			chassisStatusHealthRollup := chassisStatus.HealthRollup
 			ChassisLabelValues := []string{"chassis", chassisID}
 			if chassisStatusHealthValue, ok := parseCommonStatusHealth(chassisStatusHealth); ok {
 				ch <- prometheus.MustNewConstMetric(c.metrics["chassis_health"].desc, prometheus.GaugeValue, chassisStatusHealthValue, ChassisLabelValues...)
+			}
+			if chassisStatusHealthRollupValue, ok := parseCommonStatusHealth(chassisStatusHealthRollup); ok {
+				ch <- prometheus.MustNewConstMetric(c.metrics["chassis_health_rollup"].desc, prometheus.GaugeValue, chassisStatusHealthRollupValue, ChassisLabelValues...)
 			}
 			if chassisStatusStateValue, ok := parseCommonStatusState(chassisStatusState); ok {
 				ch <- prometheus.MustNewConstMetric(c.metrics["chassis_state"].desc, prometheus.GaugeValue, chassisStatusStateValue, ChassisLabelValues...)
