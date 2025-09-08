@@ -215,7 +215,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) {
 			} else {
 				wg2.Add(len(processors))
 				for _, processor := range processors {
-					go parseProcessor(ch, systemHostName, processor, wg2)
+					go parseProcessor(ch, systemHostName, processor, wg2, systemLogger)
 				}
 			}
 
@@ -355,7 +355,7 @@ func parseMemory(ch chan<- prometheus.Metric, systemHostName string, memory *red
 
 }
 
-func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processor *redfish.Processor, wg *sync.WaitGroup) {
+func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processor *redfish.Processor, wg *sync.WaitGroup, logger *slog.Logger) {
 	defer wg.Done()
 	processorName := processor.Name
 	processorID := processor.ID
@@ -380,7 +380,10 @@ func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processo
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_total_cores"].desc, prometheus.GaugeValue, float64(processorTotalCores), systemProcessorLabelValues...)
 	
 	// Fetch and emit ProcessorMetrics if available
-	if processorMetrics, err := processor.Metrics(); err == nil && processorMetrics != nil {
+	processorMetrics, err := processor.Metrics()
+	if err != nil {
+		logger.Debug("error getting processor metrics", slog.String("processor", processorID), slog.Any("error", err))
+	} else if processorMetrics != nil {
 		// Emit PCIe error metrics
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_l0_to_recovery_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.L0ToRecoveryCount), systemProcessorLabelValues...)
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_correctable_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.CorrectableErrorCount), systemProcessorLabelValues...)
