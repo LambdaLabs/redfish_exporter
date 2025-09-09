@@ -83,32 +83,26 @@ func collectSystemGPUMetrics(ch chan<- prometheus.Metric, system *redfish.Comput
 		return
 	}
 
-	systemName := system.Name
-	if systemName == "" {
-		systemName = system.ID
+	if system.Name == "" {
+		system.Name = system.ID
 	}
 
 	for _, gpu := range filterGPUs(cpus) {
-		emitGPUHealth(ch, systemName, gpu)
+		if gpu.Name == "" {
+			gpu.Name = gpu.ID
+		}
+		commonGPULabels := []string{gpu.Name, system.Name, gpu.ID}
+		emitGPUHealth(ch, gpu, commonGPULabels)
 	}
 }
 
-func emitGPUHealth(ch chan<- prometheus.Metric, systemName string, gpu *redfish.Processor) {
-	gpuID := gpu.ID
-	gpuName := gpu.Name
-	if gpuName == "" {
-		gpuName = gpuID
-	}
-
-	// Create label values matching the order of gpuBaseLabels: "resource", "system", "id"
-	gpuLabelValues := []string{gpuName, systemName, gpuID}
-
+func emitGPUHealth(ch chan<- prometheus.Metric, gpu *redfish.Processor, commonLabels []string) {
 	if gpuStatusHealthValue, ok := parseCommonStatusHealth(gpu.Status.Health); ok {
 		ch <- prometheus.MustNewConstMetric(
 			gpuMetrics["gpu_health"].desc,
 			prometheus.GaugeValue,
 			gpuStatusHealthValue,
-			gpuLabelValues...)
+			commonLabels...)
 	}
 }
 

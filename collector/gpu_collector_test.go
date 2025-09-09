@@ -66,7 +66,7 @@ func TestCollectSystemGPUMetrics(t *testing.T) {
 	for tName, test := range tT {
 		t.Run(tName, func(t *testing.T) {
 			outCh := make(chan prometheus.Metric, 1)
-			emitGPUHealth(outCh, test.systemName, test.gpu)
+			emitGPUHealth(outCh, test.gpu, []string{test.gpu.Name, test.systemName, test.gpu.ID})
 
 			select {
 			case metric := <-outCh:
