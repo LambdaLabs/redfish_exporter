@@ -85,6 +85,10 @@ func TestCollectSystemGPUMetrics(t *testing.T) {
 	}
 }
 
+func TestEmitGPUECCMetrics(t *testing.T) {
+	t.Fail()
+}
+
 func requireGaugeWithValue(t *testing.T, metric *dto.Metric, expected float64) {
 	t.Helper()
 	require.NotNil(t, metric.Gauge, "required a gauge")

@@ -93,6 +93,7 @@ func collectSystemGPUMetrics(ch chan<- prometheus.Metric, system *redfish.Comput
 		}
 		commonGPULabels := []string{gpu.Name, system.Name, gpu.ID}
 		emitGPUHealth(ch, gpu, commonGPULabels)
+		// emitGPUECCMetrics(ch, systemName, gpu)
 	}
 }
 
