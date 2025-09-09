@@ -62,6 +62,16 @@ func createSystemMetricMap() map[string]Metric {
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_health_rollup", fmt.Sprintf("system processor health rollup,%s", CommonHealthHelp), SystemProcessorLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_total_threads", "system processor total threads", SystemProcessorLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_total_cores", "system processor total cores", SystemProcessorLabelNames)
+	
+	// PCIe error metrics for processors/GPUs
+	addToMetricMap(systemMetrics, SystemSubsystem, "processor_pcie_errors_l0_to_recovery_count", "system processor PCIe L0 to recovery state transition count", SystemProcessorLabelNames)
+	addToMetricMap(systemMetrics, SystemSubsystem, "processor_pcie_errors_correctable_count", "system processor PCIe correctable error count", SystemProcessorLabelNames)
+	addToMetricMap(systemMetrics, SystemSubsystem, "processor_pcie_errors_fatal_count", "system processor PCIe fatal error count", SystemProcessorLabelNames)
+	addToMetricMap(systemMetrics, SystemSubsystem, "processor_pcie_errors_non_fatal_count", "system processor PCIe non-fatal error count", SystemProcessorLabelNames)
+	addToMetricMap(systemMetrics, SystemSubsystem, "processor_pcie_errors_nak_received_count", "system processor PCIe NAK received count", SystemProcessorLabelNames)
+	addToMetricMap(systemMetrics, SystemSubsystem, "processor_pcie_errors_nak_sent_count", "system processor PCIe NAK sent count", SystemProcessorLabelNames)
+	addToMetricMap(systemMetrics, SystemSubsystem, "processor_pcie_errors_replay_count", "system processor PCIe replay count", SystemProcessorLabelNames)
+	addToMetricMap(systemMetrics, SystemSubsystem, "processor_pcie_errors_replay_rollover_count", "system processor PCIe replay rollover count", SystemProcessorLabelNames)
 
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_volume_state", fmt.Sprintf("system storage volume state,%s", CommonStateHelp), SystemVolumeLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_volume_health_state", fmt.Sprintf("system storage volume health state,%s", CommonHealthHelp), SystemVolumeLabelNames)
@@ -205,7 +215,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) {
 			} else {
 				wg2.Add(len(processors))
 				for _, processor := range processors {
-					go parseProcessor(ch, systemHostName, processor, wg2)
+					go parseProcessor(ch, systemHostName, processor, wg2, systemLogger)
 				}
 			}
 
@@ -345,7 +355,7 @@ func parseMemory(ch chan<- prometheus.Metric, systemHostName string, memory *red
 
 }
 
-func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processor *redfish.Processor, wg *sync.WaitGroup) {
+func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processor *redfish.Processor, wg *sync.WaitGroup, logger *slog.Logger) {
 	defer wg.Done()
 	processorName := processor.Name
 	processorID := processor.ID
@@ -368,6 +378,22 @@ func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processo
 	}
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_total_threads"].desc, prometheus.GaugeValue, float64(processorTotalThreads), systemProcessorLabelValues...)
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_total_cores"].desc, prometheus.GaugeValue, float64(processorTotalCores), systemProcessorLabelValues...)
+	
+	// Fetch and emit ProcessorMetrics if available
+	processorMetrics, err := processor.Metrics()
+	if err != nil {
+		logger.Error("error getting processor metrics", slog.String("processor", processorID), slog.Any("error", err))
+	} else if processorMetrics != nil {
+		// Emit PCIe error metrics
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_l0_to_recovery_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.L0ToRecoveryCount), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_correctable_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.CorrectableErrorCount), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_fatal_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.FatalErrorCount), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_non_fatal_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.NonFatalErrorCount), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_nak_received_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.NAKReceivedCount), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_nak_sent_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.NAKSentCount), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_replay_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.ReplayCount), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_replay_rollover_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.ReplayRolloverCount), systemProcessorLabelValues...)
+	}
 }
 
 func parseVolume(ch chan<- prometheus.Metric, systemHostName string, volume *redfish.Volume, wg *sync.WaitGroup) {

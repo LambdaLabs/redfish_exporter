@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"log/slog"
 	"strings"
 	"sync"
 	"testing"
@@ -203,4 +204,73 @@ func TestDriveMetrics(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestProcessorWithoutMetrics tests that processor collection works when ProcessorMetrics is not available
+func TestProcessorWithoutMetrics(t *testing.T) {
+	// Mock processor without metrics (no metrics field means Metrics() returns nil)
+	mockProcessor := &redfish.Processor{
+		Entity: common.Entity{
+			ID:   "CPU_1",
+			Name: "CPU 1",
+		},
+		TotalCores:   8,
+		TotalThreads: 16,
+		Status: common.Status{
+			State:        "Enabled",
+			Health:       "OK",
+			HealthRollup: "OK",
+		},
+	}
+
+	// Test metric collection
+	ch := make(chan prometheus.Metric, 100)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	
+	// Create a test logger
+	logger := slog.Default()
+
+	go parseProcessor(ch, "test-host", mockProcessor, wg, logger)
+	wg.Wait()
+
+	// Collect metrics from channel
+	processorMetricCount := 0
+	pcieErrorMetricCount := 0
+	basicMetrics := make(map[string]bool)
+
+	for len(ch) > 0 {
+		metric := <-ch
+		desc := metric.Desc().String()
+
+		if strings.Contains(desc, "processor") {
+			processorMetricCount++
+			if strings.Contains(desc, "pcie_errors") {
+				pcieErrorMetricCount++
+			}
+			// Track which basic metrics we got
+			if strings.Contains(desc, "processor_state") {
+				basicMetrics["state"] = true
+			} else if strings.Contains(desc, "processor_health_state") {
+				basicMetrics["health"] = true
+			} else if strings.Contains(desc, "processor_health_rollup") {
+				basicMetrics["health_rollup"] = true
+			} else if strings.Contains(desc, "processor_total_threads") {
+				basicMetrics["threads"] = true
+			} else if strings.Contains(desc, "processor_total_cores") {
+				basicMetrics["cores"] = true
+			}
+		}
+	}
+
+	// Verify basic metrics were collected
+	assert.Equal(t, 5, processorMetricCount, "Should have exactly 5 basic processor metrics")
+	assert.True(t, basicMetrics["state"], "Should have processor state metric")
+	assert.True(t, basicMetrics["health"], "Should have processor health metric")
+	assert.True(t, basicMetrics["health_rollup"], "Should have processor health rollup metric")
+	assert.True(t, basicMetrics["threads"], "Should have processor threads metric")
+	assert.True(t, basicMetrics["cores"], "Should have processor cores metric")
+
+	// Verify no PCIe error metrics were collected when ProcessorMetrics is unavailable
+	assert.Equal(t, 0, pcieErrorMetricCount, "Should have no PCIe error metrics when ProcessorMetrics is unavailable")
 }
