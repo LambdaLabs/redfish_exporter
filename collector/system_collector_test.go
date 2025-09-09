@@ -237,6 +237,7 @@ func TestProcessorWithoutMetrics(t *testing.T) {
 	// Collect metrics from channel
 	processorMetricCount := 0
 	pcieErrorMetricCount := 0
+	cacheMetricCount := 0
 	basicMetrics := make(map[string]bool)
 
 	for len(ch) > 0 {
@@ -247,6 +248,8 @@ func TestProcessorWithoutMetrics(t *testing.T) {
 			processorMetricCount++
 			if strings.Contains(desc, "pcie_errors") {
 				pcieErrorMetricCount++
+			} else if strings.Contains(desc, "cache_lifetime") {
+				cacheMetricCount++
 			}
 			// Track which basic metrics we got
 			if strings.Contains(desc, "processor_state") {
@@ -273,4 +276,7 @@ func TestProcessorWithoutMetrics(t *testing.T) {
 
 	// Verify no PCIe error metrics were collected when ProcessorMetrics is unavailable
 	assert.Equal(t, 0, pcieErrorMetricCount, "Should have no PCIe error metrics when ProcessorMetrics is unavailable")
+	
+	// Verify no cache metrics were collected when ProcessorMetrics is unavailable
+	assert.Equal(t, 0, cacheMetricCount, "Should have no cache metrics when ProcessorMetrics is unavailable")
 }

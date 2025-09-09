@@ -72,6 +72,10 @@ func createSystemMetricMap() map[string]Metric {
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_pcie_errors_nak_sent_count", "system processor PCIe NAK sent count", SystemProcessorLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_pcie_errors_replay_count", "system processor PCIe replay count", SystemProcessorLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_pcie_errors_replay_rollover_count", "system processor PCIe replay rollover count", SystemProcessorLabelNames)
+	
+	// Cache metrics for processors/GPUs
+	addToMetricMap(systemMetrics, SystemSubsystem, "processor_cache_lifetime_uncorrectable_ecc_error_count", "system processor cache lifetime uncorrectable ECC error count", SystemProcessorLabelNames)
+	addToMetricMap(systemMetrics, SystemSubsystem, "processor_cache_lifetime_correctable_ecc_error_count", "system processor cache lifetime correctable ECC error count", SystemProcessorLabelNames)
 
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_volume_state", fmt.Sprintf("system storage volume state,%s", CommonStateHelp), SystemVolumeLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_volume_health_state", fmt.Sprintf("system storage volume health state,%s", CommonHealthHelp), SystemVolumeLabelNames)
@@ -393,6 +397,10 @@ func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processo
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_nak_sent_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.NAKSentCount), systemProcessorLabelValues...)
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_replay_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.ReplayCount), systemProcessorLabelValues...)
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_replay_rollover_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.ReplayRolloverCount), systemProcessorLabelValues...)
+		
+		// Emit cache metrics
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_cache_lifetime_uncorrectable_ecc_error_count"].desc, prometheus.GaugeValue, float64(processorMetrics.CacheMetricsTotal.LifeTime.UncorrectableECCErrorCount), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_cache_lifetime_correctable_ecc_error_count"].desc, prometheus.GaugeValue, float64(processorMetrics.CacheMetricsTotal.LifeTime.CorrectableECCErrorCount), systemProcessorLabelValues...)
 	}
 }
 
