@@ -8,8 +8,6 @@ import (
 )
 
 func TestProcessorMetricsIntegration(t *testing.T) {
-	catalog := NewTestDataCatalog(t)
-	
 	tests := []struct {
 		name        string
 		setupMock   func(*testRedfishServer)
@@ -19,32 +17,12 @@ func TestProcessorMetricsIntegration(t *testing.T) {
 		{
 			name: "processor with full PCIe and cache metrics from testdata",
 			setupMock: func(m *testRedfishServer) {
-				// Load test data from files
-				processor := catalog.ProcessorWithMetrics()
-				metrics := catalog.ProcessorMetricsFull()
+				// Set up system and processor collection
+				m.setupSystemWithProcessor("System1", "GPU_2")
 				
-				// Set up mock server with loaded data
-				m.responses["/redfish/v1/Systems/System1"] = map[string]interface{}{
-					"@odata.type": "#ComputerSystem.v1_20_0.ComputerSystem",
-					"@odata.id":   "/redfish/v1/Systems/System1",
-					"Id":          "System1",
-					"Name":        "Test System",
-					"Status": map[string]string{
-						"State":  "Enabled",
-						"Health": "OK",
-					},
-					"Processors": map[string]string{
-						"@odata.id": "/redfish/v1/Systems/System1/Processors",
-					},
-				}
-				m.responses["/redfish/v1/Systems/System1/Processors"] = map[string]interface{}{
-					"@odata.type": "#ProcessorCollection.ProcessorCollection",
-					"Members": []map[string]string{
-						{"@odata.id": "/redfish/v1/Systems/System1/Processors/GPU_2"},
-					},
-				}
-				m.responses["/redfish/v1/Systems/System1/Processors/GPU_2"] = processor
-				m.responses["/redfish/v1/Systems/System1/Processors/GPU_2/ProcessorMetrics"] = metrics
+				// Add processor and metrics from fixtures
+				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/GPU_2", "processor_with_metrics.json")
+				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/GPU_2/ProcessorMetrics", "processor_metrics_full.json")
 			},
 			wantMetrics: map[string]float64{
 				"pcie_l0_recovery":    42,
@@ -57,24 +35,12 @@ func TestProcessorMetricsIntegration(t *testing.T) {
 		{
 			name: "processor with zero error counts",
 			setupMock: func(m *testRedfishServer) {
-				m.addProcessorWithMetrics(
-					"System1",
-					"CPU_0",
-					map[string]int{
-						"L0ToRecoveryCount":      0,
-						"CorrectableErrorCount":  0,
-						"FatalErrorCount":        0,
-						"NonFatalErrorCount":     0,
-						"NAKReceivedCount":       0,
-						"NAKSentCount":           0,
-						"ReplayCount":            0,
-						"ReplayRolloverCount":    0,
-					},
-					map[string]int{
-						"CorrectableECCErrorCount":   0,
-						"UncorrectableECCErrorCount": 0,
-					},
-				)
+				// Set up system and processor collection
+				m.setupSystemWithProcessor("System1", "CPU_0")
+				
+				// Add processor and metrics with zero errors
+				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/CPU_0", "processor_zero_errors.json")
+				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/CPU_0/ProcessorMetrics", "processor_metrics_zero.json")
 			},
 			wantMetrics: map[string]float64{
 				"pcie_l0_recovery":    0,
@@ -87,41 +53,11 @@ func TestProcessorMetricsIntegration(t *testing.T) {
 		{
 			name: "processor without metrics link",
 			setupMock: func(m *testRedfishServer) {
-				// Add processor without Metrics field
-				m.responses["/redfish/v1/Systems/System1"] = map[string]interface{}{
-					"@odata.type": "#ComputerSystem.v1_20_0.ComputerSystem",
-					"@odata.id":   "/redfish/v1/Systems/System1",
-					"Id":          "System1",
-					"Name":        "Test System",
-					"Status": map[string]string{
-						"State":  "Enabled",
-						"Health": "OK",
-					},
-					"Processors": map[string]string{
-						"@odata.id": "/redfish/v1/Systems/System1/Processors",
-					},
-				}
+				// Set up system and processor collection
+				m.setupSystemWithProcessor("System1", "CPU_1")
 				
-				m.responses["/redfish/v1/Systems/System1/Processors"] = map[string]interface{}{
-					"@odata.type": "#ProcessorCollection.ProcessorCollection",
-					"Members": []map[string]string{
-						{"@odata.id": "/redfish/v1/Systems/System1/Processors/CPU_1"},
-					},
-				}
-				
-				m.responses["/redfish/v1/Systems/System1/Processors/CPU_1"] = map[string]interface{}{
-					"@odata.type":  "#Processor.v1_0_0.Processor", // Old version without Metrics
-					"@odata.id":    "/redfish/v1/Systems/System1/Processors/CPU_1",
-					"Id":           "CPU_1",
-					"Name":         "CPU without metrics",
-					"TotalCores":   8,
-					"TotalThreads": 16,
-					"Status": map[string]string{
-						"State":  "Enabled",
-						"Health": "OK",
-					},
-					// No Metrics field
-				}
+				// Add processor v1.0.0 (no Metrics field)
+				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/CPU_1", "schemas/v1_0_0_processor.json")
 			},
 			wantMetrics: map[string]float64{
 				// Should have no PCIe or cache metrics
@@ -168,15 +104,7 @@ func TestProcessorMetricsBackwardsCompatibility(t *testing.T) {
 			schemaVersion: "1.0.0",
 			setupMock: func(m *testRedfishServer) {
 				// Processor.v1_0_0 doesn't have Metrics link
-				m.responses["/redfish/v1/Systems/System1/Processors/CPU_1"] = map[string]interface{}{
-					"@odata.type": "#Processor.v1_0_0.Processor",
-					"Id":          "CPU_1",
-					"Name":        "Legacy CPU",
-					"Status": map[string]string{
-						"State":  "Enabled",
-						"Health": "OK",
-					},
-				}
+				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/CPU_1", "schemas/v1_0_0_processor.json")
 			},
 			expectMetrics: false,
 		},
@@ -185,25 +113,9 @@ func TestProcessorMetricsBackwardsCompatibility(t *testing.T) {
 			schemaVersion: "1.4.0",
 			setupMock: func(m *testRedfishServer) {
 				// Processor.v1_4_0 has Metrics link
-				m.responses["/redfish/v1/Systems/System1/Processors/CPU_1"] = map[string]interface{}{
-					"@odata.type": "#Processor.v1_4_0.Processor",
-					"Id":          "CPU_1",
-					"Name":        "CPU with basic metrics",
-					"Metrics": map[string]string{
-						"@odata.id": "/redfish/v1/Systems/System1/Processors/CPU_1/ProcessorMetrics",
-					},
-				}
+				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/CPU_1", "schemas/v1_4_0_processor.json")
 				// ProcessorMetrics.v1_0_0 has cache metrics but no PCIe errors yet
-				m.responses["/redfish/v1/Systems/System1/Processors/CPU_1/ProcessorMetrics"] = map[string]interface{}{
-					"@odata.type": "#ProcessorMetrics.v1_0_0.ProcessorMetrics",
-					"CacheMetricsTotal": map[string]interface{}{
-						"LifeTime": map[string]int{
-							"CorrectableECCErrorCount":   5,
-							"UncorrectableECCErrorCount": 1,
-						},
-					},
-					// No PCIeErrors in v1.0.0
-				}
+				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/CPU_1/ProcessorMetrics", "schemas/v1_4_0_processor_metrics.json")
 			},
 			expectMetrics: true,
 		},
@@ -214,18 +126,7 @@ func TestProcessorMetricsBackwardsCompatibility(t *testing.T) {
 			server := newTestRedfishServer(t)
 			
 			// Setup basic system structure
-			server.responses["/redfish/v1/Systems/System1"] = map[string]interface{}{
-				"@odata.type": "#ComputerSystem.v1_0_0.ComputerSystem",
-				"Id":          "System1",
-				"Processors": map[string]string{
-					"@odata.id": "/redfish/v1/Systems/System1/Processors",
-				},
-			}
-			server.responses["/redfish/v1/Systems/System1/Processors"] = map[string]interface{}{
-				"Members": []map[string]string{
-					{"@odata.id": "/redfish/v1/Systems/System1/Processors/CPU_1"},
-				},
-			}
+			server.setupSystemWithProcessor("System1", "CPU_1")
 			
 			// Apply version-specific setup
 			tt.setupMock(server)

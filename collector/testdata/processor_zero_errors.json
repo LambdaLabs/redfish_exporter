@@ -1,0 +1,16 @@
+{
+  "@odata.type": "#Processor.v1_20_0.Processor",
+  "@odata.id": "/redfish/v1/Systems/System1/Processors/CPU_0",
+  "Id": "CPU_0",
+  "Name": "Test Processor",
+  "TotalCores": 128,
+  "TotalThreads": 256,
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+  },
+  "Metrics": {
+    "@odata.id": "/redfish/v1/Systems/System1/Processors/CPU_0/ProcessorMetrics"
+  }
+}

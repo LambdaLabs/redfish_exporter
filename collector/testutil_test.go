@@ -17,9 +17,9 @@ import (
 // testRedfishServer provides a test HTTP server that mimics Redfish API responses
 type testRedfishServer struct {
 	*httptest.Server
-	t         *testing.T
-	responses map[string]interface{}
-	requests  []string // Track requests for debugging
+	t        *testing.T
+	mux      *http.ServeMux
+	requests []string // Track requests for debugging
 }
 
 // newTestRedfishServer creates a new test Redfish server for testing
@@ -27,111 +27,76 @@ func newTestRedfishServer(t *testing.T) *testRedfishServer {
 	t.Helper()
 	
 	trs := &testRedfishServer{
-		t:         t,
-		responses: make(map[string]interface{}),
-		requests:  make([]string, 0),
+		t:        t,
+		mux:      http.NewServeMux(),
+		requests: make([]string, 0),
 	}
 	
-	trs.Server = httptest.NewServer(http.HandlerFunc(trs.handler))
+	trs.Server = httptest.NewServer(trs.mux)
 	t.Cleanup(trs.Close)
 	
-	// Set default responses
-	trs.setDefaultResponses()
+	// Set up default routes
+	trs.setupDefaultRoutes()
 	
 	return trs
 }
 
-// handler processes requests and returns mock responses
-func (m *testRedfishServer) handler(w http.ResponseWriter, r *http.Request) {
-	m.requests = append(m.requests, r.Method+" "+r.URL.Path)
+// setupDefaultRoutes registers the default Redfish API routes
+func (m *testRedfishServer) setupDefaultRoutes() {
+	// Service root
+	m.addRouteFromFixture("/redfish/v1/", "service_root.json")
 	
-	w.Header().Set("Content-Type", "application/json")
-	
-	if response, ok := m.responses[r.URL.Path]; ok {
+	// Systems collection
+	m.addRouteFromFixture("/redfish/v1/Systems", "systems_collection.json")
+}
+
+// makeJSONHandler creates a handler that returns a JSON response
+func (m *testRedfishServer) makeJSONHandler(response interface{}) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		m.requests = append(m.requests, r.Method+" "+r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			m.t.Errorf("Failed to encode response: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 		}
-	} else {
-		w.WriteHeader(http.StatusNotFound)
 	}
 }
 
-// setDefaultResponses sets up the minimum required Redfish responses
-func (m *testRedfishServer) setDefaultResponses() {
-	m.responses["/redfish/v1/"] = map[string]interface{}{
-		"@odata.type":    "#ServiceRoot.v1_15_0.ServiceRoot",
-		"@odata.id":      "/redfish/v1/",
-		"Id":             "RootService",
-		"Name":           "Root Service",
-		"RedfishVersion": "1.15.0",
-		"Systems":        map[string]string{"@odata.id": "/redfish/v1/Systems"},
-	}
-	
-	m.responses["/redfish/v1/Systems"] = map[string]interface{}{
-		"@odata.type": "#ComputerSystemCollection.ComputerSystemCollection",
-		"Members": []map[string]string{
-			{"@odata.id": "/redfish/v1/Systems/System1"},
-		},
-	}
+// addRoute registers a new route with the given response
+func (m *testRedfishServer) addRoute(path string, response interface{}) {
+	m.mux.HandleFunc(path, m.makeJSONHandler(response))
 }
 
-// addProcessorWithMetrics adds a processor with full ProcessorMetrics to the test server
-func (m *testRedfishServer) addProcessorWithMetrics(systemID, processorID string, pcieErrors, cacheErrors map[string]int) {
+// addRouteFromFixture loads a fixture file and registers it as a route
+func (m *testRedfishServer) addRouteFromFixture(path string, fixtureFile string) {
+	data := loadTestData(m.t, fixtureFile)
+	m.addRoute(path, data)
+}
+
+// loadFixture loads a JSON fixture and returns it
+func (m *testRedfishServer) loadFixture(fixtureFile string) map[string]interface{} {
+	return loadTestData(m.t, fixtureFile)
+}
+
+// setupSystemWithProcessor sets up a basic system with a processor using fixtures
+func (m *testRedfishServer) setupSystemWithProcessor(systemID, processorID string) {
 	systemPath := "/redfish/v1/Systems/" + systemID
 	processorPath := systemPath + "/Processors/" + processorID
-	metricsPath := processorPath + "/ProcessorMetrics"
 	
-	// Add system
-	m.responses[systemPath] = map[string]interface{}{
-		"@odata.type": "#ComputerSystem.v1_20_0.ComputerSystem",
-		"@odata.id":   systemPath,
-		"Id":          systemID,
-		"Name":        "Test System",
-		"Status": map[string]string{
-			"State":  "Enabled",
-			"Health": "OK",
-		},
-		"Processors": map[string]string{
-			"@odata.id": systemPath + "/Processors",
-		},
-	}
+	// Load and modify system fixture
+	system := m.loadFixture("system1.json")
+	system["@odata.id"] = systemPath
+	system["Id"] = systemID
+	system["Processors"] = map[string]string{"@odata.id": systemPath + "/Processors"}
+	m.addRoute(systemPath, system)
 	
-	// Add processor collection
-	m.responses[systemPath+"/Processors"] = map[string]interface{}{
+	// Create processor collection
+	m.addRoute(systemPath+"/Processors", map[string]interface{}{
 		"@odata.type": "#ProcessorCollection.ProcessorCollection",
 		"Members": []map[string]string{
 			{"@odata.id": processorPath},
 		},
-	}
-	
-	// Add processor
-	m.responses[processorPath] = map[string]interface{}{
-		"@odata.type":  "#Processor.v1_20_0.Processor",
-		"@odata.id":    processorPath,
-		"Id":           processorID,
-		"Name":         "Test Processor",
-		"TotalCores":   128,
-		"TotalThreads": 256,
-		"Status": map[string]string{
-			"State":        "Enabled",
-			"Health":       "OK",
-			"HealthRollup": "OK",
-		},
-		"Metrics": map[string]string{
-			"@odata.id": metricsPath,
-		},
-	}
-	
-	// Add processor metrics
-	m.responses[metricsPath] = map[string]interface{}{
-		"@odata.type": "#ProcessorMetrics.v1_6_1.ProcessorMetrics",
-		"@odata.id":   metricsPath,
-		"PCIeErrors":  pcieErrors,
-		"CacheMetricsTotal": map[string]interface{}{
-			"LifeTime": cacheErrors,
-		},
-	}
+	})
 }
 
 // connectToTestServer creates a gofish client connected to the test server

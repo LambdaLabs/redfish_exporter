@@ -1,0 +1,13 @@
+{
+  "@odata.type": "#ComputerSystem.v1_20_0.ComputerSystem",
+  "@odata.id": "/redfish/v1/Systems/System1",
+  "Id": "System1",
+  "Name": "Test System",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "Processors": {
+    "@odata.id": "/redfish/v1/Systems/System1/Processors"
+  }
+}

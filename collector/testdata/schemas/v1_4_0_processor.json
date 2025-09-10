@@ -1,0 +1,14 @@
+{
+  "@odata.type": "#Processor.v1_4_0.Processor",
+  "@odata.id": "/redfish/v1/Systems/System1/Processors/CPU_1",
+  "Id": "CPU_1",
+  "Name": "CPU with basic metrics",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "Metrics": {
+    "@odata.id": "/redfish/v1/Systems/System1/Processors/CPU_1/ProcessorMetrics"
+  },
+  "_comment": "Processor.v1_4_0 introduced the Metrics link"
+}
