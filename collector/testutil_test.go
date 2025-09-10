@@ -14,35 +14,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockRedfishServer creates a test server with configurable responses
-type mockRedfishServer struct {
+// testRedfishServer provides a test HTTP server that mimics Redfish API responses
+type testRedfishServer struct {
 	*httptest.Server
 	t         *testing.T
 	responses map[string]interface{}
 	requests  []string // Track requests for debugging
 }
 
-// newMockRedfishServer creates a new mock Redfish server for testing
-func newMockRedfishServer(t *testing.T) *mockRedfishServer {
+// newTestRedfishServer creates a new test Redfish server for testing
+func newTestRedfishServer(t *testing.T) *testRedfishServer {
 	t.Helper()
 	
-	mrs := &mockRedfishServer{
+	trs := &testRedfishServer{
 		t:         t,
 		responses: make(map[string]interface{}),
 		requests:  make([]string, 0),
 	}
 	
-	mrs.Server = httptest.NewServer(http.HandlerFunc(mrs.handler))
-	t.Cleanup(mrs.Close)
+	trs.Server = httptest.NewServer(http.HandlerFunc(trs.handler))
+	t.Cleanup(trs.Close)
 	
 	// Set default responses
-	mrs.setDefaultResponses()
+	trs.setDefaultResponses()
 	
-	return mrs
+	return trs
 }
 
 // handler processes requests and returns mock responses
-func (m *mockRedfishServer) handler(w http.ResponseWriter, r *http.Request) {
+func (m *testRedfishServer) handler(w http.ResponseWriter, r *http.Request) {
 	m.requests = append(m.requests, r.Method+" "+r.URL.Path)
 	
 	w.Header().Set("Content-Type", "application/json")
@@ -58,7 +58,7 @@ func (m *mockRedfishServer) handler(w http.ResponseWriter, r *http.Request) {
 }
 
 // setDefaultResponses sets up the minimum required Redfish responses
-func (m *mockRedfishServer) setDefaultResponses() {
+func (m *testRedfishServer) setDefaultResponses() {
 	m.responses["/redfish/v1/"] = map[string]interface{}{
 		"@odata.type":    "#ServiceRoot.v1_15_0.ServiceRoot",
 		"@odata.id":      "/redfish/v1/",
@@ -76,8 +76,8 @@ func (m *mockRedfishServer) setDefaultResponses() {
 	}
 }
 
-// addProcessorWithMetrics adds a processor with full ProcessorMetrics to the mock
-func (m *mockRedfishServer) addProcessorWithMetrics(systemID, processorID string, pcieErrors, cacheErrors map[string]int) {
+// addProcessorWithMetrics adds a processor with full ProcessorMetrics to the test server
+func (m *testRedfishServer) addProcessorWithMetrics(systemID, processorID string, pcieErrors, cacheErrors map[string]int) {
 	systemPath := "/redfish/v1/Systems/" + systemID
 	processorPath := systemPath + "/Processors/" + processorID
 	metricsPath := processorPath + "/ProcessorMetrics"
@@ -134,8 +134,8 @@ func (m *mockRedfishServer) addProcessorWithMetrics(systemID, processorID string
 	}
 }
 
-// connectToMockServer creates a gofish client connected to the mock server
-func connectToMockServer(t *testing.T, server *mockRedfishServer) *gofish.APIClient {
+// connectToTestServer creates a gofish client connected to the test server
+func connectToTestServer(t *testing.T, server *testRedfishServer) *gofish.APIClient {
 	t.Helper()
 	
 	config := gofish.ClientConfig{
@@ -146,7 +146,7 @@ func connectToMockServer(t *testing.T, server *mockRedfishServer) *gofish.APICli
 	}
 	
 	client, err := gofish.Connect(config)
-	require.NoError(t, err, "Failed to connect to mock server")
+	require.NoError(t, err, "Failed to connect to test server")
 	
 	return client
 }

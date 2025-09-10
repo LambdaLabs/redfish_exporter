@@ -12,13 +12,13 @@ func TestProcessorMetricsIntegration(t *testing.T) {
 	
 	tests := []struct {
 		name        string
-		setupMock   func(*mockRedfishServer)
+		setupMock   func(*testRedfishServer)
 		wantMetrics map[string]float64
 		wantErr     bool
 	}{
 		{
 			name: "processor with full PCIe and cache metrics from testdata",
-			setupMock: func(m *mockRedfishServer) {
+			setupMock: func(m *testRedfishServer) {
 				// Load test data from files
 				processor := catalog.ProcessorWithMetrics()
 				metrics := catalog.ProcessorMetricsFull()
@@ -56,7 +56,7 @@ func TestProcessorMetricsIntegration(t *testing.T) {
 		},
 		{
 			name: "processor with zero error counts",
-			setupMock: func(m *mockRedfishServer) {
+			setupMock: func(m *testRedfishServer) {
 				m.addProcessorWithMetrics(
 					"System1",
 					"CPU_0",
@@ -86,7 +86,7 @@ func TestProcessorMetricsIntegration(t *testing.T) {
 		},
 		{
 			name: "processor without metrics link",
-			setupMock: func(m *mockRedfishServer) {
+			setupMock: func(m *testRedfishServer) {
 				// Add processor without Metrics field
 				m.responses["/redfish/v1/Systems/System1"] = map[string]interface{}{
 					"@odata.type": "#ComputerSystem.v1_20_0.ComputerSystem",
@@ -132,10 +132,10 @@ func TestProcessorMetricsIntegration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			server := newMockRedfishServer(t)
+			server := newTestRedfishServer(t)
 			tt.setupMock(server)
 			
-			client := connectToMockServer(t, server)
+			client := connectToTestServer(t, server)
 			
 			// Act
 			metrics := collectProcessorMetrics(t, client)
@@ -160,13 +160,13 @@ func TestProcessorMetricsBackwardsCompatibility(t *testing.T) {
 	tests := []struct {
 		name          string
 		schemaVersion string
-		setupMock     func(*mockRedfishServer)
+		setupMock     func(*testRedfishServer)
 		expectMetrics bool
 	}{
 		{
 			name:          "Schema v1.0.0 - No ProcessorMetrics",
 			schemaVersion: "1.0.0",
-			setupMock: func(m *mockRedfishServer) {
+			setupMock: func(m *testRedfishServer) {
 				// Processor.v1_0_0 doesn't have Metrics link
 				m.responses["/redfish/v1/Systems/System1/Processors/CPU_1"] = map[string]interface{}{
 					"@odata.type": "#Processor.v1_0_0.Processor",
@@ -183,7 +183,7 @@ func TestProcessorMetricsBackwardsCompatibility(t *testing.T) {
 		{
 			name:          "Schema v1.4.0 - ProcessorMetrics introduced",
 			schemaVersion: "1.4.0",
-			setupMock: func(m *mockRedfishServer) {
+			setupMock: func(m *testRedfishServer) {
 				// Processor.v1_4_0 has Metrics link
 				m.responses["/redfish/v1/Systems/System1/Processors/CPU_1"] = map[string]interface{}{
 					"@odata.type": "#Processor.v1_4_0.Processor",
@@ -211,7 +211,7 @@ func TestProcessorMetricsBackwardsCompatibility(t *testing.T) {
 	
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := newMockRedfishServer(t)
+			server := newTestRedfishServer(t)
 			
 			// Setup basic system structure
 			server.responses["/redfish/v1/Systems/System1"] = map[string]interface{}{
@@ -230,7 +230,7 @@ func TestProcessorMetricsBackwardsCompatibility(t *testing.T) {
 			// Apply version-specific setup
 			tt.setupMock(server)
 			
-			client := connectToMockServer(t, server)
+			client := connectToTestServer(t, server)
 			metrics := collectProcessorMetrics(t, client)
 			
 			if tt.expectMetrics {
