@@ -1,0 +1,15 @@
+{
+  "@odata.type": "#ProcessorMetrics.v1_0_0.ProcessorMetrics",
+  "@odata.id": "/redfish/v1/Systems/System1/Processors/CPU_1/ProcessorMetrics",
+  "Id": "ProcessorMetrics",
+  "Name": "Processor Metrics",
+  "BandwidthPercent": 30.5,
+  "OperatingSpeedMHz": 2400,
+  "CacheMetricsTotal": {
+    "LifeTime": {
+      "CorrectableECCErrorCount": 5,
+      "UncorrectableECCErrorCount": 1
+    }
+  },
+  "_comment": "Schema v1.0.0 ProcessorMetrics has cache metrics but no PCIeErrors yet"
+}

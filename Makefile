@@ -1,10 +1,18 @@
-.PHONY: build test mock-test capture clean help
+.PHONY: build test mock-test capture clean help lint fmt fmt-check unit-test integration-test coverage check ci
 
 # Default target
 help:
 	@echo "Available targets:"
 	@echo "  build       - Build the redfish_exporter binary"
-	@echo "  test        - Run tests"
+	@echo "  test        - Run all tests"
+	@echo "  unit-test   - Run unit tests only"
+	@echo "  integration-test - Run integration tests"
+	@echo "  lint        - Run golangci-lint"
+	@echo "  fmt         - Format code with gofmt"
+	@echo "  fmt-check   - Check if code is formatted"
+	@echo "  coverage    - Generate and show test coverage"
+	@echo "  check       - Run fmt, lint, and test (dev workflow)"
+	@echo "  ci          - Run all CI checks"
 	@echo "  mock-test   - Run mock server with exporter for testing"
 	@echo "  capture     - Capture Redfish data from a BMC"
 	@echo "  clean       - Clean build artifacts"
@@ -69,3 +77,36 @@ clean:
 	rm -f redfish_exporter
 	rm -f tools/mock-server/exporter-config.yml
 	rm -f tools/capture/capture
+	rm -f coverage.out
+
+# Run unit tests only (exclude integration)
+unit-test:
+	go test -v -race -short ./...
+
+# Run integration tests
+integration-test:
+	go test -v -run Integration ./collector
+
+# Run linter
+lint:
+	golangci-lint run ./...
+
+# Format code
+fmt:
+	gofmt -w -s .
+	go mod tidy
+
+# Check formatting
+fmt-check:
+	@test -z "$$(gofmt -l .)" || (echo "Please run 'make fmt'" && exit 1)
+
+# Generate test coverage
+coverage:
+	go test -v -race -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out
+
+# Development workflow - format, lint, and test
+check: fmt lint test
+
+# CI workflow - stricter checks
+ci: fmt-check lint test build

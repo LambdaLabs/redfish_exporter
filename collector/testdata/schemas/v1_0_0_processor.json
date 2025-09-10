@@ -1,0 +1,15 @@
+{
+  "@odata.type": "#Processor.v1_0_0.Processor",
+  "@odata.id": "/redfish/v1/Systems/System1/Processors/CPU_1",
+  "Id": "CPU_1",
+  "Name": "CPU 1",
+  "ProcessorType": "CPU",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "TotalCores": 8,
+  "TotalThreads": 16,
+  "ProcessorArchitecture": "x86",
+  "_comment": "Schema v1.0.0 has no Metrics link, no HealthRollup"
+}
