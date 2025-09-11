@@ -10,10 +10,17 @@ import (
 )
 
 var (
-	gpuSubsystem  = "gpu"
-	gpuBaseLabels = []string{"resource", "system", "id"}
-	gpuMetrics    = createGPUMetricMap()
+	gpuSubsystem    = "gpu"
+	gpuBaseLabels   = []string{"resource", "system", "gpu_id"}
+	gpuMemoryLabels = baseWithExtraLabels([]string{"memory_id"})
+	gpuMetrics      = createGPUMetricMap()
 )
+
+func baseWithExtraLabels(extra []string) []string {
+	gpuBaseLabelsCopy := make([]string, len(gpuBaseLabels))
+	copy(gpuBaseLabelsCopy, gpuBaseLabels)
+	return append(gpuBaseLabelsCopy, extra...)
+}
 
 type GPUCollector struct {
 	rfClient              *gofish.APIClient
@@ -25,6 +32,8 @@ type GPUCollector struct {
 func createGPUMetricMap() map[string]Metric {
 	gpuMetrics := make(map[string]Metric)
 	addToMetricMap(gpuMetrics, gpuSubsystem, "health", "health of gpu reported by system,1(OK),2(Warning),3(Critical)", gpuBaseLabels)
+	addToMetricMap(gpuMetrics, gpuSubsystem, "memory_ecc_correctable", "current correctable memory ecc errors reported on the gpu", gpuMemoryLabels)
+	addToMetricMap(gpuMetrics, gpuSubsystem, "memory_ecc_uncorrectable", "current uncorrectable memory ecc errors reported on the gpu", gpuMemoryLabels)
 	return gpuMetrics
 }
 
@@ -83,32 +92,71 @@ func collectSystemGPUMetrics(ch chan<- prometheus.Metric, system *redfish.Comput
 		return
 	}
 
-	systemName := system.Name
-	if systemName == "" {
-		systemName = system.ID
+	if system.Name == "" {
+		system.Name = system.ID
 	}
 
 	for _, gpu := range filterGPUs(cpus) {
-		emitGPUHealth(ch, systemName, gpu)
+		if gpu.Name == "" {
+			gpu.Name = gpu.ID
+		}
+		commonGPULabels := []string{gpu.Name, system.Name, gpu.ID}
+		emitGPUHealth(ch, gpu, commonGPULabels)
+		gpuMem, err := gpu.Memory()
+		if err != nil {
+			logger.Error("error getting gpu memory", slog.Any("error", err))
+			continue
+		}
+		memWithMetrics := make([]MemoryWithMetrics, len(gpuMem))
+		for i, mem := range gpuMem {
+			memWithMetrics[i] = &redfishMemoryAdapter{Memory: mem}
+		}
+		emitGPUECCMetrics(ch, memWithMetrics, logger, commonGPULabels)
 	}
 }
 
-func emitGPUHealth(ch chan<- prometheus.Metric, systemName string, gpu *redfish.Processor) {
-	gpuID := gpu.ID
-	gpuName := gpu.Name
-	if gpuName == "" {
-		gpuName = gpuID
+type MemoryWithMetrics interface {
+	Metrics() (*redfish.MemoryMetrics, error)
+	GetID() string
+}
+
+type redfishMemoryAdapter struct {
+	*redfish.Memory
+}
+
+func (r *redfishMemoryAdapter) GetID() string {
+	return r.ID
+}
+
+func emitGPUECCMetrics(ch chan<- prometheus.Metric, mem []MemoryWithMetrics, logger *slog.Logger, commonLabels []string) {
+	for _, m := range mem {
+		memMetric, err := m.Metrics()
+		if err != nil {
+			logger.Error("error getting gpu memory metrics", slog.Any("error", err))
+			continue
+		}
+		metricLabels := append(commonLabels, m.GetID())
+
+		ch <- prometheus.MustNewConstMetric(
+			gpuMetrics["gpu_memory_ecc_correctable"].desc,
+			prometheus.CounterValue,
+			float64(memMetric.CurrentPeriod.CorrectableECCErrorCount),
+			metricLabels...)
+		ch <- prometheus.MustNewConstMetric(
+			gpuMetrics["gpu_memory_ecc_uncorrectable"].desc,
+			prometheus.CounterValue,
+			float64(memMetric.CurrentPeriod.UncorrectableECCErrorCount),
+			metricLabels...)
 	}
+}
 
-	// Create label values matching the order of gpuBaseLabels: "resource", "system", "id"
-	gpuLabelValues := []string{gpuName, systemName, gpuID}
-
+func emitGPUHealth(ch chan<- prometheus.Metric, gpu *redfish.Processor, commonLabels []string) {
 	if gpuStatusHealthValue, ok := parseCommonStatusHealth(gpu.Status.Health); ok {
 		ch <- prometheus.MustNewConstMetric(
 			gpuMetrics["gpu_health"].desc,
 			prometheus.GaugeValue,
 			gpuStatusHealthValue,
-			gpuLabelValues...)
+			commonLabels...)
 	}
 }
 
