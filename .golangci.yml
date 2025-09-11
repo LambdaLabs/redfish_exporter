@@ -1,0 +1,84 @@
+# golangci-lint configuration
+# https://golangci-lint.run/usage/configuration/
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  skip-dirs:
+    - vendor
+
+linters:
+  # Use default linters plus a few extras
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - unconvert
+    - gosec
+    - prealloc
+    - nakedret
+    - gocyclo
+    - dupl
+    
+  disable:
+    - exhaustive     # Too strict for most cases
+    - godox          # Allow TODO/FIXME comments
+    - gochecknoglobals # Globals are sometimes needed
+    - gochecknoinits # Init functions are sometimes needed
+
+linters-settings:
+  gocyclo:
+    min-complexity: 45  # Allow complex Collect functions
+    
+  dupl:
+    threshold: 150
+    
+  nakedret:
+    max-func-lines: 30
+    
+  gosec:
+    excludes:
+      - G104  # Unhandled errors in defer statements
+
+issues:
+  exclude-rules:
+    # Exclude certain linters for test files
+    - path: _test\.go
+      linters:
+        - dupl
+        - gosec
+        - errcheck
+    
+    # G304: Test fixtures must be loaded dynamically based on test requirements.
+    # The paths are controlled by test code, not external user input.
+    - path: testdata_loader_test\.go
+      linters:
+        - gosec
+      text: "G304"
+    
+    # G304: Config file path must be user-specifiable for deployment flexibility.
+    # This is a required feature - admins need to specify config location.
+    - path: config\.go
+      linters:
+        - gosec
+      text: "G304"
+    
+    # G112: TODO: Add ReadHeaderTimeout to http.Server to prevent Slowloris attacks
+    # This requires careful tuning based on deployment environment
+    - path: main\.go
+      linters:
+        - gosec
+      text: "G112"
+
+  # Maximum issues count per one linter
+  max-issues-per-linter: 0
+  
+  # Maximum count of issues with the same text
+  max-same-issues: 0
+  
+  # Show all issues
+  new: false

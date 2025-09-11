@@ -2,6 +2,7 @@ package collector
 
 import (
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -25,19 +26,19 @@ type testRedfishServer struct {
 // newTestRedfishServer creates a new test Redfish server for testing
 func newTestRedfishServer(t *testing.T) *testRedfishServer {
 	t.Helper()
-	
+
 	trs := &testRedfishServer{
 		t:        t,
 		mux:      http.NewServeMux(),
 		requests: make([]string, 0),
 	}
-	
+
 	trs.Server = httptest.NewServer(trs.mux)
 	t.Cleanup(trs.Close)
-	
+
 	// Set up default routes
 	trs.setupDefaultRoutes()
-	
+
 	return trs
 }
 
@@ -45,7 +46,7 @@ func newTestRedfishServer(t *testing.T) *testRedfishServer {
 func (m *testRedfishServer) setupDefaultRoutes() {
 	// Service root
 	m.addRouteFromFixture("/redfish/v1/", "service_root.json")
-	
+
 	// Systems collection
 	m.addRouteFromFixture("/redfish/v1/Systems", "systems_collection.json")
 }
@@ -82,14 +83,14 @@ func (m *testRedfishServer) loadFixture(fixtureFile string) map[string]interface
 func (m *testRedfishServer) setupSystemWithProcessor(systemID, processorID string) {
 	systemPath := "/redfish/v1/Systems/" + systemID
 	processorPath := systemPath + "/Processors/" + processorID
-	
+
 	// Load and modify system fixture
 	system := m.loadFixture("system1.json")
 	system["@odata.id"] = systemPath
 	system["Id"] = systemID
 	system["Processors"] = map[string]string{"@odata.id": systemPath + "/Processors"}
 	m.addRoute(systemPath, system)
-	
+
 	// Create processor collection
 	m.addRoute(systemPath+"/Processors", map[string]interface{}{
 		"@odata.type": "#ProcessorCollection.ProcessorCollection",
@@ -102,38 +103,38 @@ func (m *testRedfishServer) setupSystemWithProcessor(systemID, processorID strin
 // connectToTestServer creates a gofish client connected to the test server
 func connectToTestServer(t *testing.T, server *testRedfishServer) *gofish.APIClient {
 	t.Helper()
-	
+
 	config := gofish.ClientConfig{
 		Endpoint: server.URL,
 		Username: "",
 		Password: "",
 		Insecure: true,
 	}
-	
+
 	client, err := gofish.Connect(config)
 	require.NoError(t, err, "Failed to connect to test server")
-	
+
 	return client
 }
 
 // collectProcessorMetrics runs the collector and returns metrics as a map
 func collectProcessorMetrics(t *testing.T, client *gofish.APIClient) map[string]float64 {
 	t.Helper()
-	
-	// Create a test logger
-	logger := slog.Default()
-	
+
+	// Create a test logger that discards output
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
 	collector := NewSystemCollector(client, logger)
 	ch := make(chan prometheus.Metric, 100)
 	collector.Collect(ch)
 	close(ch)
-	
+
 	metrics := make(map[string]float64)
 	for metric := range ch {
 		dto := &dto.Metric{}
 		err := metric.Write(dto)
 		require.NoError(t, err)
-		
+
 		desc := metric.Desc().String()
 		if gauge := dto.GetGauge(); gauge != nil {
 			// Extract metric name from description
@@ -151,7 +152,7 @@ func collectProcessorMetrics(t *testing.T, client *gofish.APIClient) map[string]
 			}
 		}
 	}
-	
+
 	return metrics
 }
 

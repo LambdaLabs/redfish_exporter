@@ -62,22 +62,26 @@ func main() {
 	// Create output directory - relative to project root
 	// We're running from tools/capture, so go up two levels
 	outputDir := filepath.Join("..", "mock-server", "testdata", *output)
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	if err := os.MkdirAll(outputDir, 0750); err != nil { // Use 0750 for directory permissions
 		log.Fatalf("Failed to create output directory: %v", err)
 	}
 
 	// Open output file
 	outputPath := filepath.Join(outputDir, "capture.txt")
-	outputFile, err := os.Create(outputPath)
+	outputFile, err := os.Create(outputPath) //nolint:gosec // Output path is controlled by developer
 	if err != nil {
 		log.Fatalf("Failed to create output file: %v", err)
 	}
-	defer outputFile.Close()
+	defer func() {
+		if err := outputFile.Close(); err != nil {
+			log.Printf("Failed to close output file: %v", err)
+		}
+	}()
 
 	// Create HTTP client with basic auth
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: *insecure,
+			InsecureSkipVerify: *insecure, //nolint:gosec // Insecure flag is explicit user choice for testing
 		},
 	}
 	client := &http.Client{
@@ -183,7 +187,9 @@ func (c *Capture) crawl() {
 		}
 
 		// Write to output file
-		fmt.Fprintf(c.outputFile, "# %s\n", url)
+		if _, err := fmt.Fprintf(c.outputFile, "# %s\n", url); err != nil {
+			fmt.Fprintf(os.Stderr, "# ERROR writing URL comment: %v\n", err)
+		}
 		encoder := json.NewEncoder(c.outputFile)
 		encoder.SetIndent("", "  ")
 		encoder.SetEscapeHTML(false)
@@ -218,7 +224,12 @@ func (c *Capture) fetchJSON(urlStr string) (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			// Log but don't fail - response body close errors are usually not critical
+			fmt.Fprintf(os.Stderr, "Warning: failed to close response body: %v\n", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)

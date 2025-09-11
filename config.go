@@ -28,7 +28,7 @@ type HostConfig struct {
 // Read exporter config from file
 func NewConfigFromFile(configFile string) (*Config, error) {
 	var config = &Config{}
-	yamlFile, err := os.ReadFile(configFile)
+	yamlFile, err := os.ReadFile(configFile) //nolint:gosec // Config path must be user-specifiable for deployment
 	if err != nil {
 		return nil, err
 	}

@@ -135,7 +135,7 @@ func (s *SystemCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 // Collect implements prometheus.Collector.
-func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) {
+func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocyclo // Complex but necessary for complete system collection
 
 	logger := s.logger.With(slog.String("collector", "SystemCollector"))
 	service := s.redfishClient.Service

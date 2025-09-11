@@ -19,7 +19,7 @@ func TestProcessorMetricsIntegration(t *testing.T) {
 			setupMock: func(m *testRedfishServer) {
 				// Set up system and processor collection
 				m.setupSystemWithProcessor("System1", "GPU_2")
-				
+
 				// Add processor and metrics from fixtures
 				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/GPU_2", "processor_with_metrics.json")
 				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/GPU_2/ProcessorMetrics", "processor_metrics_full.json")
@@ -37,7 +37,7 @@ func TestProcessorMetricsIntegration(t *testing.T) {
 			setupMock: func(m *testRedfishServer) {
 				// Set up system and processor collection
 				m.setupSystemWithProcessor("System1", "CPU_0")
-				
+
 				// Add processor and metrics with zero errors
 				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/CPU_0", "processor_zero_errors.json")
 				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/CPU_0/ProcessorMetrics", "processor_metrics_zero.json")
@@ -55,7 +55,7 @@ func TestProcessorMetricsIntegration(t *testing.T) {
 			setupMock: func(m *testRedfishServer) {
 				// Set up system and processor collection
 				m.setupSystemWithProcessor("System1", "CPU_1")
-				
+
 				// Add processor v1.0.0 (no Metrics field)
 				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/CPU_1", "schemas/v1_0_0_processor.json")
 			},
@@ -64,27 +64,27 @@ func TestProcessorMetricsIntegration(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
 			server := newTestRedfishServer(t)
 			tt.setupMock(server)
-			
+
 			client := connectToTestServer(t, server)
-			
+
 			// Act
 			metrics := collectProcessorMetrics(t, client)
-			
+
 			// Assert
 			for metricName, expectedValue := range tt.wantMetrics {
 				actualValue, found := metrics[metricName]
 				require.True(t, found, "Metric %s not found", metricName)
 				assert.Equal(t, expectedValue, actualValue, "Metric %s has wrong value", metricName)
 			}
-			
+
 			// Verify no unexpected metrics for the "without metrics" case
-			if tt.name == "processor without metrics link" {
+			if len(tt.wantMetrics) == 0 {
 				assert.Empty(t, metrics, "Expected no PCIe or cache metrics when ProcessorMetrics unavailable")
 			}
 		})
@@ -120,20 +120,20 @@ func TestProcessorMetricsBackwardsCompatibility(t *testing.T) {
 			expectMetrics: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := newTestRedfishServer(t)
-			
+
 			// Setup basic system structure
 			server.setupSystemWithProcessor("System1", "CPU_1")
-			
+
 			// Apply version-specific setup
 			tt.setupMock(server)
-			
+
 			client := connectToTestServer(t, server)
 			metrics := collectProcessorMetrics(t, client)
-			
+
 			if tt.expectMetrics {
 				assert.NotEmpty(t, metrics, "Expected metrics for schema %s", tt.schemaVersion)
 			} else {
