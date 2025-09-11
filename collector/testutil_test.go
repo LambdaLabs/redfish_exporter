@@ -158,5 +158,5 @@ func collectSystemMetrics(t *testing.T, client *gofish.APIClient) map[string]flo
 
 // contains is a helper function for string matching
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && strings.Contains(s, substr))
+	return strings.Contains(s, substr)
 }
