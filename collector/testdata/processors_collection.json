@@ -1,0 +1,5 @@
+{
+  "@odata.type": "#ProcessorCollection.ProcessorCollection",
+  "_comment": "Default processor collection, tests should override Members as needed",
+  "Members": []
+}

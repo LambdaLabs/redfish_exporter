@@ -14,7 +14,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math/big"
 	"net"
@@ -96,7 +95,7 @@ func NewMockRedfishServer(config *Config) *MockRedfishServer {
 	}
 	
 	if config.EnableLogging && config.LogFile != "" {
-		logFile, err := os.OpenFile(config.LogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		logFile, err := os.OpenFile(config.LogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644) //nolint:gosec // Log files need to be readable
 		if err == nil {
 			server.accessLog = log.New(logFile, "[ACCESS] ", log.LstdFlags)
 		}
@@ -116,7 +115,7 @@ func NewMockRedfishServer(config *Config) *MockRedfishServer {
 }
 
 func (s *MockRedfishServer) loadAuthConfig(filename string) error {
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename) //nolint:gosec // Test data files are controlled by developer
 	if err != nil {
 		return err
 	}
@@ -144,11 +143,15 @@ func (s *MockRedfishServer) useDefaultAuth() {
 // # URL
 // JSON content
 func (s *MockRedfishServer) LoadFromFile(filename string) error {
-	file, err := os.Open(filename)
+	file, err := os.Open(filename) //nolint:gosec // Test data files are controlled by developer
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("Failed to close file: %v", err)
+		}
+	}()
 
 	// Check file size
 	stat, err := file.Stat()
@@ -315,7 +318,9 @@ func (s *MockRedfishServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("OData-Version", "4.0")
 	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	if _, err := w.Write(data); err != nil {
+		log.Printf("Failed to write response: %v", err)
+	}
 	
 	s.logRequest(reqLog)
 }
@@ -431,7 +436,9 @@ func (s *MockRedfishServer) handleSpecialEndpoints(w http.ResponseWriter, r *htt
 		w.Header().Set("X-Auth-Token", token)
 		w.Header().Set("Location", "/redfish/v1/SessionService/Sessions/"+sessionID)
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			log.Printf("Failed to encode login response: %v", err)
+		}
 		return true
 	}
 	
@@ -530,7 +537,9 @@ func (s *MockRedfishServer) DebugHandler(w http.ResponseWriter, r *http.Request)
 	}
 	
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Failed to encode status response: %v", err)
+	}
 }
 
 func main() {
@@ -634,7 +643,7 @@ func main() {
 			if *debug {
 				log.Printf("Debug info available at: http://localhost:%s/debug", config.Port)
 			}
-			log.Fatal(http.ListenAndServe(addr, mux))
+			log.Fatal(http.ListenAndServe(addr, mux)) //nolint:gosec // Mock server for testing only
 		}()
 	}
 	
@@ -648,9 +657,10 @@ func main() {
 				log.Printf("Debug info available at: https://localhost:%s/debug", config.HTTPSPort)
 			}
 			server := &http.Server{
-				Addr:      addr,
-				Handler:   mux,
-				TLSConfig: tlsConfig,
+				Addr:              addr,
+				Handler:           mux,
+				TLSConfig:         tlsConfig,
+				ReadHeaderTimeout: 10 * time.Second, // Prevent Slowloris attacks
 			}
 			log.Fatal(server.ListenAndServeTLS("", ""))
 		}()
@@ -690,6 +700,7 @@ func getTLSConfig(config *Config) (*tls.Config, error) {
 	
 	return &tls.Config{
 		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12, // Set minimum TLS version for security
 	}, nil
 }
 
@@ -727,10 +738,10 @@ func generateSelfSignedCert() (tls.Certificate, error) {
 	certPath := "tools/mock-server/server.crt"
 	keyPath := "tools/mock-server/server.key"
 	
-	if err := ioutil.WriteFile(certPath, certPEM, 0644); err != nil {
+	if err := os.WriteFile(certPath, certPEM, 0600); err != nil { // Use 0600 for certificate files
 		log.Printf("Warning: failed to save certificate to %s: %v", certPath, err)
 	}
-	if err := ioutil.WriteFile(keyPath, keyPEM, 0600); err != nil {
+	if err := os.WriteFile(keyPath, keyPEM, 0600); err != nil {
 		log.Printf("Warning: failed to save key to %s: %v", keyPath, err)
 	}
 	

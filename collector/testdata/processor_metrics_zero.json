@@ -1,0 +1,21 @@
+{
+  "@odata.type": "#ProcessorMetrics.v1_6_1.ProcessorMetrics",
+  "@odata.id": "/redfish/v1/Systems/System1/Processors/CPU_0/ProcessorMetrics",
+  "_comment": "All error counts are zero",
+  "PCIeErrors": {
+    "L0ToRecoveryCount": 0,
+    "CorrectableErrorCount": 0,
+    "FatalErrorCount": 0,
+    "NonFatalErrorCount": 0,
+    "NAKReceivedCount": 0,
+    "NAKSentCount": 0,
+    "ReplayCount": 0,
+    "ReplayRolloverCount": 0
+  },
+  "CacheMetricsTotal": {
+    "LifeTime": {
+      "CorrectableECCErrorCount": 0,
+      "UncorrectableECCErrorCount": 0
+    }
+  }
+}

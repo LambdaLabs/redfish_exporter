@@ -1,0 +1,24 @@
+{
+  "@odata.type": "#Processor.v1_20_0.Processor",
+  "@odata.id": "/redfish/v1/Systems/System1/Processors/GPU_2",
+  "Id": "GPU_2",
+  "Name": "GPU 2",
+  "ProcessorType": "GPU",
+  "Manufacturer": "NVIDIA",
+  "Model": "H100",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+  },
+  "TotalCores": 128,
+  "TotalThreads": 256,
+  "ProcessorArchitecture": "GPU",
+  "ProcessorId": {
+    "VendorId": "NVIDIA",
+    "IdentificationRegisters": "0x2330"
+  },
+  "Metrics": {
+    "@odata.id": "/redfish/v1/Systems/System1/Processors/GPU_2/ProcessorMetrics"
+  }
+}

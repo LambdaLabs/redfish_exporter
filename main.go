@@ -143,7 +143,7 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, opts))
 	slog.SetDefault(logger)
 
-	slog.Info("Config successfuly parsed", slog.String("loglevel", opts.Level.Level().String()))
+	slog.Info("Config successfully parsed", slog.String("loglevel", opts.Level.Level().String()))
 
 	// load config in background to watch for config changes
 	hup := make(chan os.Signal, 1)
@@ -194,7 +194,7 @@ func main() {
 	})
 
 	slog.Info("Exporter started", slog.String("listenAddress", *listenAddress))
-	srv := &http.Server{Addr: *listenAddress}
+	srv := &http.Server{Addr: *listenAddress} //nolint:gosec // TODO: Add ReadHeaderTimeout after determining appropriate value
 	err := web.ListenAndServe(srv, *webConfig, kitlogger)
 	if err != nil {
 		log.Fatal(err)

@@ -1,0 +1,40 @@
+{
+  "@odata.type": "#ProcessorMetrics.v1_6_1.ProcessorMetrics",
+  "@odata.id": "/redfish/v1/Systems/System1/Processors/GPU_2/ProcessorMetrics",
+  "Id": "ProcessorMetrics",
+  "Name": "Processor Metrics for GPU_2",
+  "BandwidthPercent": 45.2,
+  "OperatingSpeedMHz": 1980,
+  "PCIeErrors": {
+    "L0ToRecoveryCount": 42,
+    "CorrectableErrorCount": 10,
+    "FatalErrorCount": 1,
+    "NonFatalErrorCount": 3,
+    "NAKReceivedCount": 5,
+    "NAKSentCount": 2,
+    "ReplayCount": 7,
+    "ReplayRolloverCount": 1,
+    "UnsupportedRequestCount": 0
+  },
+  "CacheMetricsTotal": {
+    "CurrentPeriod": {
+      "CorrectableECCErrorCount": 3,
+      "UncorrectableECCErrorCount": 0
+    },
+    "LifeTime": {
+      "CorrectableECCErrorCount": 15,
+      "UncorrectableECCErrorCount": 2
+    }
+  },
+  "CoreMetrics": [
+    {
+      "CoreID": "0",
+      "IOStallCount": 100,
+      "MemoryStallCount": 250,
+      "UncorrectableCoreErrorCount": 0,
+      "CorrectableCoreErrorCount": 1
+    }
+  ],
+  "CorrectableCoreErrorCount": 1,
+  "UncorrectableCoreErrorCount": 0
+}

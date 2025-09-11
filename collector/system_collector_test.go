@@ -163,9 +163,10 @@ func TestDriveMetrics(t *testing.T) {
 					// Get drive ID and controller ID from labels
 					var driveID, controllerID string
 					for _, label := range metricDTO.GetLabel() {
-						if *label.Name == "drive_id" {
+						switch *label.Name {
+						case "drive_id":
 							driveID = *label.Value
-						} else if *label.Name == "storage_controller_id" {
+						case "storage_controller_id":
 							controllerID = *label.Value
 						}
 					}
