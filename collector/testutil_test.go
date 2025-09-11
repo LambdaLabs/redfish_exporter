@@ -117,8 +117,8 @@ func connectToTestServer(t *testing.T, server *testRedfishServer) *gofish.APICli
 	return client
 }
 
-// collectProcessorMetrics runs the collector and returns metrics as a map
-func collectProcessorMetrics(t *testing.T, client *gofish.APIClient) map[string]float64 {
+// collectSystemMetrics runs the system collector and returns metrics as a map
+func collectSystemMetrics(t *testing.T, client *gofish.APIClient) map[string]float64 {
 	t.Helper()
 
 	// Create a test logger that discards output
@@ -137,7 +137,7 @@ func collectProcessorMetrics(t *testing.T, client *gofish.APIClient) map[string]
 
 		desc := metric.Desc().String()
 		if gauge := dto.GetGauge(); gauge != nil {
-			// Extract metric name from description
+			// Extract processor-related metrics from system collector output
 			switch {
 			case contains(desc, "processor_pcie_errors_l0_to_recovery_count"):
 				metrics["pcie_l0_recovery"] = gauge.GetValue()

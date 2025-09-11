@@ -74,7 +74,7 @@ func TestProcessorMetricsIntegration(t *testing.T) {
 			client := connectToTestServer(t, server)
 
 			// Act
-			metrics := collectProcessorMetrics(t, client)
+			metrics := collectSystemMetrics(t, client)
 
 			// Assert
 			for metricName, expectedValue := range tt.wantMetrics {
@@ -132,7 +132,7 @@ func TestProcessorMetricsBackwardsCompatibility(t *testing.T) {
 			tt.setupMock(server)
 
 			client := connectToTestServer(t, server)
-			metrics := collectProcessorMetrics(t, client)
+			metrics := collectSystemMetrics(t, client)
 
 			if tt.expectMetrics {
 				assert.NotEmpty(t, metrics, "Expected metrics for schema %s", tt.schemaVersion)
