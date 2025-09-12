@@ -28,7 +28,7 @@ type GPUCollector struct {
 	metrics               map[string]Metric
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
-	oemHelper             *NvidiaOEMHelper
+	oemClient             *NvidiaOEMClient
 }
 
 func createGPUMetricMap() map[string]Metric {
@@ -95,7 +95,7 @@ func NewGPUCollector(redfishClient *gofish.APIClient, logger *slog.Logger) *GPUC
 			},
 			[]string{"collector"},
 		),
-		oemHelper: NewNvidiaOEMHelper(redfishClient.GetService().GetClient(), logger),
+		oemClient: NewNvidiaOEMClient(redfishClient.GetService().GetClient(), logger),
 	}
 }
 
@@ -150,7 +150,8 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 		)
 	} else {
 		for _, memory := range memories {
-			if IsNvidiaGPUMemory(memory.ID) {
+			// Collect metrics for any memory that appears to be GPU memory
+			if strings.Contains(memory.ID, "GPU_") && strings.Contains(memory.ID, "_DRAM_") {
 				wgMemory.Add(1)
 				go g.collectGPUMemory(ch, systemName, systemID, memory, wgMemory)
 			}
@@ -166,7 +167,8 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 		)
 	} else {
 		for _, processor := range processors {
-			if processor.ProcessorType == redfish.GPUProcessorType || IsNvidiaGPU(processor.ID) {
+			// Collect metrics for any GPU processor
+			if processor.ProcessorType == redfish.GPUProcessorType || strings.Contains(processor.ID, "GPU_") {
 				wgProcessor.Add(1)
 				go g.collectGPUProcessor(ch, systemName, systemID, processor, wgProcessor)
 			}
@@ -214,7 +216,7 @@ func (g *GPUCollector) collectGPUMemory(ch chan<- prometheus.Metric, systemName,
 	}
 
 	// Get Memory OEM metrics
-	if memOEM, err := g.oemHelper.GetMemoryOEMMetrics(memory.ODataID); err == nil {
+	if memOEM, err := g.oemClient.GetMemoryOEMMetrics(memory.ODataID); err == nil {
 		ch <- prometheus.MustNewConstMetric(
 			g.metrics["gpu_memory_row_remapping_failed"].desc,
 			prometheus.GaugeValue,
@@ -236,7 +238,7 @@ func (g *GPUCollector) collectGPUMemory(ch chan<- prometheus.Metric, systemName,
 
 	// Get MemoryMetrics OEM data
 	if metrics, err := memory.Metrics(); err == nil && metrics != nil {
-		if metricsOEM, err := g.oemHelper.GetMemoryMetricsOEMData(metrics.ODataID); err == nil {
+		if metricsOEM, err := g.oemClient.GetMemoryMetricsOEMData(metrics.ODataID); err == nil {
 			ch <- prometheus.MustNewConstMetric(
 				g.metrics["gpu_memory_correctable_row_remapping_count"].desc,
 				prometheus.GaugeValue,
@@ -335,7 +337,7 @@ func (g *GPUCollector) collectGPUProcessor(ch chan<- prometheus.Metric, systemNa
 
 	// Get ProcessorMetrics OEM data
 	if metrics, err := processor.Metrics(); err == nil && metrics != nil {
-		if metricsOEM, err := g.oemHelper.GetProcessorMetricsOEMData(metrics.ODataID); err == nil {
+		if metricsOEM, err := g.oemClient.GetProcessorMetricsOEMData(metrics.ODataID); err == nil {
 			ch <- prometheus.MustNewConstMetric(
 				g.metrics["gpu_sm_utilization_percent"].desc,
 				prometheus.GaugeValue,
@@ -420,7 +422,8 @@ func (g *GPUCollector) collectNVLinkPorts(ch chan<- prometheus.Metric, systemNam
 	}
 
 	for _, port := range ports {
-		if !IsNVLinkPort(port.ID) {
+		// Only collect metrics for NVLink ports
+		if !strings.Contains(port.ID, "NVLink_") {
 			continue
 		}
 
@@ -449,7 +452,7 @@ func (g *GPUCollector) collectNVLinkPorts(ch chan<- prometheus.Metric, systemNam
 
 		// Get PortMetrics OEM data
 		if metrics, err := port.Metrics(); err == nil && metrics != nil {
-			if metricsOEM, err := g.oemHelper.GetPortMetricsOEMData(metrics.ODataID); err == nil {
+			if metricsOEM, err := g.oemClient.GetPortMetricsOEMData(metrics.ODataID); err == nil {
 				ch <- prometheus.MustNewConstMetric(
 					g.metrics["gpu_nvlink_runtime_error"].desc,
 					prometheus.GaugeValue,
