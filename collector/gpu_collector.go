@@ -144,7 +144,7 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 	// Collect GPU memory metrics
 	wgMemory := &sync.WaitGroup{}
 	if memories, err := system.Memory(); err != nil {
-		g.logger.Debug("failed to get memory for system",
+		g.logger.Error("failed to get memory for system",
 			slog.String("system_id", systemID),
 			slog.Any("error", err),
 		)

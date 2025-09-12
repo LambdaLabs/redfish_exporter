@@ -415,3 +415,184 @@ func TestGPUCollectorWithNoGPUs(t *testing.T) {
 	
 	t.Log("Successfully verified no GPU metrics collected for non-GPU system")
 }
+
+// TestCollectGPUProcessorMetrics tests collection of GPU processor metrics with various health states
+func TestCollectGPUProcessorMetrics(t *testing.T) {
+	tests := map[string]struct {
+		processorID    string
+		processorName  string
+		processorType  string
+		health         string
+		state          string
+		expectMetric   bool
+		expectedHealth float64
+		expectedState  float64
+	}{
+		"healthy GPU": {
+			processorID:    "GPU_0",
+			processorName:  "NVIDIA GB300",
+			processorType:  "GPU",
+			health:         "OK",
+			state:          "Enabled",
+			expectMetric:   true,
+			expectedHealth: 1,
+			expectedState:  1,
+		},
+		"GPU with warning": {
+			processorID:    "GPU_1",
+			processorName:  "NVIDIA GB300",
+			processorType:  "GPU",
+			health:         "Warning",
+			state:          "Enabled",
+			expectMetric:   true,
+			expectedHealth: 2,
+			expectedState:  1,
+		},
+		"GPU with critical status": {
+			processorID:    "GPU_2",
+			processorName:  "NVIDIA GB300",
+			processorType:  "GPU",
+			health:         "Critical",
+			state:          "Enabled",
+			expectMetric:   true,
+			expectedHealth: 3,
+			expectedState:  1,
+		},
+		"disabled GPU": {
+			processorID:    "GPU_3",
+			processorName:  "NVIDIA GB300",
+			processorType:  "GPU",
+			health:         "OK",
+			state:          "Disabled",
+			expectMetric:   true,
+			expectedHealth: 1,
+			expectedState:  2,
+		},
+		"GPU processor identified by ID pattern": {
+			processorID:    "GPU_4",
+			processorName:  "Custom GPU",
+			processorType:  "CPU", // Wrong type but ID contains GPU_
+			health:         "OK",
+			state:          "Enabled",
+			expectMetric:   true, // Should still be collected due to ID pattern
+			expectedHealth: 1,
+			expectedState:  1,
+		},
+		"non-GPU processor": {
+			processorID:   "CPU_0",
+			processorName: "Intel Xeon",
+			processorType: "CPU",
+			health:        "OK",
+			state:         "Enabled",
+			expectMetric:  false,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Create test server
+			server := &testRedfishServer{
+				t:        t,
+				mux:      http.NewServeMux(),
+				requests: make([]string, 0),
+			}
+			server.Server = httptest.NewServer(server.mux)
+			defer server.Close()
+
+			// Setup service root
+			server.addRouteFromFixture("/redfish/v1/", "service_root.json")
+
+			// Setup systems collection
+			server.addRoute("/redfish/v1/Systems", map[string]interface{}{
+				"@odata.type": "#ComputerSystemCollection.ComputerSystemCollection",
+				"Members": []map[string]string{
+					{"@odata.id": "/redfish/v1/Systems/System1"},
+				},
+				"Members@odata.count": 1,
+			})
+
+			// Setup system with processor
+			server.addRoute("/redfish/v1/Systems/System1", map[string]interface{}{
+				"@odata.type": "#ComputerSystem.v1_14_0.ComputerSystem",
+				"Id":          "System1",
+				"Name":        "Test System",
+				"Processors": map[string]string{
+					"@odata.id": "/redfish/v1/Systems/System1/Processors",
+				},
+			})
+
+			// Setup processors collection
+			server.addRoute("/redfish/v1/Systems/System1/Processors", map[string]interface{}{
+				"@odata.type": "#ProcessorCollection.ProcessorCollection",
+				"Members": []map[string]string{
+					{"@odata.id": "/redfish/v1/Systems/System1/Processors/" + tt.processorID},
+				},
+				"Members@odata.count": 1,
+			})
+
+			// Setup individual processor
+			server.addRoute("/redfish/v1/Systems/System1/Processors/"+tt.processorID, map[string]interface{}{
+				"@odata.type":   "#Processor.v1_4_0.Processor",
+				"Id":            tt.processorID,
+				"Name":          tt.processorName,
+				"ProcessorType": tt.processorType,
+				"Status": map[string]string{
+					"Health": tt.health,
+					"State":  tt.state,
+				},
+				"TotalCores":   128,
+				"TotalThreads": 128,
+			})
+
+			// Create collector and collect metrics
+			client := connectToTestServer(t, server)
+
+			collector := NewGPUCollector(client, slog.Default())
+			ch := make(chan prometheus.Metric, 100)
+			go func() {
+				collector.Collect(ch)
+				close(ch)
+			}()
+
+			// Check metrics
+			foundHealth := false
+			foundState := false
+
+			for metric := range ch {
+				desc := metric.Desc()
+				descString := desc.String()
+				
+				dto := &dto.Metric{}
+				if err := metric.Write(dto); err != nil {
+					t.Errorf("failed to write metric: %v", err)
+					continue
+				}
+
+				// Check if this is a GPU processor metric
+				if strings.Contains(descString, "gpu_processor_health") {
+					foundHealth = true
+					if tt.expectMetric && dto.Gauge.GetValue() != tt.expectedHealth {
+						t.Errorf("expected health value %f, got %f", tt.expectedHealth, dto.Gauge.GetValue())
+					}
+				}
+
+				if strings.Contains(descString, "gpu_processor_state") {
+					foundState = true
+					if tt.expectMetric && dto.Gauge.GetValue() != tt.expectedState {
+						t.Errorf("expected state value %f, got %f", tt.expectedState, dto.Gauge.GetValue())
+					}
+				}
+			}
+
+			if tt.expectMetric && !foundHealth {
+				t.Error("expected GPU health metric but not found")
+			}
+			if tt.expectMetric && !foundState {
+				t.Error("expected GPU state metric but not found")
+			}
+			if !tt.expectMetric && (foundHealth || foundState) {
+				t.Error("found GPU metrics for non-GPU processor")
+			}
+		})
+	}
+}
