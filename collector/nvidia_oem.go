@@ -86,23 +86,24 @@ func IsNVLinkPort(portID string) bool {
 	return strings.Contains(portID, "NVLink_")
 }
 
-// GetMemoryOEMMetrics fetches and parses Nvidia OEM fields from Memory endpoint
-func (h *NvidiaOEMHelper) GetMemoryOEMMetrics(odataID string) (*MemoryOEMMetrics, error) {
-	resp, err := h.client.Get(odataID)
+// fetchJSON fetches JSON data from the given endpoint
+func (h *NvidiaOEMHelper) fetchJSON(endpoint string) (map[string]interface{}, error) {
+	resp, err := h.client.Get(endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch memory data: %w", err)
+		return nil, fmt.Errorf("failed to fetch from %s: %w", endpoint, err)
 	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			h.logger.Debug("failed to close response body", slog.String("error", err.Error()))
-		}
-	}()
+	defer resp.Body.Close() // nolint:errcheck // Close() errors on read are not actionable
 
 	var data map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("failed to decode memory JSON: %w", err)
+		return nil, fmt.Errorf("failed to decode JSON from %s: %w", endpoint, err)
 	}
 
+	return data, nil
+}
+
+// parseMemoryOEMMetrics parses Nvidia OEM fields from Memory JSON data
+func parseMemoryOEMMetrics(data map[string]interface{}) *MemoryOEMMetrics {
 	metrics := &MemoryOEMMetrics{}
 	
 	// Navigate to Oem.Nvidia fields
@@ -114,33 +115,31 @@ func (h *NvidiaOEMHelper) GetMemoryOEMMetrics(odataID string) (*MemoryOEMMetrics
 			if val, ok := nvidiaData["RowRemappingPending"].(bool); ok {
 				metrics.RowRemappingPending = val
 			}
-			h.logger.Debug("extracted Memory OEM metrics",
-				slog.String("odataID", odataID),
-				slog.Bool("row_remapping_failed", metrics.RowRemappingFailed),
-				slog.Bool("row_remapping_pending", metrics.RowRemappingPending))
 		}
 	}
+	
+	return metrics
+}
+
+// GetMemoryOEMMetrics fetches and parses Nvidia OEM fields from Memory endpoint
+func (h *NvidiaOEMHelper) GetMemoryOEMMetrics(odataID string) (*MemoryOEMMetrics, error) {
+	data, err := h.fetchJSON(odataID)
+	if err != nil {
+		return nil, err
+	}
+	
+	metrics := parseMemoryOEMMetrics(data)
+	
+	h.logger.Debug("extracted Memory OEM metrics",
+		slog.String("odataID", odataID),
+		slog.Bool("row_remapping_failed", metrics.RowRemappingFailed),
+		slog.Bool("row_remapping_pending", metrics.RowRemappingPending))
 	
 	return metrics, nil
 }
 
-// GetMemoryMetricsOEMData fetches and parses Nvidia OEM fields from MemoryMetrics endpoint
-func (h *NvidiaOEMHelper) GetMemoryMetricsOEMData(metricsEndpoint string) (*MemoryMetricsOEMData, error) {
-	resp, err := h.client.Get(metricsEndpoint)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch memory metrics: %w", err)
-	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			h.logger.Debug("failed to close response body", slog.String("error", err.Error()))
-		}
-	}()
-
-	var data map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("failed to decode memory metrics JSON: %w", err)
-	}
-
+// parseMemoryMetricsOEMData parses Nvidia OEM fields from MemoryMetrics JSON data
+func parseMemoryMetricsOEMData(data map[string]interface{}) *MemoryMetricsOEMData {
 	metrics := &MemoryMetricsOEMData{}
 	
 	// Navigate to Oem.Nvidia.RowRemapping fields
@@ -154,35 +153,32 @@ func (h *NvidiaOEMHelper) GetMemoryMetricsOEMData(metricsEndpoint string) (*Memo
 				metrics.NoAvailabilityBankCount = getInt64(rowRemapping, "NoAvailabilityBankCount")
 				metrics.PartialAvailabilityBankCount = getInt64(rowRemapping, "PartialAvailabilityBankCount")
 				metrics.UncorrectableRowRemappingCount = getInt64(rowRemapping, "UncorrectableRowRemappingCount")
-				
-				h.logger.Debug("extracted MemoryMetrics OEM data",
-					slog.String("endpoint", metricsEndpoint),
-					slog.Int64("correctable_count", metrics.CorrectableRowRemappingCount),
-					slog.Int64("uncorrectable_count", metrics.UncorrectableRowRemappingCount))
 			}
 		}
 	}
 	
+	return metrics
+}
+
+// GetMemoryMetricsOEMData fetches and parses Nvidia OEM fields from MemoryMetrics endpoint
+func (h *NvidiaOEMHelper) GetMemoryMetricsOEMData(metricsEndpoint string) (*MemoryMetricsOEMData, error) {
+	data, err := h.fetchJSON(metricsEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	
+	metrics := parseMemoryMetricsOEMData(data)
+	
+	h.logger.Debug("extracted MemoryMetrics OEM data",
+		slog.String("endpoint", metricsEndpoint),
+		slog.Int64("correctable_count", metrics.CorrectableRowRemappingCount),
+		slog.Int64("uncorrectable_count", metrics.UncorrectableRowRemappingCount))
+	
 	return metrics, nil
 }
 
-// GetProcessorMetricsOEMData fetches and parses Nvidia OEM fields from ProcessorMetrics endpoint
-func (h *NvidiaOEMHelper) GetProcessorMetricsOEMData(metricsEndpoint string) (*ProcessorMetricsOEMData, error) {
-	resp, err := h.client.Get(metricsEndpoint)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch processor metrics: %w", err)
-	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			h.logger.Debug("failed to close response body", slog.String("error", err.Error()))
-		}
-	}()
-
-	var data map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("failed to decode processor metrics JSON: %w", err)
-	}
-
+// parseProcessorMetricsOEMData parses Nvidia OEM fields from ProcessorMetrics JSON data
+func parseProcessorMetricsOEMData(data map[string]interface{}) *ProcessorMetricsOEMData {
 	metrics := &ProcessorMetricsOEMData{}
 	
 	// Navigate to Oem.Nvidia fields
@@ -212,34 +208,31 @@ func (h *NvidiaOEMHelper) GetProcessorMetricsOEMData(metricsEndpoint string) (*P
 					}
 				}
 			}
-			
-			h.logger.Debug("extracted ProcessorMetrics OEM data",
-				slog.String("endpoint", metricsEndpoint),
-				slog.Float64("sm_utilization", metrics.SMUtilizationPercent),
-				slog.Float64("tensor_core_activity", metrics.TensorCoreActivityPercent))
 		}
 	}
+	
+	return metrics
+}
+
+// GetProcessorMetricsOEMData fetches and parses Nvidia OEM fields from ProcessorMetrics endpoint
+func (h *NvidiaOEMHelper) GetProcessorMetricsOEMData(metricsEndpoint string) (*ProcessorMetricsOEMData, error) {
+	data, err := h.fetchJSON(metricsEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	
+	metrics := parseProcessorMetricsOEMData(data)
+	
+	h.logger.Debug("extracted ProcessorMetrics OEM data",
+		slog.String("endpoint", metricsEndpoint),
+		slog.Float64("sm_utilization", metrics.SMUtilizationPercent),
+		slog.Float64("tensor_core_activity", metrics.TensorCoreActivityPercent))
 	
 	return metrics, nil
 }
 
-// GetPortMetricsOEMData fetches and parses Nvidia OEM fields from PortMetrics endpoint
-func (h *NvidiaOEMHelper) GetPortMetricsOEMData(metricsEndpoint string) (*PortMetricsOEMData, error) {
-	resp, err := h.client.Get(metricsEndpoint)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch port metrics: %w", err)
-	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			h.logger.Debug("failed to close response body", slog.String("error", err.Error()))
-		}
-	}()
-
-	var data map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("failed to decode port metrics JSON: %w", err)
-	}
-
+// parsePortMetricsOEMData parses Nvidia OEM fields from PortMetrics JSON data
+func parsePortMetricsOEMData(data map[string]interface{}) *PortMetricsOEMData {
 	metrics := &PortMetricsOEMData{}
 	
 	// Navigate to Oem.Nvidia fields
@@ -261,14 +254,26 @@ func (h *NvidiaOEMHelper) GetPortMetricsOEMData(metricsEndpoint string) (*PortMe
 			metrics.MalformedPackets = getInt64(nvidiaData, "MalformedPackets")
 			metrics.BitErrorRate = getFloat64(nvidiaData, "BitErrorRate")
 			metrics.EffectiveBER = getFloat64(nvidiaData, "EffectiveBER")
-			
-			h.logger.Debug("extracted PortMetrics OEM data",
-				slog.String("endpoint", metricsEndpoint),
-				slog.Bool("runtime_error", metrics.NVLinkErrorsRuntimeError),
-				slog.Bool("training_error", metrics.NVLinkErrorsTrainingError),
-				slog.Int64("link_recovery_count", metrics.LinkErrorRecoveryCount))
 		}
 	}
+	
+	return metrics
+}
+
+// GetPortMetricsOEMData fetches and parses Nvidia OEM fields from PortMetrics endpoint
+func (h *NvidiaOEMHelper) GetPortMetricsOEMData(metricsEndpoint string) (*PortMetricsOEMData, error) {
+	data, err := h.fetchJSON(metricsEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	
+	metrics := parsePortMetricsOEMData(data)
+	
+	h.logger.Debug("extracted PortMetrics OEM data",
+		slog.String("endpoint", metricsEndpoint),
+		slog.Bool("runtime_error", metrics.NVLinkErrorsRuntimeError),
+		slog.Bool("training_error", metrics.NVLinkErrorsTrainingError),
+		slog.Int64("link_recovery_count", metrics.LinkErrorRecoveryCount))
 	
 	return metrics, nil
 }

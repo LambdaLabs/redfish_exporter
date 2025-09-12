@@ -16,9 +16,9 @@ const GPUSubsystem = "gpu"
 
 // GPU metric label names
 var (
-	GPUMemoryLabelNames    = []string{"hostname", "system_id", "gpu_id", "memory_id"}
-	GPUProcessorLabelNames = []string{"hostname", "system_id", "gpu_id", "processor_name"}
-	GPUPortLabelNames      = []string{"hostname", "system_id", "gpu_id", "port_id", "port_type"}
+	gpuMemoryLabelNames    = []string{"hostname", "system_id", "gpu_id", "memory_id"}
+	gpuProcessorLabelNames = []string{"hostname", "system_id", "gpu_id", "processor_name"}
+	gpuPortLabelNames      = []string{"hostname", "system_id", "gpu_id", "port_id", "port_type"}
 	gpuMetrics             = createGPUMetricMap()
 )
 
@@ -35,48 +35,48 @@ func createGPUMetricMap() map[string]Metric {
 	gpuMetrics := make(map[string]Metric)
 
 	// GPU Memory metrics
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_capacity_mib", "GPU memory capacity in MiB", GPUMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_state", fmt.Sprintf("GPU memory state,%s", CommonStateHelp), GPUMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_health", fmt.Sprintf("GPU memory health,%s", CommonHealthHelp), GPUMemoryLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_capacity_mib", "GPU memory capacity in MiB", gpuMemoryLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_state", fmt.Sprintf("GPU memory state,%s", CommonStateHelp), gpuMemoryLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_health", fmt.Sprintf("GPU memory health,%s", CommonHealthHelp), gpuMemoryLabelNames)
 
 	// Nvidia GPU Memory OEM metrics
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_row_remapping_failed", "GPU memory row remapping failed status (1 if failed)", GPUMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_row_remapping_pending", "GPU memory row remapping pending status (1 if pending)", GPUMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_correctable_row_remapping_count", "GPU memory correctable row remapping count", GPUMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_uncorrectable_row_remapping_count", "GPU memory uncorrectable row remapping count", GPUMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_high_availability_bank_count", "GPU memory high availability bank count", GPUMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_low_availability_bank_count", "GPU memory low availability bank count", GPUMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_no_availability_bank_count", "GPU memory no availability bank count", GPUMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_partial_availability_bank_count", "GPU memory partial availability bank count", GPUMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_max_availability_bank_count", "GPU memory max availability bank count", GPUMemoryLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_row_remapping_failed", "GPU memory row remapping failed status (1 if failed)", gpuMemoryLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_row_remapping_pending", "GPU memory row remapping pending status (1 if pending)", gpuMemoryLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_correctable_row_remapping_count", "GPU memory correctable row remapping count", gpuMemoryLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_uncorrectable_row_remapping_count", "GPU memory uncorrectable row remapping count", gpuMemoryLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_high_availability_bank_count", "GPU memory high availability bank count", gpuMemoryLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_low_availability_bank_count", "GPU memory low availability bank count", gpuMemoryLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_no_availability_bank_count", "GPU memory no availability bank count", gpuMemoryLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_partial_availability_bank_count", "GPU memory partial availability bank count", gpuMemoryLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_max_availability_bank_count", "GPU memory max availability bank count", gpuMemoryLabelNames)
 
 	// GPU Processor metrics
-	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_state", fmt.Sprintf("GPU processor state,%s", CommonStateHelp), GPUProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_health", fmt.Sprintf("GPU processor health,%s", CommonHealthHelp), GPUProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_total_cores", "GPU processor total cores", GPUProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_total_threads", "GPU processor total threads", GPUProcessorLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_state", fmt.Sprintf("GPU processor state,%s", CommonStateHelp), gpuProcessorLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_health", fmt.Sprintf("GPU processor health,%s", CommonHealthHelp), gpuProcessorLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_total_cores", "GPU processor total cores", gpuProcessorLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_total_threads", "GPU processor total threads", gpuProcessorLabelNames)
 
 	// Nvidia GPU Processor OEM metrics
-	addToMetricMap(gpuMetrics, GPUSubsystem, "sm_utilization_percent", "GPU SM utilization percentage", GPUProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "sm_activity_percent", "GPU SM activity percentage", GPUProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "sm_occupancy_percent", "GPU SM occupancy percentage", GPUProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "tensor_core_activity_percent", "GPU tensor core activity percentage", GPUProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "fp16_activity_percent", "GPU FP16 activity percentage", GPUProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "fp32_activity_percent", "GPU FP32 activity percentage", GPUProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "fp64_activity_percent", "GPU FP64 activity percentage", GPUProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "sram_ecc_error_threshold_exceeded", "GPU SRAM ECC error threshold exceeded (1 if exceeded)", GPUProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "pcie_rx_bytes", "GPU PCIe receive bytes", GPUProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "pcie_tx_bytes", "GPU PCIe transmit bytes", GPUProcessorLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "sm_utilization_percent", "GPU SM utilization percentage", gpuProcessorLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "sm_activity_percent", "GPU SM activity percentage", gpuProcessorLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "sm_occupancy_percent", "GPU SM occupancy percentage", gpuProcessorLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "tensor_core_activity_percent", "GPU tensor core activity percentage", gpuProcessorLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "fp16_activity_percent", "GPU FP16 activity percentage", gpuProcessorLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "fp32_activity_percent", "GPU FP32 activity percentage", gpuProcessorLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "fp64_activity_percent", "GPU FP64 activity percentage", gpuProcessorLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "sram_ecc_error_threshold_exceeded", "GPU SRAM ECC error threshold exceeded (1 if exceeded)", gpuProcessorLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "pcie_rx_bytes", "GPU PCIe receive bytes", gpuProcessorLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "pcie_tx_bytes", "GPU PCIe transmit bytes", gpuProcessorLabelNames)
 
 	// NVLink Port metrics
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_state", fmt.Sprintf("NVLink port state,%s", CommonStateHelp), GPUPortLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_health", fmt.Sprintf("NVLink port health,%s", CommonHealthHelp), GPUPortLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_runtime_error", "NVLink runtime error status (1 if error)", GPUPortLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_training_error", "NVLink training error status (1 if error)", GPUPortLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_link_error_recovery_count", "NVLink error recovery count", GPUPortLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_link_downed_count", "NVLink link downed count", GPUPortLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_symbol_errors", "NVLink symbol error count", GPUPortLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_bit_error_rate", "NVLink bit error rate", GPUPortLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_state", fmt.Sprintf("NVLink port state,%s", CommonStateHelp), gpuPortLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_health", fmt.Sprintf("NVLink port health,%s", CommonHealthHelp), gpuPortLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_runtime_error", "NVLink runtime error status (1 if error)", gpuPortLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_training_error", "NVLink training error status (1 if error)", gpuPortLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_link_error_recovery_count", "NVLink error recovery count", gpuPortLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_link_downed_count", "NVLink link downed count", gpuPortLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_symbol_errors", "NVLink symbol error count", gpuPortLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_bit_error_rate", "NVLink bit error rate", gpuPortLabelNames)
 
 	return gpuMetrics
 }
