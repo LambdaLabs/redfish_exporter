@@ -18,7 +18,7 @@ const GPUSubsystem = "gpu"
 var (
 	gpuMemoryLabelNames    = []string{"hostname", "system_id", "gpu_id", "memory_id"}
 	gpuProcessorLabelNames = []string{"hostname", "system_id", "gpu_id", "processor_name"}
-	gpuPortLabelNames      = []string{"hostname", "system_id", "gpu_id", "port_id", "port_type"}
+	gpuPortLabelNames      = []string{"hostname", "system_id", "gpu_id", "port_id", "port_type", "port_protocol"}
 	gpuMetrics             = createGPUMetricMap()
 	gpuMemoryTypes         = createGPUMemoryTypeSet()
 )
@@ -447,11 +447,8 @@ func (g *GPUCollector) collectNVLinkPorts(ch chan<- prometheus.Metric, systemNam
 
 		portID := port.ID
 		portType := string(port.PortType)
-		// Use PortProtocol name if PortType is empty
-		if portType == "" {
-			portType = string(port.PortProtocol)
-		}
-		labels := []string{systemName, systemID, gpuID, portID, portType}
+		portProtocol := string(port.PortProtocol)
+		labels := []string{systemName, systemID, gpuID, portID, portType, portProtocol}
 
 		// Basic port metrics
 		if stateValue, ok := parseCommonStatusState(port.Status.State); ok {

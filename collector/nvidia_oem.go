@@ -65,16 +65,15 @@ type NVLinkErrors struct {
 
 // PortMetricsOEMData represents Nvidia OEM fields from PortMetrics endpoint
 type PortMetricsOEMData struct {
-	NVLinkErrors           NVLinkErrors `json:"NVLinkErrors"`
-	LinkErrorRecoveryCount int64        `json:"LinkErrorRecoveryCount"`
-	LinkDownedCount        int64        `json:"LinkDownedCount"`
-	SymbolErrors           int64        `json:"SymbolErrors"`
-	MalformedPackets       int64        `json:"MalformedPackets"`
-	BitErrorRate           float64      `json:"BitErrorRate"`
-	EffectiveBER           float64      `json:"EffectiveBER"`
-	// Flattened fields for backward compatibility
-	NVLinkErrorsRuntimeError  bool `json:"-"`
-	NVLinkErrorsTrainingError bool `json:"-"`
+	NVLinkErrors              NVLinkErrors `json:"NVLinkErrors"`
+	LinkErrorRecoveryCount    int64        `json:"LinkErrorRecoveryCount"`
+	LinkDownedCount           int64        `json:"LinkDownedCount"`
+	SymbolErrors              int64        `json:"SymbolErrors"`
+	MalformedPackets          int64        `json:"MalformedPackets"`
+	BitErrorRate              float64      `json:"BitErrorRate"`
+	EffectiveBER              float64      `json:"EffectiveBER"`
+	NVLinkErrorsRuntimeError  bool         `json:"-"`
+	NVLinkErrorsTrainingError bool         `json:"-"`
 }
 
 // memoryResponse represents the JSON structure from Memory endpoint
