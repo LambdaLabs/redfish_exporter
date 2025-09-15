@@ -16,12 +16,21 @@ const GPUSubsystem = "gpu"
 
 // GPU metric label names
 var (
-	gpuMemoryLabelNames    = []string{"hostname", "system_id", "gpu_id", "memory_id"}
-	gpuProcessorLabelNames = []string{"hostname", "system_id", "gpu_id", "processor_name"}
-	gpuPortLabelNames      = []string{"hostname", "system_id", "gpu_id", "port_id", "port_type", "port_protocol"}
-	gpuMetrics             = createGPUMetricMap()
-	gpuMemoryTypes         = createGPUMemoryTypeSet()
+	// Base labels using the main branch pattern but with system_id instead of system
+	gpuBaseLabels      = []string{"hostname", "system_id", "gpu_id"}
+	gpuMemoryLabels    = baseWithExtraLabels([]string{"memory_id"})
+	gpuProcessorLabels = baseWithExtraLabels([]string{"processor_name"})
+	gpuPortLabels      = baseWithExtraLabels([]string{"port_id", "port_type", "port_protocol"})
+
+	gpuMetrics     = createGPUMetricMap()
+	gpuMemoryTypes = createGPUMemoryTypeSet()
 )
+
+func baseWithExtraLabels(extra []string) []string {
+	gpuBaseLabelsCopy := make([]string, len(gpuBaseLabels))
+	copy(gpuBaseLabelsCopy, gpuBaseLabels)
+	return append(gpuBaseLabelsCopy, extra...)
+}
 
 // createGPUMemoryTypeSet creates a set of GPU memory types for efficient lookup
 func createGPUMemoryTypeSet() map[redfish.MemoryDeviceType]bool {
@@ -57,49 +66,54 @@ type GPUCollector struct {
 func createGPUMetricMap() map[string]Metric {
 	gpuMetrics := make(map[string]Metric)
 
+	// Basic GPU metrics from main branch
+	addToMetricMap(gpuMetrics, GPUSubsystem, "health", "health of gpu reported by system,1(OK),2(Warning),3(Critical)", gpuBaseLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_ecc_correctable", "current correctable memory ecc errors reported on the gpu", gpuMemoryLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_ecc_uncorrectable", "current uncorrectable memory ecc errors reported on the gpu", gpuMemoryLabels)
+
 	// GPU Memory metrics
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_capacity_mib", "GPU memory capacity in MiB", gpuMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_state", fmt.Sprintf("GPU memory state,%s", CommonStateHelp), gpuMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_health", fmt.Sprintf("GPU memory health,%s", CommonHealthHelp), gpuMemoryLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_capacity_mib", "GPU memory capacity in MiB", gpuMemoryLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_state", fmt.Sprintf("GPU memory state,%s", CommonStateHelp), gpuMemoryLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_health", fmt.Sprintf("GPU memory health,%s", CommonHealthHelp), gpuMemoryLabels)
 
 	// Nvidia GPU Memory OEM metrics
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_row_remapping_failed", "GPU memory row remapping failed status (1 if failed)", gpuMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_row_remapping_pending", "GPU memory row remapping pending status (1 if pending)", gpuMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_correctable_row_remapping_count", "GPU memory correctable row remapping count", gpuMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_uncorrectable_row_remapping_count", "GPU memory uncorrectable row remapping count", gpuMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_high_availability_bank_count", "GPU memory high availability bank count", gpuMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_low_availability_bank_count", "GPU memory low availability bank count", gpuMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_no_availability_bank_count", "GPU memory no availability bank count", gpuMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_partial_availability_bank_count", "GPU memory partial availability bank count", gpuMemoryLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_max_availability_bank_count", "GPU memory max availability bank count", gpuMemoryLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_row_remapping_failed", "GPU memory row remapping failed status (1 if failed)", gpuMemoryLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_row_remapping_pending", "GPU memory row remapping pending status (1 if pending)", gpuMemoryLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_correctable_row_remapping_count", "GPU memory correctable row remapping count", gpuMemoryLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_uncorrectable_row_remapping_count", "GPU memory uncorrectable row remapping count", gpuMemoryLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_high_availability_bank_count", "GPU memory high availability bank count", gpuMemoryLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_low_availability_bank_count", "GPU memory low availability bank count", gpuMemoryLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_no_availability_bank_count", "GPU memory no availability bank count", gpuMemoryLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_partial_availability_bank_count", "GPU memory partial availability bank count", gpuMemoryLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_max_availability_bank_count", "GPU memory max availability bank count", gpuMemoryLabels)
 
 	// GPU Processor metrics
-	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_state", fmt.Sprintf("GPU processor state,%s", CommonStateHelp), gpuProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_health", fmt.Sprintf("GPU processor health,%s", CommonHealthHelp), gpuProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_total_cores", "GPU processor total cores", gpuProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_total_threads", "GPU processor total threads", gpuProcessorLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_state", fmt.Sprintf("GPU processor state,%s", CommonStateHelp), gpuProcessorLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_health", fmt.Sprintf("GPU processor health,%s", CommonHealthHelp), gpuProcessorLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_total_cores", "GPU processor total cores", gpuProcessorLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_total_threads", "GPU processor total threads", gpuProcessorLabels)
 
 	// Nvidia GPU Processor OEM metrics
-	addToMetricMap(gpuMetrics, GPUSubsystem, "sm_utilization_percent", "GPU SM utilization percentage", gpuProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "sm_activity_percent", "GPU SM activity percentage", gpuProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "sm_occupancy_percent", "GPU SM occupancy percentage", gpuProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "tensor_core_activity_percent", "GPU tensor core activity percentage", gpuProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "fp16_activity_percent", "GPU FP16 activity percentage", gpuProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "fp32_activity_percent", "GPU FP32 activity percentage", gpuProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "fp64_activity_percent", "GPU FP64 activity percentage", gpuProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "sram_ecc_error_threshold_exceeded", "GPU SRAM ECC error threshold exceeded (1 if exceeded)", gpuProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "pcie_rx_bytes", "GPU PCIe receive bytes", gpuProcessorLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "pcie_tx_bytes", "GPU PCIe transmit bytes", gpuProcessorLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "sm_utilization_percent", "GPU SM utilization percentage", gpuProcessorLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "sm_activity_percent", "GPU SM activity percentage", gpuProcessorLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "sm_occupancy_percent", "GPU SM occupancy percentage", gpuProcessorLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "tensor_core_activity_percent", "GPU tensor core activity percentage", gpuProcessorLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "fp16_activity_percent", "GPU FP16 activity percentage", gpuProcessorLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "fp32_activity_percent", "GPU FP32 activity percentage", gpuProcessorLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "fp64_activity_percent", "GPU FP64 activity percentage", gpuProcessorLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "sram_ecc_error_threshold_exceeded", "GPU SRAM ECC error threshold exceeded (1 if exceeded)", gpuProcessorLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "pcie_rx_bytes", "GPU PCIe receive bytes", gpuProcessorLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "pcie_tx_bytes", "GPU PCIe transmit bytes", gpuProcessorLabels)
 
 	// NVLink Port metrics
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_state", fmt.Sprintf("NVLink port state,%s", CommonStateHelp), gpuPortLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_health", fmt.Sprintf("NVLink port health,%s", CommonHealthHelp), gpuPortLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_runtime_error", "NVLink runtime error status (1 if error)", gpuPortLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_training_error", "NVLink training error status (1 if error)", gpuPortLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_link_error_recovery_count", "NVLink error recovery count", gpuPortLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_link_downed_count", "NVLink link downed count", gpuPortLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_symbol_errors", "NVLink symbol error count", gpuPortLabelNames)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_bit_error_rate", "NVLink bit error rate", gpuPortLabelNames)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_state", fmt.Sprintf("NVLink port state,%s", CommonStateHelp), gpuPortLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_health", fmt.Sprintf("NVLink port health,%s", CommonHealthHelp), gpuPortLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_runtime_error", "NVLink runtime error status (1 if error)", gpuPortLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_training_error", "NVLink training error status (1 if error)", gpuPortLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_link_error_recovery_count", "NVLink error recovery count", gpuPortLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_link_downed_count", "NVLink link downed count", gpuPortLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_symbol_errors", "NVLink symbol error count", gpuPortLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_bit_error_rate", "NVLink bit error rate", gpuPortLabels)
 
 	return gpuMetrics
 }
@@ -164,7 +178,40 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 		systemName = systemID
 	}
 
-	// Collect GPU memory metrics
+	// Get processors first for GPU-specific metrics
+	processors, err := system.Processors()
+	if err != nil {
+		g.logger.Error("failed to get processors for system",
+			slog.String("system_id", systemID),
+			slog.Any("error", err),
+		)
+		return
+	}
+
+	// Filter for GPU processors and collect basic metrics (from main branch)
+	gpus := filterGPUs(processors)
+	for _, gpu := range gpus {
+		if gpu.Name == "" {
+			gpu.Name = gpu.ID
+		}
+		commonGPULabels := []string{gpu.Name, systemName, gpu.ID}
+		emitGPUHealth(ch, gpu, commonGPULabels, g.metrics)
+
+		// Get GPU-specific memory for ECC metrics
+		gpuMem, err := gpu.Memory()
+		if err != nil {
+			g.logger.Error("error getting gpu memory", slog.Any("error", err))
+			continue
+		}
+		memWithMetrics := make([]MemoryWithMetrics, len(gpuMem))
+		for i, mem := range gpuMem {
+			memWithMetrics[i] = &redfishMemoryAdapter{Memory: mem}
+		}
+		emitGPUECCMetrics(ch, memWithMetrics, g.logger, commonGPULabels, g.metrics)
+	}
+
+	// Collect detailed OEM metrics (from HEAD branch)
+	// Collect GPU memory metrics from system level
 	wgMemory := &sync.WaitGroup{}
 	if memories, err := system.Memory(); err != nil {
 		g.logger.Error("failed to get memory for system",
@@ -181,20 +228,13 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 		}
 	}
 
-	// Collect GPU processor metrics
+	// Collect GPU processor metrics (reusing processors from line 182)
 	wgProcessor := &sync.WaitGroup{}
-	if processors, err := system.Processors(); err != nil {
-		g.logger.Error("failed to get processors for system",
-			slog.String("system_id", systemID),
-			slog.Any("error", err),
-		)
-	} else {
-		for _, processor := range processors {
-			// Collect metrics for any GPU processor
-			if processor.ProcessorType == redfish.GPUProcessorType {
-				wgProcessor.Add(1)
-				go g.collectGPUProcessor(ch, systemName, systemID, processor, wgProcessor)
-			}
+	for _, processor := range processors {
+		// Collect metrics for any GPU processor
+		if processor.ProcessorType == redfish.GPUProcessorType {
+			wgProcessor.Add(1)
+			go g.collectGPUProcessor(ch, systemName, systemID, processor, wgProcessor)
 		}
 	}
 
@@ -527,3 +567,66 @@ func extractGPUID(componentID string) string {
 	}
 	return componentID
 }
+
+// Helper types and functions from main branch
+
+// MemoryWithMetrics interface for accessing memory metrics
+type MemoryWithMetrics interface {
+	Metrics() (*redfish.MemoryMetrics, error)
+	GetID() string
+}
+
+// redfishMemoryAdapter adapts redfish.Memory to MemoryWithMetrics interface
+type redfishMemoryAdapter struct {
+	*redfish.Memory
+}
+
+func (r *redfishMemoryAdapter) GetID() string {
+	return r.ID
+}
+
+// filterGPUs filters processors to return only GPU processors
+func filterGPUs(cpus []*redfish.Processor) []*redfish.Processor {
+	gpus := []*redfish.Processor{}
+	for _, cpu := range cpus {
+		if cpu.ProcessorType == redfish.GPUProcessorType {
+			gpus = append(gpus, cpu)
+		}
+	}
+	return gpus
+}
+
+// emitGPUHealth emits GPU health metrics
+func emitGPUHealth(ch chan<- prometheus.Metric, gpu *redfish.Processor, commonLabels []string, metrics map[string]Metric) {
+	if gpuStatusHealthValue, ok := parseCommonStatusHealth(gpu.Status.Health); ok {
+		ch <- prometheus.MustNewConstMetric(
+			metrics["gpu_health"].desc,
+			prometheus.GaugeValue,
+			gpuStatusHealthValue,
+			commonLabels...)
+	}
+}
+
+// emitGPUECCMetrics emits GPU ECC memory error metrics
+func emitGPUECCMetrics(ch chan<- prometheus.Metric, mem []MemoryWithMetrics, logger *slog.Logger, commonLabels []string, metrics map[string]Metric) {
+	for _, m := range mem {
+		memMetric, err := m.Metrics()
+		if err != nil {
+			logger.Error("error getting gpu memory metrics", slog.Any("error", err))
+			continue
+		}
+		metricLabels := append(commonLabels, m.GetID())
+
+		ch <- prometheus.MustNewConstMetric(
+			metrics["gpu_memory_ecc_correctable"].desc,
+			prometheus.CounterValue,
+			float64(memMetric.CurrentPeriod.CorrectableECCErrorCount),
+			metricLabels...)
+		ch <- prometheus.MustNewConstMetric(
+			metrics["gpu_memory_ecc_uncorrectable"].desc,
+			prometheus.CounterValue,
+			float64(memMetric.CurrentPeriod.UncorrectableECCErrorCount),
+			metricLabels...)
+	}
+}
+
