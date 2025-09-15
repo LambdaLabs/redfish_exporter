@@ -1,0 +1,40 @@
+{
+  "@odata.type": "#MemoryMetrics.v1_6_1.MemoryMetrics",
+  "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_0_DRAM_0/MemoryMetrics",
+  "Id": "MemoryMetrics",
+  "Name": "Memory Metrics",
+  "BlockSizeBytes": 4096,
+  "CurrentPeriod": {
+    "CorrectableECCErrorCount": 0,
+    "UncorrectableECCErrorCount": 0
+  },
+  "LifeTime": {
+    "CorrectableECCErrorCount": 0,
+    "UncorrectableECCErrorCount": 0
+  },
+  "HealthData": {
+    "AlarmTrips": {
+      "Temperature": false,
+      "SpareBlock": false,
+      "UncorrectableECCError": false,
+      "CorrectableECCError": false
+    },
+    "DataLossDetected": false,
+    "PerformanceDegraded": false,
+    "PredictedMediaLifeLeftPercent": 100
+  },
+  "Oem": {
+    "Nvidia": {
+      "@odata.type": "#NvidiaMemoryMetrics.v1_2_0.NvidiaGPUMemoryMetrics",
+      "RowRemapping": {
+        "CorrectableRowRemappingCount": 0,
+        "HighAvailabilityBankCount": 0,
+        "LowAvailabilityBankCount": 0,
+        "MaxAvailabilityBankCount": 5952,
+        "NoAvailabilityBankCount": 0,
+        "PartialAvailabilityBankCount": 0,
+        "UncorrectableRowRemappingCount": 0
+      }
+    }
+  }
+}

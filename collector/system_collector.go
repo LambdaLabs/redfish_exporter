@@ -56,6 +56,7 @@ func createSystemMetricMap() map[string]Metric {
 	addToMetricMap(systemMetrics, SystemSubsystem, "memory_state", fmt.Sprintf("system memory state,%s", CommonStateHelp), SystemMemoryLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "memory_health_state", fmt.Sprintf("system memory health state,%s", CommonHealthHelp), SystemMemoryLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "memory_capacity", "system memory capacity, MiB", SystemMemoryLabelNames)
+	
 
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_state", fmt.Sprintf("system processor state,%s", CommonStateHelp), SystemProcessorLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_health_state", fmt.Sprintf("system processor health state,%s", CommonHealthHelp), SystemProcessorLabelNames)
@@ -206,7 +207,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 			} else {
 				wg1.Add(len(memories))
 				for _, memory := range memories {
-					go parseMemory(ch, systemHostName, memory, wg1)
+					go parseMemory(ch, systemHostName, memory, wg1, systemLogger)
 				}
 			}
 
@@ -340,7 +341,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 	}
 }
 
-func parseMemory(ch chan<- prometheus.Metric, systemHostName string, memory *redfish.Memory, wg *sync.WaitGroup) {
+func parseMemory(ch chan<- prometheus.Metric, systemHostName string, memory *redfish.Memory, wg *sync.WaitGroup, logger *slog.Logger) {
 	defer wg.Done()
 	memoryName := memory.Name
 	memoryID := memory.ID
