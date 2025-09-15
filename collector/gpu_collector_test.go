@@ -89,7 +89,7 @@ func setupGPUMemory(server *testRedfishServer) {
 		"Id":          "GPU_1_DRAM_0",
 		"Name":        "GPU_1_DRAM",
 		"CapacityMiB": 98304,
-		"MemoryDeviceType": "HBM2e",
+		"MemoryDeviceType": "HBM2E",
 		"Manufacturer": "NVIDIA",
 		"Status": map[string]string{
 			"State":  "Enabled",
@@ -474,7 +474,7 @@ func TestCollectGPUProcessorMetrics(t *testing.T) {
 			processorType:  "CPU", // Wrong type but ID contains GPU_
 			health:         "OK",
 			state:          "Enabled",
-			expectMetric:   true, // Should still be collected due to ID pattern
+			expectMetric:   false, // Won't be collected since ProcessorType is not GPU
 			expectedHealth: 1,
 			expectedState:  1,
 		},

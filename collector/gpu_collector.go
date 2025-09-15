@@ -20,7 +20,30 @@ var (
 	gpuProcessorLabelNames = []string{"hostname", "system_id", "gpu_id", "processor_name"}
 	gpuPortLabelNames      = []string{"hostname", "system_id", "gpu_id", "port_id", "port_type"}
 	gpuMetrics             = createGPUMetricMap()
+	gpuMemoryTypes         = createGPUMemoryTypeSet()
 )
+
+// createGPUMemoryTypeSet creates a set of GPU memory types for efficient lookup
+func createGPUMemoryTypeSet() map[redfish.MemoryDeviceType]bool {
+	return map[redfish.MemoryDeviceType]bool{
+		redfish.HBMMemoryDeviceType:    true,
+		redfish.HBM2MemoryDeviceType:   true,
+		redfish.HBM2EMemoryDeviceType:  true,
+		redfish.HBM3MemoryDeviceType:   true,
+		redfish.GDDRMemoryDeviceType:   true,
+		redfish.GDDR2MemoryDeviceType:  true,
+		redfish.GDDR3MemoryDeviceType:  true,
+		redfish.GDDR4MemoryDeviceType:  true,
+		redfish.GDDR5MemoryDeviceType:  true,
+		redfish.GDDR5XMemoryDeviceType: true,
+		redfish.GDDR6MemoryDeviceType:  true,
+	}
+}
+
+// isGPUMemory checks if the memory device type indicates GPU memory
+func isGPUMemory(deviceType redfish.MemoryDeviceType) bool {
+	return gpuMemoryTypes[deviceType]
+}
 
 // GPUCollector collects GPU-specific metrics including Nvidia OEM fields
 type GPUCollector struct {
@@ -150,8 +173,8 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 		)
 	} else {
 		for _, memory := range memories {
-			// Collect metrics for any memory that appears to be GPU memory
-			if strings.Contains(memory.ID, "GPU_") && strings.Contains(memory.ID, "_DRAM_") {
+			// Collect metrics for GPU memory (HBM and GDDR types)
+			if isGPUMemory(memory.MemoryDeviceType) {
 				wgMemory.Add(1)
 				go g.collectGPUMemory(ch, systemName, systemID, memory, wgMemory)
 			}
@@ -161,14 +184,14 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 	// Collect GPU processor metrics
 	wgProcessor := &sync.WaitGroup{}
 	if processors, err := system.Processors(); err != nil {
-		g.logger.Debug("failed to get processors for system",
+		g.logger.Error("failed to get processors for system",
 			slog.String("system_id", systemID),
 			slog.Any("error", err),
 		)
 	} else {
 		for _, processor := range processors {
 			// Collect metrics for any GPU processor
-			if processor.ProcessorType == redfish.GPUProcessorType || strings.Contains(processor.ID, "GPU_") {
+			if processor.ProcessorType == redfish.GPUProcessorType {
 				wgProcessor.Add(1)
 				go g.collectGPUProcessor(ch, systemName, systemID, processor, wgProcessor)
 			}
@@ -230,7 +253,7 @@ func (g *GPUCollector) collectGPUMemory(ch chan<- prometheus.Metric, systemName,
 			labels...,
 		)
 	} else {
-		g.logger.Debug("failed to get Memory OEM metrics",
+		g.logger.Error("failed to get Memory OEM metrics",
 			slog.String("memory_id", memoryID),
 			slog.Any("error", err),
 		)
@@ -282,7 +305,7 @@ func (g *GPUCollector) collectGPUMemory(ch chan<- prometheus.Metric, systemName,
 				labels...,
 			)
 		} else {
-			g.logger.Debug("failed to get MemoryMetrics OEM data",
+			g.logger.Error("failed to get MemoryMetrics OEM data",
 				slog.String("memory_id", memoryID),
 				slog.Any("error", err),
 			)
@@ -399,7 +422,7 @@ func (g *GPUCollector) collectGPUProcessor(ch chan<- prometheus.Metric, systemNa
 				labels...,
 			)
 		} else {
-			g.logger.Debug("failed to get ProcessorMetrics OEM data",
+			g.logger.Error("failed to get ProcessorMetrics OEM data",
 				slog.String("processor_id", processorID),
 				slog.Any("error", err),
 			)
@@ -414,21 +437,20 @@ func (g *GPUCollector) collectGPUProcessor(ch chan<- prometheus.Metric, systemNa
 func (g *GPUCollector) collectNVLinkPorts(ch chan<- prometheus.Metric, systemName, systemID, gpuID string, processor *redfish.Processor) {
 	ports, err := processor.Ports()
 	if err != nil {
-		g.logger.Debug("failed to get ports for processor",
-			slog.String("processor_id", processor.ID),
-			slog.Any("error", err),
-		)
-		return
+		g.logger.Error("failed to get port data")
 	}
 
 	for _, port := range ports {
-		// Only collect metrics for NVLink ports
-		if !strings.Contains(port.ID, "NVLink_") {
+		if port.PortProtocol != redfish.NVLinkPortProtocol && !strings.Contains(port.ID, "NVLink_") {
 			continue
 		}
 
 		portID := port.ID
-		portType := "NVLink"
+		portType := string(port.PortType)
+		// Use PortProtocol name if PortType is empty
+		if portType == "" {
+			portType = string(port.PortProtocol)
+		}
 		labels := []string{systemName, systemID, gpuID, portID, portType}
 
 		// Basic port metrics
@@ -490,7 +512,7 @@ func (g *GPUCollector) collectNVLinkPorts(ch chan<- prometheus.Metric, systemNam
 					labels...,
 				)
 			} else {
-				g.logger.Debug("failed to get PortMetrics OEM data",
+				g.logger.Error("failed to get PortMetrics OEM data",
 					slog.String("port_id", portID),
 					slog.Any("error", err),
 				)

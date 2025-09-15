@@ -9,6 +9,8 @@ import (
 	"log/slog"
 
 	"github.com/stmcginnis/gofish/common"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetMemoryOEMMetrics(t *testing.T) {
@@ -37,17 +39,10 @@ func TestGetMemoryOEMMetrics(t *testing.T) {
 	oemClient := NewNvidiaOEMClient(client, logger)
 
 	metrics, err := oemClient.GetMemoryOEMMetrics("/redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_0_DRAM_0")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 
-	if !metrics.RowRemappingFailed {
-		t.Errorf("expected RowRemappingFailed to be true")
-	}
-
-	if metrics.RowRemappingPending {
-		t.Errorf("expected RowRemappingPending to be false")
-	}
+	assert.True(t, metrics.RowRemappingFailed, "expected RowRemappingFailed to be true")
+	assert.False(t, metrics.RowRemappingPending, "expected RowRemappingPending to be false")
 }
 
 func TestGetMemoryMetricsOEMData(t *testing.T) {
@@ -83,17 +78,10 @@ func TestGetMemoryMetricsOEMData(t *testing.T) {
 	oemClient := NewNvidiaOEMClient(client, logger)
 
 	metrics, err := oemClient.GetMemoryMetricsOEMData("/redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_0_DRAM_0/MemoryMetrics")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 
-	if metrics.CorrectableRowRemappingCount != 5 {
-		t.Errorf("expected CorrectableRowRemappingCount to be 5, got %d", metrics.CorrectableRowRemappingCount)
-	}
-
-	if metrics.UncorrectableRowRemappingCount != 1 {
-		t.Errorf("expected UncorrectableRowRemappingCount to be 1, got %d", metrics.UncorrectableRowRemappingCount)
-	}
+	assert.Equal(t, int64(5), metrics.CorrectableRowRemappingCount, "expected CorrectableRowRemappingCount to be 5")
+	assert.Equal(t, int64(1), metrics.UncorrectableRowRemappingCount, "expected UncorrectableRowRemappingCount to be 1")
 }
 
 func TestGetProcessorMetricsOEMData(t *testing.T) {
@@ -134,21 +122,11 @@ func TestGetProcessorMetricsOEMData(t *testing.T) {
 	oemClient := NewNvidiaOEMClient(client, logger)
 
 	metrics, err := oemClient.GetProcessorMetricsOEMData("/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/ProcessorMetrics")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 
-	if metrics.SMUtilizationPercent != 75.5 {
-		t.Errorf("expected SMUtilizationPercent to be 75.5, got %f", metrics.SMUtilizationPercent)
-	}
-
-	if !metrics.SRAMECCErrorThresholdExceeded {
-		t.Errorf("expected SRAMECCErrorThresholdExceeded to be true")
-	}
-
-	if len(metrics.ThrottleReasons) != 2 {
-		t.Errorf("expected 2 throttle reasons, got %d", len(metrics.ThrottleReasons))
-	}
+	assert.Equal(t, 75.5, metrics.SMUtilizationPercent, "expected SMUtilizationPercent to be 75.5")
+	assert.True(t, metrics.SRAMECCErrorThresholdExceeded, "expected SRAMECCErrorThresholdExceeded to be true")
+	assert.Len(t, metrics.ThrottleReasons, 2, "expected 2 throttle reasons")
 }
 
 func TestGetPortMetricsOEMData(t *testing.T) {
@@ -185,21 +163,11 @@ func TestGetPortMetricsOEMData(t *testing.T) {
 	oemClient := NewNvidiaOEMClient(client, logger)
 
 	metrics, err := oemClient.GetPortMetricsOEMData("/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/Ports/NVLink_0/Metrics")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 
-	if !metrics.NVLinkErrorsRuntimeError {
-		t.Errorf("expected NVLinkErrorsRuntimeError to be true")
-	}
-
-	if metrics.NVLinkErrorsTrainingError {
-		t.Errorf("expected NVLinkErrorsTrainingError to be false")
-	}
-
-	if metrics.LinkErrorRecoveryCount != 10 {
-		t.Errorf("expected LinkErrorRecoveryCount to be 10, got %d", metrics.LinkErrorRecoveryCount)
-	}
+	assert.True(t, metrics.NVLinkErrorsRuntimeError, "expected NVLinkErrorsRuntimeError to be true")
+	assert.False(t, metrics.NVLinkErrorsTrainingError, "expected NVLinkErrorsTrainingError to be false")
+	assert.Equal(t, int64(10), metrics.LinkErrorRecoveryCount, "expected LinkErrorRecoveryCount to be 10")
 }
 
 
@@ -223,18 +191,11 @@ func TestGetMemoryOEMMetrics_EmptyOem(t *testing.T) {
 	oemClient := NewNvidiaOEMClient(client, logger)
 
 	metrics, err := oemClient.GetMemoryOEMMetrics("/redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_0_DRAM_0")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Should return zero values when OEM data is missing
-	if metrics.RowRemappingFailed {
-		t.Errorf("expected RowRemappingFailed to be false for empty OEM")
-	}
-
-	if metrics.RowRemappingPending {
-		t.Errorf("expected RowRemappingPending to be false for empty OEM")
-	}
+	assert.False(t, metrics.RowRemappingFailed, "expected RowRemappingFailed to be false for empty OEM")
+	assert.False(t, metrics.RowRemappingPending, "expected RowRemappingPending to be false for empty OEM")
 }
 
 func TestGetMemoryOEMMetrics_ErrorHandling(t *testing.T) {
@@ -253,7 +214,5 @@ func TestGetMemoryOEMMetrics_ErrorHandling(t *testing.T) {
 	oemClient := NewNvidiaOEMClient(client, logger)
 
 	_, err := oemClient.GetMemoryOEMMetrics("/redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_0_DRAM_0")
-	if err == nil {
-		t.Error("expected error for invalid JSON")
-	}
+	assert.Error(t, err, "expected error for invalid JSON")
 }

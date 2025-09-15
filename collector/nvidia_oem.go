@@ -24,58 +24,63 @@ func NewNvidiaOEMClient(client common.Client, logger *slog.Logger) *NvidiaOEMCli
 
 // MemoryOEMMetrics represents Nvidia OEM fields from Memory endpoint
 type MemoryOEMMetrics struct {
-	RowRemappingFailed  bool
-	RowRemappingPending bool
+	RowRemappingFailed  bool `json:"RowRemappingFailed"`
+	RowRemappingPending bool `json:"RowRemappingPending"`
 }
 
 // MemoryMetricsOEMData represents Nvidia OEM fields from MemoryMetrics endpoint
 type MemoryMetricsOEMData struct {
-	CorrectableRowRemappingCount   int64
-	HighAvailabilityBankCount      int64
-	LowAvailabilityBankCount       int64
-	MaxAvailabilityBankCount       int64
-	NoAvailabilityBankCount        int64
-	PartialAvailabilityBankCount   int64
-	UncorrectableRowRemappingCount int64
+	CorrectableRowRemappingCount   int64 `json:"CorrectableRowRemappingCount"`
+	HighAvailabilityBankCount      int64 `json:"HighAvailabilityBankCount"`
+	LowAvailabilityBankCount       int64 `json:"LowAvailabilityBankCount"`
+	MaxAvailabilityBankCount       int64 `json:"MaxAvailabilityBankCount"`
+	NoAvailabilityBankCount        int64 `json:"NoAvailabilityBankCount"`
+	PartialAvailabilityBankCount   int64 `json:"PartialAvailabilityBankCount"`
+	UncorrectableRowRemappingCount int64 `json:"UncorrectableRowRemappingCount"`
 }
 
 // ProcessorMetricsOEMData represents Nvidia OEM fields from ProcessorMetrics endpoint
 type ProcessorMetricsOEMData struct {
-	SMUtilizationPercent              float64
-	SMActivityPercent                 float64
-	SMOccupancyPercent                float64
-	TensorCoreActivityPercent         float64
-	FP16ActivityPercent               float64
-	FP32ActivityPercent               float64
-	FP64ActivityPercent               float64
-	IntegerActivityUtilizationPercent float64
-	SRAMECCErrorThresholdExceeded     bool
-	NVLinkDataRxBandwidthGbps         float64
-	NVLinkDataTxBandwidthGbps         float64
-	PCIeRXBytes                       int64
-	PCIeTXBytes                       int64
-	ThrottleReasons                   []string
+	SMUtilizationPercent              float64  `json:"SMUtilizationPercent"`
+	SMActivityPercent                 float64  `json:"SMActivityPercent"`
+	SMOccupancyPercent                float64  `json:"SMOccupancyPercent"`
+	TensorCoreActivityPercent         float64  `json:"TensorCoreActivityPercent"`
+	FP16ActivityPercent               float64  `json:"FP16ActivityPercent"`
+	FP32ActivityPercent               float64  `json:"FP32ActivityPercent"`
+	FP64ActivityPercent               float64  `json:"FP64ActivityPercent"`
+	IntegerActivityUtilizationPercent float64  `json:"IntegerActivityUtilizationPercent"`
+	SRAMECCErrorThresholdExceeded     bool     `json:"SRAMECCErrorThresholdExceeded"`
+	NVLinkDataRxBandwidthGbps         float64  `json:"NVLinkDataRxBandwidthGbps"`
+	NVLinkDataTxBandwidthGbps         float64  `json:"NVLinkDataTxBandwidthGbps"`
+	PCIeRXBytes                       int64    `json:"PCIeRXBytes"`
+	PCIeTXBytes                       int64    `json:"PCIeTXBytes"`
+	ThrottleReasons                   []string `json:"ThrottleReasons"`
+}
+
+// NVLinkErrors represents NVLink error states
+type NVLinkErrors struct {
+	RuntimeError  bool `json:"RuntimeError"`
+	TrainingError bool `json:"TrainingError"`
 }
 
 // PortMetricsOEMData represents Nvidia OEM fields from PortMetrics endpoint
 type PortMetricsOEMData struct {
-	NVLinkErrorsRuntimeError   bool
-	NVLinkErrorsTrainingError  bool
-	LinkErrorRecoveryCount     int64
-	LinkDownedCount            int64
-	SymbolErrors               int64
-	MalformedPackets           int64
-	BitErrorRate               float64
-	EffectiveBER               float64
+	NVLinkErrors           NVLinkErrors `json:"NVLinkErrors"`
+	LinkErrorRecoveryCount int64        `json:"LinkErrorRecoveryCount"`
+	LinkDownedCount        int64        `json:"LinkDownedCount"`
+	SymbolErrors           int64        `json:"SymbolErrors"`
+	MalformedPackets       int64        `json:"MalformedPackets"`
+	BitErrorRate           float64      `json:"BitErrorRate"`
+	EffectiveBER           float64      `json:"EffectiveBER"`
+	// Flattened fields for backward compatibility
+	NVLinkErrorsRuntimeError  bool `json:"-"`
+	NVLinkErrorsTrainingError bool `json:"-"`
 }
 
 // memoryResponse represents the JSON structure from Memory endpoint
 type memoryResponse struct {
 	Oem struct {
-		Nvidia struct {
-			RowRemappingFailed  bool `json:"RowRemappingFailed"`
-			RowRemappingPending bool `json:"RowRemappingPending"`
-		} `json:"Nvidia"`
+		Nvidia MemoryOEMMetrics `json:"Nvidia"`
 	} `json:"Oem"`
 }
 
@@ -83,15 +88,7 @@ type memoryResponse struct {
 type memoryMetricsResponse struct {
 	Oem struct {
 		Nvidia struct {
-			RowRemapping struct {
-				CorrectableRowRemappingCount   int64 `json:"CorrectableRowRemappingCount"`
-				HighAvailabilityBankCount      int64 `json:"HighAvailabilityBankCount"`
-				LowAvailabilityBankCount       int64 `json:"LowAvailabilityBankCount"`
-				MaxAvailabilityBankCount       int64 `json:"MaxAvailabilityBankCount"`
-				NoAvailabilityBankCount        int64 `json:"NoAvailabilityBankCount"`
-				PartialAvailabilityBankCount   int64 `json:"PartialAvailabilityBankCount"`
-				UncorrectableRowRemappingCount int64 `json:"UncorrectableRowRemappingCount"`
-			} `json:"RowRemapping"`
+			RowRemapping MemoryMetricsOEMData `json:"RowRemapping"`
 		} `json:"Nvidia"`
 	} `json:"Oem"`
 }
@@ -99,40 +96,14 @@ type memoryMetricsResponse struct {
 // processorMetricsResponse represents the JSON structure from ProcessorMetrics endpoint
 type processorMetricsResponse struct {
 	Oem struct {
-		Nvidia struct {
-			SMUtilizationPercent              float64  `json:"SMUtilizationPercent"`
-			SMActivityPercent                 float64  `json:"SMActivityPercent"`
-			SMOccupancyPercent                float64  `json:"SMOccupancyPercent"`
-			TensorCoreActivityPercent         float64  `json:"TensorCoreActivityPercent"`
-			FP16ActivityPercent               float64  `json:"FP16ActivityPercent"`
-			FP32ActivityPercent               float64  `json:"FP32ActivityPercent"`
-			FP64ActivityPercent               float64  `json:"FP64ActivityPercent"`
-			IntegerActivityUtilizationPercent float64  `json:"IntegerActivityUtilizationPercent"`
-			SRAMECCErrorThresholdExceeded     bool     `json:"SRAMECCErrorThresholdExceeded"`
-			NVLinkDataRxBandwidthGbps         float64  `json:"NVLinkDataRxBandwidthGbps"`
-			NVLinkDataTxBandwidthGbps         float64  `json:"NVLinkDataTxBandwidthGbps"`
-			PCIeRXBytes                       int64    `json:"PCIeRXBytes"`
-			PCIeTXBytes                       int64    `json:"PCIeTXBytes"`
-			ThrottleReasons                   []string `json:"ThrottleReasons"`
-		} `json:"Nvidia"`
+		Nvidia ProcessorMetricsOEMData `json:"Nvidia"`
 	} `json:"Oem"`
 }
 
 // portMetricsResponse represents the JSON structure from PortMetrics endpoint
 type portMetricsResponse struct {
 	Oem struct {
-		Nvidia struct {
-			NVLinkErrors struct {
-				RuntimeError  bool `json:"RuntimeError"`
-				TrainingError bool `json:"TrainingError"`
-			} `json:"NVLinkErrors"`
-			LinkErrorRecoveryCount int64   `json:"LinkErrorRecoveryCount"`
-			LinkDownedCount        int64   `json:"LinkDownedCount"`
-			SymbolErrors           int64   `json:"SymbolErrors"`
-			MalformedPackets       int64   `json:"MalformedPackets"`
-			BitErrorRate           float64 `json:"BitErrorRate"`
-			EffectiveBER           float64 `json:"EffectiveBER"`
-		} `json:"Nvidia"`
+		Nvidia PortMetricsOEMData `json:"Nvidia"`
 	} `json:"Oem"`
 }
 
@@ -149,10 +120,7 @@ func (c *NvidiaOEMClient) GetMemoryOEMMetrics(odataID string) (*MemoryOEMMetrics
 		return nil, fmt.Errorf("failed to decode JSON from %s: %w", odataID, err)
 	}
 
-	metrics := &MemoryOEMMetrics{
-		RowRemappingFailed:  response.Oem.Nvidia.RowRemappingFailed,
-		RowRemappingPending: response.Oem.Nvidia.RowRemappingPending,
-	}
+	metrics := &response.Oem.Nvidia
 
 	c.logger.Debug("extracted Memory OEM metrics",
 		slog.String("odataID", odataID),
@@ -175,15 +143,7 @@ func (c *NvidiaOEMClient) GetMemoryMetricsOEMData(metricsEndpoint string) (*Memo
 		return nil, fmt.Errorf("failed to decode JSON from %s: %w", metricsEndpoint, err)
 	}
 
-	metrics := &MemoryMetricsOEMData{
-		CorrectableRowRemappingCount:   response.Oem.Nvidia.RowRemapping.CorrectableRowRemappingCount,
-		HighAvailabilityBankCount:      response.Oem.Nvidia.RowRemapping.HighAvailabilityBankCount,
-		LowAvailabilityBankCount:       response.Oem.Nvidia.RowRemapping.LowAvailabilityBankCount,
-		MaxAvailabilityBankCount:       response.Oem.Nvidia.RowRemapping.MaxAvailabilityBankCount,
-		NoAvailabilityBankCount:        response.Oem.Nvidia.RowRemapping.NoAvailabilityBankCount,
-		PartialAvailabilityBankCount:   response.Oem.Nvidia.RowRemapping.PartialAvailabilityBankCount,
-		UncorrectableRowRemappingCount: response.Oem.Nvidia.RowRemapping.UncorrectableRowRemappingCount,
-	}
+	metrics := &response.Oem.Nvidia.RowRemapping
 
 	c.logger.Debug("extracted MemoryMetrics OEM data",
 		slog.String("endpoint", metricsEndpoint),
@@ -206,22 +166,7 @@ func (c *NvidiaOEMClient) GetProcessorMetricsOEMData(metricsEndpoint string) (*P
 		return nil, fmt.Errorf("failed to decode JSON from %s: %w", metricsEndpoint, err)
 	}
 
-	metrics := &ProcessorMetricsOEMData{
-		SMUtilizationPercent:              response.Oem.Nvidia.SMUtilizationPercent,
-		SMActivityPercent:                 response.Oem.Nvidia.SMActivityPercent,
-		SMOccupancyPercent:                response.Oem.Nvidia.SMOccupancyPercent,
-		TensorCoreActivityPercent:         response.Oem.Nvidia.TensorCoreActivityPercent,
-		FP16ActivityPercent:               response.Oem.Nvidia.FP16ActivityPercent,
-		FP32ActivityPercent:               response.Oem.Nvidia.FP32ActivityPercent,
-		FP64ActivityPercent:               response.Oem.Nvidia.FP64ActivityPercent,
-		IntegerActivityUtilizationPercent: response.Oem.Nvidia.IntegerActivityUtilizationPercent,
-		SRAMECCErrorThresholdExceeded:     response.Oem.Nvidia.SRAMECCErrorThresholdExceeded,
-		NVLinkDataRxBandwidthGbps:         response.Oem.Nvidia.NVLinkDataRxBandwidthGbps,
-		NVLinkDataTxBandwidthGbps:         response.Oem.Nvidia.NVLinkDataTxBandwidthGbps,
-		PCIeRXBytes:                       response.Oem.Nvidia.PCIeRXBytes,
-		PCIeTXBytes:                       response.Oem.Nvidia.PCIeTXBytes,
-		ThrottleReasons:                   response.Oem.Nvidia.ThrottleReasons,
-	}
+	metrics := &response.Oem.Nvidia
 
 	c.logger.Debug("extracted ProcessorMetrics OEM data",
 		slog.String("endpoint", metricsEndpoint),
@@ -244,16 +189,10 @@ func (c *NvidiaOEMClient) GetPortMetricsOEMData(metricsEndpoint string) (*PortMe
 		return nil, fmt.Errorf("failed to decode JSON from %s: %w", metricsEndpoint, err)
 	}
 
-	metrics := &PortMetricsOEMData{
-		NVLinkErrorsRuntimeError:  response.Oem.Nvidia.NVLinkErrors.RuntimeError,
-		NVLinkErrorsTrainingError: response.Oem.Nvidia.NVLinkErrors.TrainingError,
-		LinkErrorRecoveryCount:    response.Oem.Nvidia.LinkErrorRecoveryCount,
-		LinkDownedCount:           response.Oem.Nvidia.LinkDownedCount,
-		SymbolErrors:              response.Oem.Nvidia.SymbolErrors,
-		MalformedPackets:          response.Oem.Nvidia.MalformedPackets,
-		BitErrorRate:              response.Oem.Nvidia.BitErrorRate,
-		EffectiveBER:              response.Oem.Nvidia.EffectiveBER,
-	}
+	metrics := &response.Oem.Nvidia
+	// Populate flattened fields for backward compatibility
+	metrics.NVLinkErrorsRuntimeError = metrics.NVLinkErrors.RuntimeError
+	metrics.NVLinkErrorsTrainingError = metrics.NVLinkErrors.TrainingError
 
 	c.logger.Debug("extracted PortMetrics OEM data",
 		slog.String("endpoint", metricsEndpoint),
