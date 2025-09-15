@@ -165,8 +165,8 @@ func TestGetPortMetricsOEMData(t *testing.T) {
 	metrics, err := oemClient.GetPortMetricsOEMData("/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/Ports/NVLink_0/Metrics")
 	require.NoError(t, err)
 
-	assert.True(t, metrics.NVLinkErrorsRuntimeError, "expected NVLinkErrorsRuntimeError to be true")
-	assert.False(t, metrics.NVLinkErrorsTrainingError, "expected NVLinkErrorsTrainingError to be false")
+	assert.True(t, metrics.NVLinkErrors.RuntimeError, "expected NVLinkErrors.RuntimeError to be true")
+	assert.False(t, metrics.NVLinkErrors.TrainingError, "expected NVLinkErrors.TrainingError to be false")
 	assert.Equal(t, int64(10), metrics.LinkErrorRecoveryCount, "expected LinkErrorRecoveryCount to be 10")
 }
 

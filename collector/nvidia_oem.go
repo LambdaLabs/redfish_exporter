@@ -65,15 +65,13 @@ type NVLinkErrors struct {
 
 // PortMetricsOEMData represents Nvidia OEM fields from PortMetrics endpoint
 type PortMetricsOEMData struct {
-	NVLinkErrors              NVLinkErrors `json:"NVLinkErrors"`
-	LinkErrorRecoveryCount    int64        `json:"LinkErrorRecoveryCount"`
-	LinkDownedCount           int64        `json:"LinkDownedCount"`
-	SymbolErrors              int64        `json:"SymbolErrors"`
-	MalformedPackets          int64        `json:"MalformedPackets"`
-	BitErrorRate              float64      `json:"BitErrorRate"`
-	EffectiveBER              float64      `json:"EffectiveBER"`
-	NVLinkErrorsRuntimeError  bool         `json:"-"`
-	NVLinkErrorsTrainingError bool         `json:"-"`
+	NVLinkErrors           NVLinkErrors `json:"NVLinkErrors"`
+	LinkErrorRecoveryCount int64        `json:"LinkErrorRecoveryCount"`
+	LinkDownedCount        int64        `json:"LinkDownedCount"`
+	SymbolErrors           int64        `json:"SymbolErrors"`
+	MalformedPackets       int64        `json:"MalformedPackets"`
+	BitErrorRate           float64      `json:"BitErrorRate"`
+	EffectiveBER           float64      `json:"EffectiveBER"`
 }
 
 // memoryResponse represents the JSON structure from Memory endpoint
@@ -189,14 +187,11 @@ func (c *NvidiaOEMClient) GetPortMetricsOEMData(metricsEndpoint string) (*PortMe
 	}
 
 	metrics := &response.Oem.Nvidia
-	// Populate flattened fields for backward compatibility
-	metrics.NVLinkErrorsRuntimeError = metrics.NVLinkErrors.RuntimeError
-	metrics.NVLinkErrorsTrainingError = metrics.NVLinkErrors.TrainingError
 
 	c.logger.Debug("extracted PortMetrics OEM data",
 		slog.String("endpoint", metricsEndpoint),
-		slog.Bool("runtime_error", metrics.NVLinkErrorsRuntimeError),
-		slog.Bool("training_error", metrics.NVLinkErrorsTrainingError),
+		slog.Bool("runtime_error", metrics.NVLinkErrors.RuntimeError),
+		slog.Bool("training_error", metrics.NVLinkErrors.TrainingError),
 		slog.Int64("link_recovery_count", metrics.LinkErrorRecoveryCount))
 
 	return metrics, nil

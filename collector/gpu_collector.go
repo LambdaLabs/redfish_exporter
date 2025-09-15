@@ -475,13 +475,13 @@ func (g *GPUCollector) collectNVLinkPorts(ch chan<- prometheus.Metric, systemNam
 				ch <- prometheus.MustNewConstMetric(
 					g.metrics["gpu_nvlink_runtime_error"].desc,
 					prometheus.GaugeValue,
-					boolToFloat64(metricsOEM.NVLinkErrorsRuntimeError),
+					boolToFloat64(metricsOEM.NVLinkErrors.RuntimeError),
 					labels...,
 				)
 				ch <- prometheus.MustNewConstMetric(
 					g.metrics["gpu_nvlink_training_error"].desc,
 					prometheus.GaugeValue,
-					boolToFloat64(metricsOEM.NVLinkErrorsTrainingError),
+					boolToFloat64(metricsOEM.NVLinkErrors.TrainingError),
 					labels...,
 				)
 				ch <- prometheus.MustNewConstMetric(
