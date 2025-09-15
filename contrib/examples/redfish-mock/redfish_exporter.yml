@@ -1,6 +1,0 @@
-groups:
-  mock:
-    # empty auth
-    username:
-    password:
-loglevel: info
