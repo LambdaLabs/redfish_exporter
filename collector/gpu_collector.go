@@ -105,15 +105,9 @@ func createGPUMetricMap() map[string]Metric {
 	addToMetricMap(gpuMetrics, GPUSubsystem, "pcie_rx_bytes", "GPU PCIe receive bytes", gpuProcessorLabels)
 	addToMetricMap(gpuMetrics, GPUSubsystem, "pcie_tx_bytes", "GPU PCIe transmit bytes", gpuProcessorLabels)
 
-	// NVLink Port metrics
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_state", fmt.Sprintf("NVLink port state,%s", CommonStateHelp), gpuPortLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_health", fmt.Sprintf("NVLink port health,%s", CommonHealthHelp), gpuPortLabels)
+	// NVLink Port metrics - only the two requested metrics
 	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_runtime_error", "NVLink runtime error status (1 if error)", gpuPortLabels)
 	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_training_error", "NVLink training error status (1 if error)", gpuPortLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_link_error_recovery_count", "NVLink error recovery count", gpuPortLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_link_downed_count", "NVLink link downed count", gpuPortLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_symbol_errors", "NVLink symbol error count", gpuPortLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_bit_error_rate", "NVLink bit error rate", gpuPortLabels)
 
 	return gpuMetrics
 }
@@ -475,87 +469,38 @@ func (g *GPUCollector) collectGPUProcessor(ch chan<- prometheus.Metric, systemNa
 
 // collectNVLinkPorts collects NVLink port metrics for a GPU processor
 func (g *GPUCollector) collectNVLinkPorts(ch chan<- prometheus.Metric, systemName, systemID, gpuID string, processor *redfish.Processor) {
-	ports, err := processor.Ports()
+	// Directly fetch NVLink_10 metrics as requested
+	// You specified GPU_0/Ports/NVLink_10 and GPU_1/Ports/NVLink_10
+	portID := "NVLink_10"
+	metricsURL := fmt.Sprintf("%s/Ports/%s/Metrics", processor.ODataID, portID)
+
+	metricsOEM, err := g.oemClient.GetPortMetricsOEMData(metricsURL)
 	if err != nil {
-		g.logger.Error("failed to get port data")
+		g.logger.Debug("no metrics found for NVLink_10",
+			slog.String("processor_id", processor.ID),
+			slog.String("url", metricsURL),
+		)
+		return
 	}
 
-	for _, port := range ports {
-		if port.PortProtocol != redfish.NVLinkPortProtocol && !strings.Contains(port.ID, "NVLink_") {
-			continue
-		}
+	// Port exists and has metrics, emit only the two requested error metrics
+	portType := "NVLink"
+	portProtocol := "NVLink"
+	labels := []string{systemName, systemID, gpuID, portID, portType, portProtocol}
 
-		portID := port.ID
-		portType := string(port.PortType)
-		portProtocol := string(port.PortProtocol)
-		labels := []string{systemName, systemID, gpuID, portID, portType, portProtocol}
-
-		// Basic port metrics
-		if stateValue, ok := parseCommonStatusState(port.Status.State); ok {
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_nvlink_state"].desc,
-				prometheus.GaugeValue,
-				stateValue,
-				labels...,
-			)
-		}
-
-		if healthValue, ok := parseCommonStatusHealth(port.Status.Health); ok {
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_nvlink_health"].desc,
-				prometheus.GaugeValue,
-				healthValue,
-				labels...,
-			)
-		}
-
-		// Get PortMetrics OEM data
-		if metrics, err := port.Metrics(); err == nil && metrics != nil {
-			if metricsOEM, err := g.oemClient.GetPortMetricsOEMData(metrics.ODataID); err == nil {
-				ch <- prometheus.MustNewConstMetric(
-					g.metrics["gpu_nvlink_runtime_error"].desc,
-					prometheus.GaugeValue,
-					boolToFloat64(metricsOEM.NVLinkErrors.RuntimeError),
-					labels...,
-				)
-				ch <- prometheus.MustNewConstMetric(
-					g.metrics["gpu_nvlink_training_error"].desc,
-					prometheus.GaugeValue,
-					boolToFloat64(metricsOEM.NVLinkErrors.TrainingError),
-					labels...,
-				)
-				ch <- prometheus.MustNewConstMetric(
-					g.metrics["gpu_nvlink_link_error_recovery_count"].desc,
-					prometheus.GaugeValue,
-					float64(metricsOEM.LinkErrorRecoveryCount),
-					labels...,
-				)
-				ch <- prometheus.MustNewConstMetric(
-					g.metrics["gpu_nvlink_link_downed_count"].desc,
-					prometheus.GaugeValue,
-					float64(metricsOEM.LinkDownedCount),
-					labels...,
-				)
-				ch <- prometheus.MustNewConstMetric(
-					g.metrics["gpu_nvlink_symbol_errors"].desc,
-					prometheus.GaugeValue,
-					float64(metricsOEM.SymbolErrors),
-					labels...,
-				)
-				ch <- prometheus.MustNewConstMetric(
-					g.metrics["gpu_nvlink_bit_error_rate"].desc,
-					prometheus.GaugeValue,
-					metricsOEM.BitErrorRate,
-					labels...,
-				)
-			} else {
-				g.logger.Error("failed to get PortMetrics OEM data",
-					slog.String("port_id", portID),
-					slog.Any("error", err),
-				)
-			}
-		}
-	}
+	// Emit only the two requested NVLink error metrics
+	ch <- prometheus.MustNewConstMetric(
+		g.metrics["gpu_nvlink_runtime_error"].desc,
+		prometheus.GaugeValue,
+		boolToFloat64(metricsOEM.NVLinkErrors.RuntimeError),
+		labels...,
+	)
+	ch <- prometheus.MustNewConstMetric(
+		g.metrics["gpu_nvlink_training_error"].desc,
+		prometheus.GaugeValue,
+		boolToFloat64(metricsOEM.NVLinkErrors.TrainingError),
+		labels...,
+	)
 }
 
 // extractGPUID extracts the GPU ID from a memory or other component ID
