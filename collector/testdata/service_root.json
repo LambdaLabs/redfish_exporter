@@ -6,5 +6,8 @@
   "RedfishVersion": "1.15.0",
   "Systems": {
     "@odata.id": "/redfish/v1/Systems"
+  },
+  "Chassis": {
+    "@odata.id": "/redfish/v1/Chassis"
   }
 }
