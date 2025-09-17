@@ -153,7 +153,7 @@ Since the fork:
 
 ## Why a Fork?
 
-We decided to fork the existing exorter for several reasons:
+We decided to fork the existing exporter for several reasons:
 
 - Slog instead of Apexlog: Just a detail, but since we have the `slog` package in Go 1.21 available, it should be used.
 - Remove log severity metrics: This is not a good metric from my point of view.
