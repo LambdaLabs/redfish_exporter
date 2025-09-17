@@ -163,7 +163,6 @@ func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	// Collect metrics from all systems
 	wg := &sync.WaitGroup{}
 	for _, system := range systems {
 		wg.Add(1)
