@@ -1,9 +1,7 @@
 package collector
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"strings"
 	"sync"
@@ -63,6 +61,13 @@ type GPUCollector struct {
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
 	oemClient             *NvidiaOEMClient
+}
+
+// systemGPUInfo holds GPU information for a system
+type systemGPUInfo struct {
+	systemName string
+	systemID   string
+	gpus       []*redfish.Processor
 }
 
 func createGPUMetricMap() map[string]Metric {
@@ -163,40 +168,44 @@ func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 
+<<<<<<< HEAD
+=======
+	// Channel to collect GPU info from each system
+	gpuInfoChan := make(chan systemGPUInfo, len(systems))
+
+	// Collect metrics from all systems
+>>>>>>> 3101ee0 (refactors)
 	wg := &sync.WaitGroup{}
 	for _, system := range systems {
 		wg.Add(1)
-		go g.collectSystemGPUs(ch, system, wg)
+		go g.collectSystemGPUs(ch, system, wg, gpuInfoChan)
 	}
-	wg.Wait()
 
-	// Now collect GPU IDs from all systems for temperature sensors
-	gpuIDs := make(map[string]string) // map[gpuID]systemName
-	for _, system := range systems {
-		if processors, err := system.Processors(); err == nil {
-			for _, proc := range processors {
-				if proc.ProcessorType == redfish.GPUProcessorType {
-					systemName := system.Name
-					if systemName == "" {
-						systemName = system.ID
-					}
-					gpuIDs[proc.ID] = systemName
-					g.logger.Debug("Found GPU for temperature collection",
-						slog.String("gpu_id", proc.ID),
-						slog.String("system", systemName))
-				}
-			}
+	// Close channel after all systems are processed
+	go func() {
+		wg.Wait()
+		close(gpuInfoChan)
+	}()
+
+	// Gather all GPU info while systems are being processed
+	var allSystemGPUs []systemGPUInfo
+	for info := range gpuInfoChan {
+		if len(info.gpus) > 0 {
+			allSystemGPUs = append(allSystemGPUs, info)
+			g.logger.Debug("Collected GPU info",
+				slog.String("system", info.systemName),
+				slog.Int("gpu_count", len(info.gpus)))
 		}
 	}
 
-	// Collect GPU temperature sensors for discovered GPUs
-	g.collectGPUTemperatureSensors(ch, gpuIDs)
+	// Collect GPU temperature sensors using gathered GPU info
+	g.collectGPUTemperatureSensors(ch, allSystemGPUs)
 
 	g.collectorScrapeStatus.WithLabelValues("gpu").Set(float64(1))
 }
 
 // collectSystemGPUs collects all GPU-related metrics for a system
-func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *redfish.ComputerSystem, wg *sync.WaitGroup) {
+func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *redfish.ComputerSystem, wg *sync.WaitGroup, gpuInfoChan chan<- systemGPUInfo) {
 	defer wg.Done()
 
 	systemID := system.ID
@@ -217,6 +226,16 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 
 	// Filter for GPU processors and collect basic metrics (from main branch)
 	gpus := filterGPUs(processors)
+
+	// Send GPU info back through channel
+	if len(gpus) > 0 {
+		gpuInfoChan <- systemGPUInfo{
+			systemName: systemName,
+			systemID:   systemID,
+			gpus:       gpus,
+		}
+	}
+
 	for _, gpu := range gpus {
 		if gpu.Name == "" {
 			gpu.Name = gpu.ID
@@ -602,35 +621,37 @@ func (g *GPUCollector) collectNVLinkPorts(ch chan<- prometheus.Metric, systemNam
 }
 
 // collectGPUTemperatureSensors collects GPU temperature sensor readings from Chassis
-func (g *GPUCollector) collectGPUTemperatureSensors(ch chan<- prometheus.Metric, gpuIDs map[string]string) {
+func (g *GPUCollector) collectGPUTemperatureSensors(ch chan<- prometheus.Metric, allSystemGPUs []systemGPUInfo) {
 	// Use a wait group to collect temperatures concurrently
 	wg := &sync.WaitGroup{}
 	// Limit concurrent requests to avoid overwhelming the server
 	sem := make(chan struct{}, 5)
 
-	for gpuID, systemName := range gpuIDs {
-		wg.Add(1)
-		go func(gpuID, systemName string) {
-			defer wg.Done()
-			sem <- struct{}{} // Acquire semaphore
-			defer func() { <-sem }() // Release semaphore
+	for _, sysInfo := range allSystemGPUs {
+		for _, gpu := range sysInfo.gpus {
+			wg.Add(1)
+			go func(gpuID, systemName, systemID string) {
+				defer wg.Done()
+				sem <- struct{}{} // Acquire semaphore
+				defer func() { <-sem }() // Release semaphore
 
-			g.collectSingleGPUTemperature(ch, gpuID, systemName)
-		}(gpuID, systemName)
+				g.collectSingleGPUTemperature(ch, gpuID, systemName, systemID)
+			}(gpu.ID, sysInfo.systemName, sysInfo.systemID)
+		}
 	}
 
 	wg.Wait()
 }
 
 // collectSingleGPUTemperature collects temperature for a single GPU
-func (g *GPUCollector) collectSingleGPUTemperature(ch chan<- prometheus.Metric, gpuID, systemName string) {
+func (g *GPUCollector) collectSingleGPUTemperature(ch chan<- prometheus.Metric, gpuID, systemName, systemID string) {
 	// Construct the chassis sensor path for this GPU
 	// Pattern: /redfish/v1/Chassis/HGX_{gpuID}/Sensors/HGX_{gpuID}_TEMP_1
 	chassisID := fmt.Sprintf("HGX_%s", gpuID)
 	sensorPath := fmt.Sprintf("/redfish/v1/Chassis/%s/Sensors/%s_TEMP_1", chassisID, chassisID)
 
-	// Fetch the sensor data directly
-	resp, err := g.oemClient.client.Get(sensorPath)
+	// Use gofish to get the sensor
+	sensor, err := redfish.GetSensor(g.redfishClient, sensorPath)
 	if err != nil {
 		g.logger.Debug("failed to fetch GPU temperature sensor",
 			slog.String("gpu_id", gpuID),
@@ -639,40 +660,31 @@ func (g *GPUCollector) collectSingleGPUTemperature(ch chan<- prometheus.Metric, 
 		)
 		return
 	}
-	// Close response body immediately after use (not deferred in loop)
-	body, err := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		g.logger.Error("failed to read sensor response",
+
+	// Verify it's a temperature sensor (defensive check)
+	if sensor.ReadingType != redfish.TemperatureReadingType {
+		g.logger.Warn("sensor is not a temperature type",
 			slog.String("gpu_id", gpuID),
-			slog.Any("error", err),
+			slog.String("actual_type", string(sensor.ReadingType)),
 		)
 		return
 	}
 
-	var sensorData struct {
-		Reading float64 `json:"Reading"`
-	}
-
-	if err := json.Unmarshal(body, &sensorData); err != nil {
-		g.logger.Error("failed to decode sensor data",
-			slog.String("gpu_id", gpuID),
-			slog.Any("error", err),
-		)
-		return
-	}
+	// Log additional sensor info if in debug mode
+	g.logger.Debug("collected GPU temperature sensor",
+		slog.String("gpu_id", gpuID),
+		slog.Float64("reading", float64(sensor.Reading)),
+		slog.String("reading_basis", string(sensor.ReadingBasis)),
+		slog.String("status", string(sensor.Status.Health)),
+	)
 
 	// Emit the temperature metric
-	systemID := systemName
-	if systemName == "" {
-		systemID = "HGX_Baseboard_0" // fallback
-	}
 	labels := []string{systemName, systemID, gpuID}
 
 	ch <- prometheus.MustNewConstMetric(
 		g.metrics["gpu_temperature_tlimit_celsius"].desc,
 		prometheus.GaugeValue,
-		sensorData.Reading,
+		float64(sensor.Reading),
 		labels...,
 	)
 }

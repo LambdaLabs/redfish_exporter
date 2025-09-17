@@ -426,6 +426,130 @@ func TestGPUCollectorWithNvidiaGPU(t *testing.T) {
 	t.Logf("GPU processor/temperature metrics: %d", len(gpuProcessorMetrics))
 }
 
+// TestGPUTemperatureSensorEdgeCases tests edge cases for GPU temperature collection
+func TestGPUTemperatureSensorEdgeCases(t *testing.T) {
+	t.Run("non-temperature sensor should be skipped", func(t *testing.T) {
+		server := setupTestServerWithGPU(t)
+
+		// Add a non-temperature sensor (e.g., a power sensor)
+		server.addRoute("/redfish/v1/Chassis/HGX_GPU_0/Sensors/HGX_GPU_0_POWER_1", map[string]interface{}{
+			"@odata.id":    "/redfish/v1/Chassis/HGX_GPU_0/Sensors/HGX_GPU_0_POWER_1",
+			"@odata.type":  "#Sensor.v1_7_0.Sensor",
+			"Id":           "HGX_GPU_0_POWER_1",
+			"Name":         "GPU 0 Power Sensor",
+			"Reading":      250.5,
+			"ReadingType":  "Power",  // Not Temperature
+			"ReadingUnits": "W",
+			"Status": map[string]interface{}{
+				"State":  "Enabled",
+				"Health": "OK",
+			},
+		})
+
+		client := connectToTestServer(t, server)
+		defer client.Logout()
+
+		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+		collector := NewGPUCollector(client, logger)
+
+		// Try to collect from the power sensor path
+		ch := make(chan prometheus.Metric, 10)
+		collector.collectSingleGPUTemperature(ch, "GPU_0_POWER_1", "TestSystem", "System1")
+
+		// Should not emit any metrics for non-temperature sensor
+		select {
+		case metric := <-ch:
+			t.Errorf("Expected no metrics for non-temperature sensor, but got: %v", metric)
+		default:
+			// Good - no metrics emitted
+		}
+	})
+
+	t.Run("sensor with correct fixture format", func(t *testing.T) {
+		// Create a minimal server just for this test
+		server := &testRedfishServer{
+			t:        t,
+			mux:      http.NewServeMux(),
+			requests: make([]string, 0),
+		}
+		server.Server = httptest.NewServer(server.mux)
+		t.Cleanup(server.Close)
+
+		// Add minimal routes needed
+		server.addRouteFromFixture("/redfish/v1/", "service_root.json")
+		server.addRoute("/redfish/v1/Systems", map[string]interface{}{
+			"@odata.type": "#ComputerSystemCollection.ComputerSystemCollection",
+			"Members": []map[string]string{
+				{"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0"},
+			},
+			"Members@odata.count": 1,
+		})
+
+		// Add system with GPU
+		server.addRoute("/redfish/v1/Systems/HGX_Baseboard_0", map[string]interface{}{
+			"@odata.type": "#ComputerSystem.v1_14_0.ComputerSystem",
+			"Id":          "HGX_Baseboard_0",
+			"Name":        "HGX System",
+			"Processors": map[string]string{
+				"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors",
+			},
+		})
+
+		// Add processor collection with GPU
+		server.addRoute("/redfish/v1/Systems/HGX_Baseboard_0/Processors", map[string]interface{}{
+			"@odata.type": "#ProcessorCollection.ProcessorCollection",
+			"Members": []map[string]string{
+				{"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0"},
+			},
+			"Members@odata.count": 1,
+		})
+
+		// Add GPU processor
+		server.addRoute("/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0", map[string]interface{}{
+			"@odata.type":   "#Processor.v1_20_0.Processor",
+			"Id":            "GPU_0",
+			"Name":          "GPU 0",
+			"ProcessorType": "GPU",
+			"Status": map[string]string{
+				"State":  "Enabled",
+				"Health": "OK",
+			},
+		})
+
+		// Add the temperature sensor using the fixture
+		server.addRouteFromFixture("/redfish/v1/Chassis/HGX_GPU_0/Sensors/HGX_GPU_0_TEMP_1",
+			"gpu_temperature_sensor.json")
+
+		client := connectToTestServer(t, server)
+		defer client.Logout()
+
+		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+		collector := NewGPUCollector(client, logger)
+
+		ch := make(chan prometheus.Metric, 200)
+		go func() {
+			collector.Collect(ch)
+			close(ch)
+		}()
+
+		// Verify temperature metric was collected from fixture
+		foundTemp := false
+		for metric := range ch {
+			desc := metric.Desc()
+			if strings.Contains(desc.String(), "temperature_tlimit_celsius") {
+				dto := &dto.Metric{}
+				require.NoError(t, metric.Write(dto))
+				// Fixture has Reading: 58.0
+				assert.Equal(t, 58.0, dto.Gauge.GetValue())
+				foundTemp = true
+				break
+			}
+		}
+
+		assert.True(t, foundTemp, "Temperature metric should be collected from fixture")
+	})
+}
+
 // TestGPUCollectorWithNoGPUs tests the GPU collector when no GPUs are present
 func TestGPUCollectorWithNoGPUs(t *testing.T) {
 	server := setupTestServerWithoutGPU(t)
