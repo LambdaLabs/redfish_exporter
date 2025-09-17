@@ -1,0 +1,23 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/HGX_GPU_0/Sensors/HGX_GPU_0_TEMP_1",
+  "@odata.type": "#Sensor.v1_7_0.Sensor",
+  "Description": "Thermal Limit(TLIMIT) Temperature is the distance in deg C from the GPU temperature to the first throttle limit.",
+  "Id": "HGX_GPU_0_TEMP_1",
+  "Implementation": "Synthesized",
+  "Name": "HGX GPU 0 TEMP 1",
+  "PhysicalContext": "GPU",
+  "Reading": 58.0,
+  "ReadingBasis": "Headroom",
+  "ReadingType": "Temperature",
+  "ReadingUnits": "Cel",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "Thresholds": {
+    "LowerCritical": {
+      "Reading": 0,
+      "Activation": "Decreasing"
+    }
+  }
+}
