@@ -553,13 +553,8 @@ func (c *ChassisCollector) collectTotalGPUPower(ch chan<- prometheus.Metric, cha
 		return
 	}
 
-	// Check if the control has sensor data
-	if control.Sensor.Reading == 0 && control.Sensor.DataSourceURI == "" {
-		logger.Debug("control has no sensor data",
-			slog.String("control_id", control.ID),
-		)
-		return
-	}
+	// Always emit the metric if we have a valid control
+	// A reading of 0 could indicate a problem worth alerting on
 
 	// Verify it's a power control (defensive check)
 	if control.ControlType != redfish.PowerControlType {

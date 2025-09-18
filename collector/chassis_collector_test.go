@@ -368,7 +368,7 @@ func TestCollectTotalGPUPowerErrorHandling(t *testing.T) {
 		expectedValue     float64
 	}{
 		{
-			name: "control with zero reading and no data source",
+			name: "control with zero reading should still emit metric",
 			controlResponse: map[string]interface{}{
 				"@odata.type":   "#Control.v1_5_0.Control",
 				"Id":            "TotalGPU_Power_0",
@@ -377,10 +377,11 @@ func TestCollectTotalGPUPowerErrorHandling(t *testing.T) {
 				"SetPointUnits": "W",
 				"Sensor": map[string]interface{}{
 					"Reading":       0,
-					"DataSourceUri": "",
+					"DataSourceUri": "/redfish/v1/Chassis/HGX_Chassis_0/Sensors/TotalGPU_Power",
 				},
 			},
-			expectMetric: false,
+			expectMetric:  true,
+			expectedValue: 0,
 		},
 		{
 			name: "control with wrong type",
