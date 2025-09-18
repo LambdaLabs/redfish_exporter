@@ -88,6 +88,9 @@ func createChassisMetricMap() map[string]Metric {
 
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_health", fmt.Sprintf("chassis leak detector health state,%s", CommonHealthHelp), ChassisLeakDetectorLabelNames)
 
+	// Total GPU power metric
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "gpu_total_power_watts", "Total GPU power consumption for all GPUs in chassis in watts", ChassisLabelNames)
+
 	return chassisMetrics
 }
 
@@ -322,6 +325,10 @@ func (c *ChassisCollector) Collect(ch chan<- prometheus.Metric) {
 					}
 				}
 			}
+
+			// Attempt to collect total GPU power for any chassis that might have it
+			c.collectTotalGPUPower(ch, chassis, chassisLogger)
+
 			chassisLogger.Info("collector scrape completed")
 		}
 	}
@@ -519,5 +526,65 @@ func parseNetworkPort(ch chan<- prometheus.Metric, chassisID string, networkPort
 	}
 	if networkPortHealthStateValue, ok := parseCommonStatusHealth(networkPortHealthState); ok {
 		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_network_port_health_state"].desc, prometheus.GaugeValue, networkPortHealthStateValue, chassisNetworkPortLabelValues...)
+	}
+}
+
+// collectTotalGPUPower collects the total GPU power consumption from all Control endpoints
+func (c *ChassisCollector) collectTotalGPUPower(ch chan<- prometheus.Metric, chassis *redfish.Chassis, logger *slog.Logger) {
+	// Get all controls for this chassis
+	controls, err := chassis.Controls()
+	if err != nil {
+		// Many chassis won't have controls at all, which is fine
+		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found") {
+			logger.Debug("no controls available for this chassis",
+				slog.String("chassis_id", chassis.ID),
+			)
+		} else {
+			logger.Debug("failed to fetch controls",
+				slog.String("chassis_id", chassis.ID),
+				slog.Any("error", err),
+			)
+		}
+		return
+	}
+
+	// Look for any control that matches the total GPU power pattern
+	for _, control := range controls {
+		// Check if this is a total GPU power control
+		// Could be TotalGPU_Power_0, TotalGPU_Power_1, etc.
+		if !strings.HasPrefix(control.ID, "TotalGPU_Power_") {
+			continue
+		}
+
+		// Verify it's a power control (defensive check)
+		if control.ControlType != redfish.PowerControlType {
+			logger.Warn("control is not a power type",
+				slog.String("control_id", control.ID),
+				slog.String("actual_type", string(control.ControlType)),
+			)
+			continue
+		}
+
+		// Always emit the metric if we have a valid control
+		// A reading of 0 could indicate a problem worth alerting on
+
+		// Log additional control info if in debug mode
+		logger.Debug("collected total GPU power control",
+			slog.String("control_id", control.ID),
+			slog.Float64("reading", float64(control.Sensor.Reading)),
+			slog.String("units", control.SetPointUnits),
+			slog.String("status", string(control.Status.Health)),
+		)
+
+		// Emit the total GPU power metric
+		// Include the control ID in the labels to distinguish multiple controls
+		chassisLabelValues := []string{"chassis", chassis.ID}
+
+		ch <- prometheus.MustNewConstMetric(
+			chassisMetrics["chassis_gpu_total_power_watts"].desc,
+			prometheus.GaugeValue,
+			float64(control.Sensor.Reading),
+			chassisLabelValues...,
+		)
 	}
 }
