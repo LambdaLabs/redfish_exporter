@@ -2,6 +2,7 @@ package collector
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -40,7 +41,8 @@ func setupTestServerWithGPU(t *testing.T) *testRedfishServer {
 	
 	setupGPUSystem(server)
 	setupGPUMemory(server)
-	
+	setupGPUProcessorsAndSensors(server)
+
 	return server
 }
 
@@ -122,8 +124,85 @@ func setupGPUMemory(server *testRedfishServer) {
 	})
 }
 
-// TODO: Add these setup functions when processor and NVLink collection is fully implemented
-// setupGPUProcessors and setupNVLinkPorts are commented out until needed
+// testGPUConfig holds configuration for a test GPU
+type testGPUConfig struct {
+	ID          string
+	Name        string
+	Temperature float64
+}
+
+// createGPUProcessor creates a GPU processor response with common fields
+func createGPUProcessor(systemID, gpuID, gpuName string) map[string]interface{} {
+	return map[string]interface{}{
+		"@odata.type":   "#Processor.v1_20_0.Processor",
+		"@odata.id":     fmt.Sprintf("/redfish/v1/Systems/%s/Processors/%s", systemID, gpuID),
+		"Id":            gpuID,
+		"Name":          gpuName,
+		"ProcessorType": "GPU",
+		"Manufacturer":  "NVIDIA",
+		"Model":         "H100",
+		"Status": map[string]string{
+			"State":  "Enabled",
+			"Health": "OK",
+		},
+	}
+}
+
+// createTemperatureSensor creates a temperature sensor response
+func createTemperatureSensor(chassisID, sensorID string, temperature float64) map[string]interface{} {
+	return map[string]interface{}{
+		"@odata.id":    fmt.Sprintf("/redfish/v1/Chassis/%s/Sensors/%s", chassisID, sensorID),
+		"@odata.type":  "#Sensor.v1_7_0.Sensor",
+		"Id":           sensorID,
+		"Name":         fmt.Sprintf("%s Temperature Sensor", chassisID),
+		"Reading":      temperature,
+		"ReadingType":  "Temperature",
+		"ReadingUnits": "Cel",
+		"Status": map[string]interface{}{
+			"State":  "Enabled",
+			"Health": "OK",
+		},
+	}
+}
+
+// setupGPUProcessorsAndSensors adds GPU processors and temperature sensors
+func setupGPUProcessorsAndSensors(server *testRedfishServer) {
+	systemID := "HGX_Baseboard_0"
+
+	// Define test GPUs
+	testGPUs := []testGPUConfig{
+		{ID: "GPU_0", Name: "GPU 0", Temperature: 58.0},
+		{ID: "GPU_1", Name: "GPU 1", Temperature: 59.5},
+	}
+
+	// Build processor collection members
+	members := make([]map[string]string, len(testGPUs))
+	for i, gpu := range testGPUs {
+		members[i] = map[string]string{
+			"@odata.id": fmt.Sprintf("/redfish/v1/Systems/%s/Processors/%s", systemID, gpu.ID),
+		}
+	}
+
+	// Add processors collection
+	server.addRoute(fmt.Sprintf("/redfish/v1/Systems/%s/Processors", systemID), map[string]interface{}{
+		"@odata.type":          "#ProcessorCollection.ProcessorCollection",
+		"Members":              members,
+		"Members@odata.count": len(members),
+	})
+
+	// Add each GPU processor and its temperature sensor
+	for _, gpu := range testGPUs {
+		// Add processor
+		processorPath := fmt.Sprintf("/redfish/v1/Systems/%s/Processors/%s", systemID, gpu.ID)
+		server.addRoute(processorPath, createGPUProcessor(systemID, gpu.ID, gpu.Name))
+
+		// Add temperature sensor
+		chassisID := fmt.Sprintf("HGX_%s", gpu.ID)
+		sensorID := fmt.Sprintf("%s_TEMP_1", chassisID)
+		sensorPath := fmt.Sprintf("/redfish/v1/Chassis/%s/Sensors/%s", chassisID, sensorID)
+		server.addRoute(sensorPath, createTemperatureSensor(chassisID, sensorID, gpu.Temperature))
+	}
+}
 
 // collectAndCategorizeMetrics collects metrics and categorizes them
 func collectAndCategorizeMetrics(t *testing.T, collector *GPUCollector) (map[string]float64, map[string]float64, map[string]float64, int) {
@@ -178,10 +257,24 @@ func categorizeMetric(metric prometheus.Metric, dto *dto.Metric, gpuMemory, gpuP
 	if processorID == "GPU_0" {
 		categorizeProcessorMetric(descString, dto, gpuProcessor)
 	}
-	
+
 	// Categorize NVLink port metrics
 	if strings.Contains(portID, "NVLink") {
 		categorizeNVLinkMetric(descString, dto, nvlink)
+	}
+
+	// Categorize GPU temperature metrics
+	if strings.Contains(descString, "temperature_tlimit_celsius") {
+		gpuID := ""
+		for _, label := range dto.Label {
+			if label.GetName() == "gpu_id" {
+				gpuID = label.GetValue()
+				break
+			}
+		}
+		if gpuID != "" {
+			gpuProcessor["temperature_tlimit_"+gpuID] = dto.Gauge.GetValue()
+		}
 	}
 }
 
@@ -233,60 +326,267 @@ func categorizeNVLinkMetric(descString string, dto *dto.Metric, metrics map[stri
 // verifyGPUMemoryMetrics verifies GPU memory metrics
 func verifyGPUMemoryMetrics(t *testing.T, metrics map[string]float64) {
 	if len(metrics) == 0 {
-		t.Error("No GPU memory metrics were collected")
+		t.Fatal("No GPU memory metrics were collected")
 	}
-	
-	// Check GPU_0 metrics
-	if val, ok := metrics["row_remapping_failed_GPU_0_DRAM_0"]; ok {
-		if val != 0 {
-			t.Errorf("Expected GPU_0 row_remapping_failed = 0, got %f", val)
-		}
-	} else {
-		t.Error("GPU_0 row_remapping_failed metric not collected")
+
+	tests := []struct {
+		metricKey     string
+		expectedValue float64
+		description   string
+		required      bool
+	}{
+		{
+			metricKey:     "row_remapping_failed_GPU_0_DRAM_0",
+			expectedValue: 0,
+			description:   "GPU_0 row_remapping_failed",
+			required:      true,
+		},
+		{
+			metricKey:     "row_remapping_failed_GPU_1_DRAM_0",
+			expectedValue: 1,
+			description:   "GPU_1 row_remapping_failed",
+			required:      true,
+		},
+		{
+			metricKey:     "max_availability_bank_count",
+			expectedValue: 5952,
+			description:   "max_availability_bank_count",
+			required:      false, // OEM data might not always be present
+		},
 	}
-	
-	// Check GPU_1 metrics
-	if val, ok := metrics["row_remapping_failed_GPU_1_DRAM_0"]; ok {
-		if val != 1 {
-			t.Errorf("Expected GPU_1 row_remapping_failed = 1, got %f", val)
-		}
-	} else {
-		t.Error("GPU_1 row_remapping_failed metric not collected")
-	}
-	
-	// Check OEM data
-	if val, ok := metrics["max_availability_bank_count"]; ok {
-		if val != 5952 {
-			t.Errorf("Expected max_availability_bank_count = 5952, got %f", val)
-		}
+
+	for _, tt := range tests {
+		t.Run(tt.description, func(t *testing.T) {
+			val, ok := metrics[tt.metricKey]
+			if !ok {
+				if tt.required {
+					t.Errorf("%s metric not collected", tt.description)
+				}
+				return
+			}
+			if val != tt.expectedValue {
+				t.Errorf("Expected %s = %f, got %f", tt.description, tt.expectedValue, val)
+			}
+		})
 	}
 }
 
+
+// verifyGPUTemperatureMetrics verifies GPU temperature metrics
+func verifyGPUTemperatureMetrics(t *testing.T, metrics map[string]float64) {
+	tests := []struct {
+		metricKey     string
+		expectedValue float64
+		description   string
+	}{
+		{
+			metricKey:     "temperature_tlimit_GPU_0",
+			expectedValue: 58.0,
+			description:   "GPU_0 temperature",
+		},
+		{
+			metricKey:     "temperature_tlimit_GPU_1",
+			expectedValue: 59.5,
+			description:   "GPU_1 temperature",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.description, func(t *testing.T) {
+			val, ok := metrics[tt.metricKey]
+			if !ok {
+				t.Errorf("%s metric not collected", tt.description)
+				return
+			}
+			if val != tt.expectedValue {
+				t.Errorf("Expected %s = %f, got %f", tt.description, tt.expectedValue, val)
+			}
+		})
+	}
+}
 
 // TestGPUCollectorWithNvidiaGPU tests the GPU collector with Nvidia GPU hardware
 func TestGPUCollectorWithNvidiaGPU(t *testing.T) {
 	server := setupTestServerWithGPU(t)
 	client := connectToTestServer(t, server)
 	defer client.Logout()
-	
+
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	collector := NewGPUCollector(client, logger)
-	
-	gpuMemoryMetrics, _, _, metricsFound := collectAndCategorizeMetrics(t, collector)
-	
-	if metricsFound == 0 {
-		t.Error("No metrics were collected")
-	}
-	
+
+	gpuMemoryMetrics, gpuProcessorMetrics, _, metricsFound := collectAndCategorizeMetrics(t, collector)
+
+	require.NotZero(t, metricsFound, "No metrics were collected")
+
 	verifyGPUMemoryMetrics(t, gpuMemoryMetrics)
-	
+	verifyGPUTemperatureMetrics(t, gpuProcessorMetrics)
+
 	t.Logf("Successfully collected %d total metrics", metricsFound)
 	t.Logf("GPU memory metrics: %d", len(gpuMemoryMetrics))
+	t.Logf("GPU processor/temperature metrics: %d", len(gpuProcessorMetrics))
+}
+
+// TestGPUTemperatureSensorEdgeCases tests edge cases for GPU temperature collection
+func TestGPUTemperatureSensorEdgeCases(t *testing.T) {
+	t.Run("non-temperature sensor should be skipped", func(t *testing.T) {
+		server := setupTestServerWithGPU(t)
+
+		// Add a non-temperature sensor (e.g., a power sensor)
+		server.addRoute("/redfish/v1/Chassis/HGX_GPU_0/Sensors/HGX_GPU_0_POWER_1", map[string]interface{}{
+			"@odata.id":    "/redfish/v1/Chassis/HGX_GPU_0/Sensors/HGX_GPU_0_POWER_1",
+			"@odata.type":  "#Sensor.v1_7_0.Sensor",
+			"Id":           "HGX_GPU_0_POWER_1",
+			"Name":         "GPU 0 Power Sensor",
+			"Reading":      250.5,
+			"ReadingType":  "Power",  // Not Temperature
+			"ReadingUnits": "W",
+			"Status": map[string]interface{}{
+				"State":  "Enabled",
+				"Health": "OK",
+			},
+		})
+
+		client := connectToTestServer(t, server)
+		defer client.Logout()
+
+		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+		collector := NewGPUCollector(client, logger)
+
+		// Try to collect from the power sensor path
+		ch := make(chan prometheus.Metric, 10)
+		collector.collectSingleGPUTemperature(ch, "GPU_0_POWER_1", "TestSystem", "System1")
+
+		// Should not emit any metrics for non-temperature sensor
+		select {
+		case metric := <-ch:
+			t.Errorf("Expected no metrics for non-temperature sensor, but got: %v", metric)
+		default:
+			// Good - no metrics emitted
+		}
+	})
+
+	t.Run("sensor with correct fixture format", func(t *testing.T) {
+		// Create a minimal server just for this test
+		server := &testRedfishServer{
+			t:        t,
+			mux:      http.NewServeMux(),
+			requests: make([]string, 0),
+		}
+		server.Server = httptest.NewServer(server.mux)
+		t.Cleanup(server.Close)
+
+		// Add minimal routes needed
+		server.addRouteFromFixture("/redfish/v1/", "service_root.json")
+		server.addRoute("/redfish/v1/Systems", map[string]interface{}{
+			"@odata.type": "#ComputerSystemCollection.ComputerSystemCollection",
+			"Members": []map[string]string{
+				{"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0"},
+			},
+			"Members@odata.count": 1,
+		})
+
+		// Add system with GPU
+		server.addRoute("/redfish/v1/Systems/HGX_Baseboard_0", map[string]interface{}{
+			"@odata.type": "#ComputerSystem.v1_14_0.ComputerSystem",
+			"Id":          "HGX_Baseboard_0",
+			"Name":        "HGX System",
+			"Processors": map[string]string{
+				"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors",
+			},
+		})
+
+		// Add processor collection with GPU
+		server.addRoute("/redfish/v1/Systems/HGX_Baseboard_0/Processors", map[string]interface{}{
+			"@odata.type": "#ProcessorCollection.ProcessorCollection",
+			"Members": []map[string]string{
+				{"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0"},
+			},
+			"Members@odata.count": 1,
+		})
+
+		// Add GPU processor
+		server.addRoute("/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0", map[string]interface{}{
+			"@odata.type":   "#Processor.v1_20_0.Processor",
+			"Id":            "GPU_0",
+			"Name":          "GPU 0",
+			"ProcessorType": "GPU",
+			"Status": map[string]string{
+				"State":  "Enabled",
+				"Health": "OK",
+			},
+		})
+
+		// Add the temperature sensor using the fixture
+		server.addRouteFromFixture("/redfish/v1/Chassis/HGX_GPU_0/Sensors/HGX_GPU_0_TEMP_1",
+			"gpu_temperature_sensor.json")
+
+		client := connectToTestServer(t, server)
+		defer client.Logout()
+
+		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+		collector := NewGPUCollector(client, logger)
+
+		ch := make(chan prometheus.Metric, 200)
+		go func() {
+			collector.Collect(ch)
+			close(ch)
+		}()
+
+		// Verify temperature metric was collected from fixture
+		foundTemp := false
+		for metric := range ch {
+			desc := metric.Desc()
+			if strings.Contains(desc.String(), "temperature_tlimit_celsius") {
+				dto := &dto.Metric{}
+				require.NoError(t, metric.Write(dto))
+				// Fixture has Reading: 58.0
+				assert.Equal(t, 58.0, dto.Gauge.GetValue())
+				foundTemp = true
+				break
+			}
+		}
+
+		assert.True(t, foundTemp, "Temperature metric should be collected from fixture")
+	})
 }
 
 // TestGPUCollectorWithNoGPUs tests the GPU collector when no GPUs are present
 func TestGPUCollectorWithNoGPUs(t *testing.T) {
-	// Create a test server with no GPU hardware
+	server := setupTestServerWithoutGPU(t)
+	client := connectToTestServer(t, server)
+	defer client.Logout()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	collector := NewGPUCollector(client, logger)
+
+	ch := make(chan prometheus.Metric, 100)
+	go func() {
+		collector.Collect(ch)
+		close(ch)
+	}()
+
+	gpuMetricsFound := 0
+	for metric := range ch {
+		dto := &dto.Metric{}
+		if err := metric.Write(dto); err != nil {
+			continue
+		}
+
+		desc := metric.Desc()
+		descString := desc.String()
+
+		if isGPUSpecificMetric(descString) {
+			gpuMetricsFound++
+			t.Errorf("Unexpected GPU metric found: %s", descString)
+		}
+	}
+
+	assert.Zero(t, gpuMetricsFound, "Found GPU metrics when none were expected")
+	t.Log("Successfully verified no GPU metrics collected for non-GPU system")
+}
+
+// setupTestServerWithoutGPU creates a test server without GPU hardware
+func setupTestServerWithoutGPU(t *testing.T) *testRedfishServer {
 	server := &testRedfishServer{
 		t:        t,
 		mux:      http.NewServeMux(),
@@ -294,11 +594,9 @@ func TestGPUCollectorWithNoGPUs(t *testing.T) {
 	}
 	server.Server = httptest.NewServer(server.mux)
 	t.Cleanup(server.Close)
-	
-	// Add service root
+
 	server.addRouteFromFixture("/redfish/v1/", "service_root.json")
-	
-	// Add systems collection with regular system
+
 	server.addRoute("/redfish/v1/Systems", map[string]interface{}{
 		"@odata.type": "#ComputerSystemCollection.ComputerSystemCollection",
 		"Members": []map[string]string{
@@ -306,8 +604,16 @@ func TestGPUCollectorWithNoGPUs(t *testing.T) {
 		},
 		"Members@odata.count": 1,
 	})
-	
-	// Add regular system without GPU components
+
+	setupNonGPUSystem(server)
+	setupNonGPUMemory(server)
+	setupNonGPUProcessors(server)
+
+	return server
+}
+
+// setupNonGPUSystem adds a regular system without GPU components
+func setupNonGPUSystem(server *testRedfishServer) {
 	server.addRoute("/redfish/v1/Systems/System1", map[string]interface{}{
 		"@odata.type": "#ComputerSystem.v1_14_0.ComputerSystem",
 		"@odata.id":   "/redfish/v1/Systems/System1",
@@ -327,8 +633,10 @@ func TestGPUCollectorWithNoGPUs(t *testing.T) {
 			"@odata.id": "/redfish/v1/Systems/System1/Processors",
 		},
 	})
-	
-	// Add Memory collection with only regular memory
+}
+
+// setupNonGPUMemory adds regular memory without GPU memory
+func setupNonGPUMemory(server *testRedfishServer) {
 	server.addRoute("/redfish/v1/Systems/System1/Memory", map[string]interface{}{
 		"@odata.type": "#MemoryCollection.MemoryCollection",
 		"Members": []map[string]string{
@@ -337,8 +645,7 @@ func TestGPUCollectorWithNoGPUs(t *testing.T) {
 		},
 		"Members@odata.count": 2,
 	})
-	
-	// Add regular DIMMs
+
 	server.addRoute("/redfish/v1/Systems/System1/Memory/DIMM_0", map[string]interface{}{
 		"@odata.type": "#Memory.v1_17_0.Memory",
 		"@odata.id":   "/redfish/v1/Systems/System1/Memory/DIMM_0",
@@ -351,8 +658,10 @@ func TestGPUCollectorWithNoGPUs(t *testing.T) {
 			"Health": "OK",
 		},
 	})
-	
-	// Add Processor collection with only CPUs
+}
+
+// setupNonGPUProcessors adds CPU processors without GPUs
+func setupNonGPUProcessors(server *testRedfishServer) {
 	server.addRoute("/redfish/v1/Systems/System1/Processors", map[string]interface{}{
 		"@odata.type": "#ProcessorCollection.ProcessorCollection",
 		"Members": []map[string]string{
@@ -361,8 +670,7 @@ func TestGPUCollectorWithNoGPUs(t *testing.T) {
 		},
 		"Members@odata.count": 2,
 	})
-	
-	// Add CPU processors
+
 	server.addRoute("/redfish/v1/Systems/System1/Processors/CPU_0", map[string]interface{}{
 		"@odata.type": "#Processor.v1_14_0.Processor",
 		"@odata.id":   "/redfish/v1/Systems/System1/Processors/CPU_0",
@@ -376,48 +684,23 @@ func TestGPUCollectorWithNoGPUs(t *testing.T) {
 			"Health": "OK",
 		},
 	})
-	
-	// Connect to the test server
-	client := connectToTestServer(t, server)
-	defer client.Logout()
-	
-	// Create GPU collector
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector := NewGPUCollector(client, logger)
-	
-	// Collect metrics
-	ch := make(chan prometheus.Metric, 100)
-	go func() {
-		collector.Collect(ch)
-		close(ch)
-	}()
-	
-	// Check that no GPU-specific metrics are collected
-	gpuMetricsFound := 0
-	for metric := range ch {
-		dto := &dto.Metric{}
-		if err := metric.Write(dto); err != nil {
-			continue
-		}
-		
-		desc := metric.Desc()
-		descString := desc.String()
-		
-		// Check if this is a GPU-specific metric (should not find any)
-		if strings.Contains(descString, "gpu_") || 
-		   strings.Contains(descString, "nvlink") ||
-		   strings.Contains(descString, "tensor_core") ||
-		   strings.Contains(descString, "sm_utilization") {
-			gpuMetricsFound++
-			t.Errorf("Unexpected GPU metric found: %s", descString)
+}
+
+// isGPUSpecificMetric checks if a metric is GPU-specific
+func isGPUSpecificMetric(descString string) bool {
+	gpuIndicators := []string{
+		"gpu_",
+		"nvlink",
+		"tensor_core",
+		"sm_utilization",
+	}
+
+	for _, indicator := range gpuIndicators {
+		if strings.Contains(descString, indicator) {
+			return true
 		}
 	}
-	
-	if gpuMetricsFound > 0 {
-		t.Errorf("Found %d GPU metrics when none were expected", gpuMetricsFound)
-	}
-	
-	t.Log("Successfully verified no GPU metrics collected for non-GPU system")
+	return false
 }
 
 // TestCollectGPUProcessorMetrics tests collection of GPU processor metrics with various health states

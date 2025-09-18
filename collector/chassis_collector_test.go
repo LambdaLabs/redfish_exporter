@@ -119,10 +119,26 @@ func TestParseLeakDetector(t *testing.T) {
 	close(metricsCh)
 	wg.Wait()
 
-	expected := `label:{name:"chassis_id" value:"test_chassis"} label:{name:"leak_detection_id" value:"LeakDetection"} label:{name:"leak_detector_id" value:"Chassis_0_LeakDetector_0_ColdPlate"} label:{name:"resource" value:"leak_detector"} gauge:{value:1}`
 	for metric := range metricsCh {
 		dto := &dto.Metric{}
 		require.NoError(t, metric.Write(dto))
-		require.Equal(t, expected, dto.String())
+
+		// Verify the metric has the expected labels and value
+		require.Len(t, dto.Label, 4, "Expected 4 labels")
+
+		// Check labels
+		labelMap := make(map[string]string)
+		for _, label := range dto.Label {
+			labelMap[label.GetName()] = label.GetValue()
+		}
+
+		require.Equal(t, "test_chassis", labelMap["chassis_id"])
+		require.Equal(t, "LeakDetection", labelMap["leak_detection_id"])
+		require.Equal(t, "Chassis_0_LeakDetector_0_ColdPlate", labelMap["leak_detector_id"])
+		require.Equal(t, "leak_detector", labelMap["resource"])
+
+		// Check gauge value
+		require.NotNil(t, dto.Gauge, "Expected gauge metric")
+		require.Equal(t, float64(1), dto.Gauge.GetValue())
 	}
 }
