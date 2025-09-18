@@ -129,6 +129,7 @@ type testGPUConfig struct {
 	ID          string
 	Name        string
 	Temperature float64
+	MemoryPower float64
 }
 
 // createGPUProcessor creates a GPU processor response with common fields
@@ -165,14 +166,31 @@ func createTemperatureSensor(chassisID, sensorID string, temperature float64) ma
 	}
 }
 
+// createPowerSensor creates a power sensor response
+func createPowerSensor(chassisID, sensorID string, powerReading float64) map[string]interface{} {
+	return map[string]interface{}{
+		"@odata.id":    fmt.Sprintf("/redfish/v1/Chassis/%s/Sensors/%s", chassisID, sensorID),
+		"@odata.type":  "#Sensor.v1_7_0.Sensor",
+		"Id":           sensorID,
+		"Name":         fmt.Sprintf("%s Power Sensor", chassisID),
+		"Reading":      powerReading,
+		"ReadingType":  "Power",
+		"ReadingUnits": "W",
+		"Status": map[string]interface{}{
+			"State":  "Enabled",
+			"Health": "OK",
+		},
+	}
+}
+
 // setupGPUProcessorsAndSensors adds GPU processors and temperature sensors
 func setupGPUProcessorsAndSensors(server *testRedfishServer) {
 	systemID := "HGX_Baseboard_0"
 
 	// Define test GPUs
 	testGPUs := []testGPUConfig{
-		{ID: "GPU_0", Name: "GPU 0", Temperature: 58.0},
-		{ID: "GPU_1", Name: "GPU 1", Temperature: 59.5},
+		{ID: "GPU_0", Name: "GPU 0", Temperature: 58.0, MemoryPower: 36.5},
+		{ID: "GPU_1", Name: "GPU 1", Temperature: 59.5, MemoryPower: 38.0},
 	}
 
 	// Build processor collection members
@@ -201,6 +219,11 @@ func setupGPUProcessorsAndSensors(server *testRedfishServer) {
 		sensorID := fmt.Sprintf("%s_TEMP_1", chassisID)
 		sensorPath := fmt.Sprintf("/redfish/v1/Chassis/%s/Sensors/%s", chassisID, sensorID)
 		server.addRoute(sensorPath, createTemperatureSensor(chassisID, sensorID, gpu.Temperature))
+
+		// Add memory power sensor
+		powerSensorID := fmt.Sprintf("HGX_%s_DRAM_0_Power_0", gpu.ID)
+		powerSensorPath := fmt.Sprintf("/redfish/v1/Chassis/%s/Sensors/%s", chassisID, powerSensorID)
+		server.addRoute(powerSensorPath, createPowerSensor(chassisID, powerSensorID, gpu.MemoryPower))
 	}
 }
 
@@ -274,6 +297,20 @@ func categorizeMetric(metric prometheus.Metric, dto *dto.Metric, gpuMemory, gpuP
 		}
 		if gpuID != "" {
 			gpuProcessor["temperature_tlimit_"+gpuID] = dto.Gauge.GetValue()
+		}
+	}
+
+	// Categorize GPU memory power metrics
+	if strings.Contains(descString, "memory_power_watts") {
+		memoryID := ""
+		for _, label := range dto.Label {
+			if label.GetName() == "memory_id" {
+				memoryID = label.GetValue()
+				break
+			}
+		}
+		if memoryID != "" {
+			gpuProcessor["memory_power_"+memoryID] = dto.Gauge.GetValue()
 		}
 	}
 }
@@ -372,6 +409,39 @@ func verifyGPUMemoryMetrics(t *testing.T, metrics map[string]float64) {
 }
 
 
+// verifyGPUMemoryPowerMetrics verifies GPU memory power metrics
+func verifyGPUMemoryPowerMetrics(t *testing.T, metrics map[string]float64) {
+	tests := []struct {
+		metricKey     string
+		expectedValue float64
+		description   string
+	}{
+		{
+			metricKey:     "memory_power_GPU_0_DRAM_0",
+			expectedValue: 36.5,
+			description:   "GPU_0_DRAM_0 power",
+		},
+		{
+			metricKey:     "memory_power_GPU_1_DRAM_0",
+			expectedValue: 38.0,
+			description:   "GPU_1_DRAM_0 power",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.description, func(t *testing.T) {
+			val, ok := metrics[tt.metricKey]
+			if !ok {
+				t.Errorf("%s metric not collected", tt.description)
+				return
+			}
+			if val != tt.expectedValue {
+				t.Errorf("Expected %s = %f, got %f", tt.description, tt.expectedValue, val)
+			}
+		})
+	}
+}
+
 // verifyGPUTemperatureMetrics verifies GPU temperature metrics
 func verifyGPUTemperatureMetrics(t *testing.T, metrics map[string]float64) {
 	tests := []struct {
@@ -420,10 +490,11 @@ func TestGPUCollectorWithNvidiaGPU(t *testing.T) {
 
 	verifyGPUMemoryMetrics(t, gpuMemoryMetrics)
 	verifyGPUTemperatureMetrics(t, gpuProcessorMetrics)
+	verifyGPUMemoryPowerMetrics(t, gpuProcessorMetrics)
 
 	t.Logf("Successfully collected %d total metrics", metricsFound)
 	t.Logf("GPU memory metrics: %d", len(gpuMemoryMetrics))
-	t.Logf("GPU processor/temperature metrics: %d", len(gpuProcessorMetrics))
+	t.Logf("GPU processor/temperature/power metrics: %d", len(gpuProcessorMetrics))
 }
 
 // TestGPUTemperatureSensorEdgeCases tests edge cases for GPU temperature collection
