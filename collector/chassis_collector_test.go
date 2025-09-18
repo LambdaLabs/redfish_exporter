@@ -3,6 +3,7 @@ package collector
 import (
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 
@@ -140,5 +141,344 @@ func TestParseLeakDetector(t *testing.T) {
 		// Check gauge value
 		require.NotNil(t, dto.Gauge, "Expected gauge metric")
 		require.Equal(t, float64(1), dto.Gauge.GetValue())
+	}
+}
+
+// TestCollectTotalGPUPower tests the collection of total GPU power metric
+func TestCollectTotalGPUPower(t *testing.T) {
+	server := newTestRedfishServer(t)
+
+	// Add chassis collection
+	server.addRoute("/redfish/v1/Chassis", map[string]interface{}{
+		"@odata.type": "#ChassisCollection.ChassisCollection",
+		"Members": []map[string]string{
+			{"@odata.id": "/redfish/v1/Chassis/HGX_Chassis_0"},
+		},
+		"Members@odata.count": 1,
+	})
+
+	// Add main chassis
+	server.addRoute("/redfish/v1/Chassis/HGX_Chassis_0", map[string]interface{}{
+		"@odata.type": "#Chassis.v1_20_0.Chassis",
+		"@odata.id":   "/redfish/v1/Chassis/HGX_Chassis_0",
+		"Id":          "HGX_Chassis_0",
+		"Name":        "HGX Chassis",
+		"ChassisType": "RackMount",
+		"Status": map[string]string{
+			"State":  "Enabled",
+			"Health": "OK",
+		},
+	})
+
+	// Add total GPU power control
+	server.addRoute("/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0", map[string]interface{}{
+		"@odata.type": "#Control.v1_5_0.Control",
+		"@odata.id":   "/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0",
+		"Id":          "TotalGPU_Power_0",
+		"Name":        "Total GPU Power",
+		"ControlType": "Power",
+		"SetPointUnits": "W",
+		"Sensor": map[string]interface{}{
+			"Reading": 673.8720092773438,
+			"DataSourceUri": "/redfish/v1/Chassis/HGX_Chassis_0/Sensors/TotalGPU_Power",
+		},
+		"Status": map[string]string{
+			"State":  "Enabled",
+			"Health": "OK",
+		},
+	})
+
+	client := connectToTestServer(t, server)
+	defer client.Logout()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	collector := NewChassisCollector(client, logger)
+
+	// Collect metrics
+	ch := make(chan prometheus.Metric, 100)
+	go func() {
+		collector.Collect(ch)
+		close(ch)
+	}()
+
+	// Check for total GPU power metric
+	foundTotalGPUPower := false
+	var totalGPUPowerValue float64
+
+	for metric := range ch {
+		dto := &dto.Metric{}
+		require.NoError(t, metric.Write(dto))
+
+		desc := metric.Desc()
+		descString := desc.String()
+
+		if strings.Contains(descString, "gpu_total_power_watts") {
+			foundTotalGPUPower = true
+			totalGPUPowerValue = dto.Gauge.GetValue()
+
+			// Check labels
+			labelMap := make(map[string]string)
+			for _, label := range dto.Label {
+				labelMap[label.GetName()] = label.GetValue()
+			}
+			require.Equal(t, "HGX_Chassis_0", labelMap["chassis_id"])
+			require.Equal(t, "chassis", labelMap["resource"])
+			break
+		}
+	}
+
+	require.True(t, foundTotalGPUPower, "Total GPU power metric should be collected")
+	require.InDelta(t, 673.872, totalGPUPowerValue, 0.01, "Total GPU power value should match")
+}
+
+// TestCollectTotalGPUPowerMultipleChassis tests total GPU power collection with multiple chassis
+// where only some have the control endpoint
+func TestCollectTotalGPUPowerMultipleChassis(t *testing.T) {
+	server := newTestRedfishServer(t)
+
+	// Add chassis collection with multiple chassis
+	server.addRoute("/redfish/v1/Chassis", map[string]interface{}{
+		"@odata.type": "#ChassisCollection.ChassisCollection",
+		"Members": []map[string]string{
+			{"@odata.id": "/redfish/v1/Chassis/HGX_Chassis_0"},
+			{"@odata.id": "/redfish/v1/Chassis/System_Chassis_1"},
+			{"@odata.id": "/redfish/v1/Chassis/HGX_ProcessorModule_0"},
+		},
+		"Members@odata.count": 3,
+	})
+
+	// Add main HGX chassis with GPU power control
+	server.addRoute("/redfish/v1/Chassis/HGX_Chassis_0", map[string]interface{}{
+		"@odata.type": "#Chassis.v1_20_0.Chassis",
+		"@odata.id":   "/redfish/v1/Chassis/HGX_Chassis_0",
+		"Id":          "HGX_Chassis_0",
+		"Name":        "HGX Chassis",
+		"ChassisType": "RackMount",
+		"Status": map[string]string{
+			"State":  "Enabled",
+			"Health": "OK",
+		},
+	})
+
+	// Add GPU power control for HGX_Chassis_0
+	server.addRoute("/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0", map[string]interface{}{
+		"@odata.type": "#Control.v1_5_0.Control",
+		"@odata.id":   "/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0",
+		"Id":          "TotalGPU_Power_0",
+		"Name":        "Total GPU Power",
+		"ControlType": "Power",
+		"SetPointUnits": "W",
+		"Sensor": map[string]interface{}{
+			"Reading":       673.8720092773438,
+			"DataSourceUri": "/redfish/v1/Chassis/HGX_Chassis_0/Sensors/TotalGPU_Power",
+		},
+		"Status": map[string]string{
+			"State":  "Enabled",
+			"Health": "OK",
+		},
+	})
+
+	// Add regular system chassis without GPU power control
+	server.addRoute("/redfish/v1/Chassis/System_Chassis_1", map[string]interface{}{
+		"@odata.type": "#Chassis.v1_20_0.Chassis",
+		"@odata.id":   "/redfish/v1/Chassis/System_Chassis_1",
+		"Id":          "System_Chassis_1",
+		"Name":        "System Chassis",
+		"ChassisType": "RackMount",
+		"Status": map[string]string{
+			"State":  "Enabled",
+			"Health": "OK",
+		},
+	})
+
+	// Add processor module chassis without GPU power control
+	server.addRoute("/redfish/v1/Chassis/HGX_ProcessorModule_0", map[string]interface{}{
+		"@odata.type": "#Chassis.v1_20_0.Chassis",
+		"@odata.id":   "/redfish/v1/Chassis/HGX_ProcessorModule_0",
+		"Id":          "HGX_ProcessorModule_0",
+		"Name":        "HGX Processor Module",
+		"ChassisType": "Module",
+		"Status": map[string]string{
+			"State":  "Enabled",
+			"Health": "OK",
+		},
+	})
+
+	client := connectToTestServer(t, server)
+	defer client.Logout()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	collector := NewChassisCollector(client, logger)
+
+	// Collect metrics
+	ch := make(chan prometheus.Metric, 200)
+	go func() {
+		collector.Collect(ch)
+		close(ch)
+	}()
+
+	// Track which chassis have GPU power metrics
+	gpuPowerMetrics := make(map[string]float64)
+	chassisHealthMetrics := make(map[string]bool)
+
+	for metric := range ch {
+		dto := &dto.Metric{}
+		require.NoError(t, metric.Write(dto))
+
+		desc := metric.Desc()
+		descString := desc.String()
+
+		// Get chassis_id from labels
+		var chassisID string
+		for _, label := range dto.Label {
+			if label.GetName() == "chassis_id" {
+				chassisID = label.GetValue()
+				break
+			}
+		}
+
+		if strings.Contains(descString, "gpu_total_power_watts") {
+			gpuPowerMetrics[chassisID] = dto.Gauge.GetValue()
+		}
+
+		if strings.Contains(descString, "chassis_health") && !strings.Contains(descString, "rollup") {
+			chassisHealthMetrics[chassisID] = true
+		}
+	}
+
+	// Verify all three chassis were processed
+	require.Len(t, chassisHealthMetrics, 3, "Should have collected health metrics for all 3 chassis")
+
+	// Verify only HGX_Chassis_0 has GPU power metric
+	require.Len(t, gpuPowerMetrics, 1, "Should have collected GPU power for only 1 chassis")
+	require.Contains(t, gpuPowerMetrics, "HGX_Chassis_0", "HGX_Chassis_0 should have GPU power metric")
+	require.InDelta(t, 673.872, gpuPowerMetrics["HGX_Chassis_0"], 0.01, "GPU power value should match")
+
+	// Verify other chassis don't have GPU power metrics
+	require.NotContains(t, gpuPowerMetrics, "System_Chassis_1", "System_Chassis_1 should not have GPU power metric")
+	require.NotContains(t, gpuPowerMetrics, "HGX_ProcessorModule_0", "HGX_ProcessorModule_0 should not have GPU power metric")
+}
+
+// TestCollectTotalGPUPowerErrorHandling tests error handling for GPU power collection
+func TestCollectTotalGPUPowerErrorHandling(t *testing.T) {
+	testCases := []struct {
+		name              string
+		controlResponse   map[string]interface{}
+		expectMetric      bool
+		expectedValue     float64
+	}{
+		{
+			name: "control with zero reading and no data source",
+			controlResponse: map[string]interface{}{
+				"@odata.type":   "#Control.v1_5_0.Control",
+				"Id":            "TotalGPU_Power_0",
+				"Name":          "Total GPU Power",
+				"ControlType":   "Power",
+				"SetPointUnits": "W",
+				"Sensor": map[string]interface{}{
+					"Reading":       0,
+					"DataSourceUri": "",
+				},
+			},
+			expectMetric: false,
+		},
+		{
+			name: "control with wrong type",
+			controlResponse: map[string]interface{}{
+				"@odata.type":   "#Control.v1_5_0.Control",
+				"Id":            "TotalGPU_Power_0",
+				"Name":          "Total GPU Power",
+				"ControlType":   "Temperature", // Wrong type
+				"SetPointUnits": "Cel",
+				"Sensor": map[string]interface{}{
+					"Reading":       100.5,
+					"DataSourceUri": "/redfish/v1/Chassis/HGX_Chassis_0/Sensors/Something",
+				},
+			},
+			expectMetric: false,
+		},
+		{
+			name: "valid control with power reading",
+			controlResponse: map[string]interface{}{
+				"@odata.type":   "#Control.v1_5_0.Control",
+				"Id":            "TotalGPU_Power_0",
+				"Name":          "Total GPU Power",
+				"ControlType":   "Power",
+				"SetPointUnits": "W",
+				"Sensor": map[string]interface{}{
+					"Reading":       500.25,
+					"DataSourceUri": "/redfish/v1/Chassis/HGX_Chassis_0/Sensors/TotalGPU_Power",
+				},
+			},
+			expectMetric:  true,
+			expectedValue: 500.25,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := newTestRedfishServer(t)
+
+			// Add chassis collection
+			server.addRoute("/redfish/v1/Chassis", map[string]interface{}{
+				"@odata.type": "#ChassisCollection.ChassisCollection",
+				"Members": []map[string]string{
+					{"@odata.id": "/redfish/v1/Chassis/HGX_Chassis_0"},
+				},
+				"Members@odata.count": 1,
+			})
+
+			// Add chassis
+			server.addRoute("/redfish/v1/Chassis/HGX_Chassis_0", map[string]interface{}{
+				"@odata.type": "#Chassis.v1_20_0.Chassis",
+				"@odata.id":   "/redfish/v1/Chassis/HGX_Chassis_0",
+				"Id":          "HGX_Chassis_0",
+				"Name":        "HGX Chassis",
+				"ChassisType": "RackMount",
+				"Status": map[string]string{
+					"State":  "Enabled",
+					"Health": "OK",
+				},
+			})
+
+			// Add control with test-specific response
+			tc.controlResponse["@odata.id"] = "/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0"
+			server.addRoute("/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0", tc.controlResponse)
+
+			client := connectToTestServer(t, server)
+			defer client.Logout()
+
+			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			collector := NewChassisCollector(client, logger)
+
+			// Collect metrics
+			ch := make(chan prometheus.Metric, 100)
+			go func() {
+				collector.Collect(ch)
+				close(ch)
+			}()
+
+			// Check for GPU power metric
+			foundGPUPower := false
+			var gpuPowerValue float64
+
+			for metric := range ch {
+				desc := metric.Desc()
+				if strings.Contains(desc.String(), "gpu_total_power_watts") {
+					foundGPUPower = true
+					dto := &dto.Metric{}
+					require.NoError(t, metric.Write(dto))
+					gpuPowerValue = dto.Gauge.GetValue()
+					break
+				}
+			}
+
+			if tc.expectMetric {
+				require.True(t, foundGPUPower, "Expected GPU power metric to be collected")
+				require.InDelta(t, tc.expectedValue, gpuPowerValue, 0.01, "GPU power value should match")
+			} else {
+				require.False(t, foundGPUPower, "GPU power metric should not be collected")
+			}
+		})
 	}
 }
