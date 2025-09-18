@@ -168,13 +168,8 @@ func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 
-<<<<<<< HEAD
-=======
 	// Channel to collect GPU info from each system
 	gpuInfoChan := make(chan systemGPUInfo, len(systems))
-
-	// Collect metrics from all systems
->>>>>>> 3101ee0 (refactors)
 	wg := &sync.WaitGroup{}
 	for _, system := range systems {
 		wg.Add(1)
@@ -274,7 +269,7 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 				wgMemory.Add(1)
 				mem := memory // Capture loop variable
 				go func() {
-					semMemory <- struct{}{} // Acquire semaphore
+					semMemory <- struct{}{}        // Acquire semaphore
 					defer func() { <-semMemory }() // Release semaphore
 					g.collectGPUMemory(ch, systemName, systemID, mem, wgMemory)
 				}()
@@ -293,7 +288,7 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 			wgProcessor.Add(1)
 			proc := processor // Capture loop variable
 			go func() {
-				semProcessor <- struct{}{} // Acquire semaphore
+				semProcessor <- struct{}{}        // Acquire semaphore
 				defer func() { <-semProcessor }() // Release semaphore
 				g.collectGPUProcessor(ch, systemName, systemID, proc, wgProcessor)
 			}()
@@ -632,7 +627,7 @@ func (g *GPUCollector) collectGPUTemperatureSensors(ch chan<- prometheus.Metric,
 			wg.Add(1)
 			go func(gpuID, systemName, systemID string) {
 				defer wg.Done()
-				sem <- struct{}{} // Acquire semaphore
+				sem <- struct{}{}        // Acquire semaphore
 				defer func() { <-sem }() // Release semaphore
 
 				g.collectSingleGPUTemperature(ch, gpuID, systemName, systemID)
@@ -760,4 +755,3 @@ func emitGPUECCMetrics(ch chan<- prometheus.Metric, mem []MemoryWithMetrics, log
 			metricLabels...)
 	}
 }
-
