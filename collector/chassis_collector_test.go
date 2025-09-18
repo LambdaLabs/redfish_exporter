@@ -3,6 +3,7 @@ package collector
 import (
 	"io"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -164,10 +165,22 @@ func TestCollectTotalGPUPower(t *testing.T) {
 		"Id":          "HGX_Chassis_0",
 		"Name":        "HGX Chassis",
 		"ChassisType": "RackMount",
+		"Controls": map[string]interface{}{
+			"@odata.id": "/redfish/v1/Chassis/HGX_Chassis_0/Controls",
+		},
 		"Status": map[string]string{
 			"State":  "Enabled",
 			"Health": "OK",
 		},
+	})
+
+	// Add controls collection
+	server.addRoute("/redfish/v1/Chassis/HGX_Chassis_0/Controls", map[string]interface{}{
+		"@odata.type": "#ControlCollection.ControlCollection",
+		"Members": []map[string]string{
+			{"@odata.id": "/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0"},
+		},
+		"Members@odata.count": 1,
 	})
 
 	// Add total GPU power control
@@ -254,13 +267,26 @@ func TestCollectTotalGPUPowerMultipleChassis(t *testing.T) {
 		"Id":          "HGX_Chassis_0",
 		"Name":        "HGX Chassis",
 		"ChassisType": "RackMount",
+		"Controls": map[string]interface{}{
+			"@odata.id": "/redfish/v1/Chassis/HGX_Chassis_0/Controls",
+		},
 		"Status": map[string]string{
 			"State":  "Enabled",
 			"Health": "OK",
 		},
 	})
 
-	// Add GPU power control for HGX_Chassis_0
+	// Add controls collection for HGX_Chassis_0 with multiple GPU power controls
+	server.addRoute("/redfish/v1/Chassis/HGX_Chassis_0/Controls", map[string]interface{}{
+		"@odata.type": "#ControlCollection.ControlCollection",
+		"Members": []map[string]string{
+			{"@odata.id": "/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0"},
+			{"@odata.id": "/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_1"},
+		},
+		"Members@odata.count": 2,
+	})
+
+	// Add first GPU power control for HGX_Chassis_0
 	server.addRoute("/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0", map[string]interface{}{
 		"@odata.type": "#Control.v1_5_0.Control",
 		"@odata.id":   "/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0",
@@ -271,6 +297,24 @@ func TestCollectTotalGPUPowerMultipleChassis(t *testing.T) {
 		"Sensor": map[string]interface{}{
 			"Reading":       673.8720092773438,
 			"DataSourceUri": "/redfish/v1/Chassis/HGX_Chassis_0/Sensors/TotalGPU_Power",
+		},
+		"Status": map[string]string{
+			"State":  "Enabled",
+			"Health": "OK",
+		},
+	})
+
+	// Add second GPU power control for HGX_Chassis_0
+	server.addRoute("/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_1", map[string]interface{}{
+		"@odata.type": "#Control.v1_5_0.Control",
+		"@odata.id":   "/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_1",
+		"Id":          "TotalGPU_Power_1",
+		"Name":        "Total GPU Power Group 2",
+		"ControlType": "Power",
+		"SetPointUnits": "W",
+		"Sensor": map[string]interface{}{
+			"Reading":       450.25,
+			"DataSourceUri": "/redfish/v1/Chassis/HGX_Chassis_0/Sensors/TotalGPU_Power_1",
 		},
 		"Status": map[string]string{
 			"State":  "Enabled",
@@ -318,7 +362,7 @@ func TestCollectTotalGPUPowerMultipleChassis(t *testing.T) {
 	}()
 
 	// Track which chassis have GPU power metrics
-	gpuPowerMetrics := make(map[string]float64)
+	gpuPowerMetrics := []float64{}
 	chassisHealthMetrics := make(map[string]bool)
 
 	for metric := range ch {
@@ -338,7 +382,7 @@ func TestCollectTotalGPUPowerMultipleChassis(t *testing.T) {
 		}
 
 		if strings.Contains(descString, "gpu_total_power_watts") {
-			gpuPowerMetrics[chassisID] = dto.Gauge.GetValue()
+			gpuPowerMetrics = append(gpuPowerMetrics, dto.Gauge.GetValue())
 		}
 
 		if strings.Contains(descString, "chassis_health") && !strings.Contains(descString, "rollup") {
@@ -349,14 +393,13 @@ func TestCollectTotalGPUPowerMultipleChassis(t *testing.T) {
 	// Verify all three chassis were processed
 	require.Len(t, chassisHealthMetrics, 3, "Should have collected health metrics for all 3 chassis")
 
-	// Verify only HGX_Chassis_0 has GPU power metric
-	require.Len(t, gpuPowerMetrics, 1, "Should have collected GPU power for only 1 chassis")
-	require.Contains(t, gpuPowerMetrics, "HGX_Chassis_0", "HGX_Chassis_0 should have GPU power metric")
-	require.InDelta(t, 673.872, gpuPowerMetrics["HGX_Chassis_0"], 0.01, "GPU power value should match")
+	// Verify we collected both GPU power metrics from HGX_Chassis_0
+	require.Len(t, gpuPowerMetrics, 2, "Should have collected 2 GPU power metrics from HGX_Chassis_0")
 
-	// Verify other chassis don't have GPU power metrics
-	require.NotContains(t, gpuPowerMetrics, "System_Chassis_1", "System_Chassis_1 should not have GPU power metric")
-	require.NotContains(t, gpuPowerMetrics, "HGX_ProcessorModule_0", "HGX_ProcessorModule_0 should not have GPU power metric")
+	// Sort to ensure consistent ordering
+	sort.Float64s(gpuPowerMetrics)
+	require.InDelta(t, 450.25, gpuPowerMetrics[0], 0.01, "First GPU power value should match")
+	require.InDelta(t, 673.872, gpuPowerMetrics[1], 0.01, "Second GPU power value should match")
 }
 
 // TestCollectTotalGPUPowerErrorHandling tests error handling for GPU power collection
@@ -436,10 +479,22 @@ func TestCollectTotalGPUPowerErrorHandling(t *testing.T) {
 				"Id":          "HGX_Chassis_0",
 				"Name":        "HGX Chassis",
 				"ChassisType": "RackMount",
+				"Controls": map[string]interface{}{
+					"@odata.id": "/redfish/v1/Chassis/HGX_Chassis_0/Controls",
+				},
 				"Status": map[string]string{
 					"State":  "Enabled",
 					"Health": "OK",
 				},
+			})
+
+			// Add controls collection
+			server.addRoute("/redfish/v1/Chassis/HGX_Chassis_0/Controls", map[string]interface{}{
+				"@odata.type": "#ControlCollection.ControlCollection",
+				"Members": []map[string]string{
+					{"@odata.id": "/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0"},
+				},
+				"Members@odata.count": 1,
 			})
 
 			// Add control with test-specific response
