@@ -142,6 +142,9 @@ func createGPUProcessor(systemID, gpuID, gpuName string) map[string]interface{} 
 		"ProcessorType": "GPU",
 		"Manufacturer":  "NVIDIA",
 		"Model":         "H100",
+		"Metrics": map[string]interface{}{
+			"@odata.id": fmt.Sprintf("/redfish/v1/Systems/%s/Processors/%s/ProcessorMetrics", systemID, gpuID),
+		},
 		"Status": map[string]string{
 			"State":  "Enabled",
 			"Health": "OK",
@@ -495,6 +498,99 @@ func TestGPUCollectorWithNvidiaGPU(t *testing.T) {
 	t.Logf("Successfully collected %d total metrics", metricsFound)
 	t.Logf("GPU memory metrics: %d", len(gpuMemoryMetrics))
 	t.Logf("GPU processor/temperature/power metrics: %d", len(gpuProcessorMetrics))
+}
+
+// TestGPUContextUtilization tests the collection of GPU context utilization duration metric
+func TestGPUContextUtilization(t *testing.T) {
+	server := setupTestServerWithGPU(t)
+
+	// Add ProcessorMetrics endpoints using testdata fixtures
+	server.addRouteFromFixture("/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/ProcessorMetrics",
+		"processor_metrics_gpu_context_util.json")
+	server.addRouteFromFixture("/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_1/ProcessorMetrics",
+		"processor_metrics_gpu_context_zero.json")
+
+	client := connectToTestServer(t, server)
+	defer client.Logout()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	collector := NewGPUCollector(client, logger)
+
+	// Collect metrics
+	ch := make(chan prometheus.Metric, 100)
+	go func() {
+		collector.Collect(ch)
+		close(ch)
+	}()
+
+	// Check for context utilization metrics
+	contextUtilMetrics := make(map[string]float64)
+
+	for metric := range ch {
+		dto := &dto.Metric{}
+		require.NoError(t, metric.Write(dto))
+
+		desc := metric.Desc()
+		if strings.Contains(desc.String(), "context_utilization_seconds_total") {
+			// Get GPU ID from labels
+			for _, label := range dto.Label {
+				if label.GetName() == "gpu_id" {
+					gpuID := label.GetValue()
+					contextUtilMetrics[gpuID] = dto.Counter.GetValue()
+					break
+				}
+			}
+		}
+	}
+
+	// Verify we got the expected metrics
+	require.Len(t, contextUtilMetrics, 2, "Should have collected context utilization for 2 GPUs")
+
+	// GPU_0 should have 2h45m30s = 9930 seconds (from fixture)
+	require.InDelta(t, 9930.0, contextUtilMetrics["GPU_0"], 0.01, "GPU_0 should have 9930 seconds")
+
+	// GPU_1 should have 0 seconds
+	require.Equal(t, 0.0, contextUtilMetrics["GPU_1"], "GPU_1 should have 0 seconds")
+}
+
+// TestGPUContextUtilizationWithDifferentOEMLocations tests finding the duration in different OEM locations
+func TestGPUContextUtilizationWithDifferentOEMLocations(t *testing.T) {
+	server := setupTestServerWithGPU(t)
+
+	// Test with OEM data directly at root level (not under vendor key)
+	server.addRouteFromFixture("/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/ProcessorMetrics",
+		"processor_metrics_gpu_context_direct.json")
+
+	client := connectToTestServer(t, server)
+	defer client.Logout()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	collector := NewGPUCollector(client, logger)
+
+	ch := make(chan prometheus.Metric, 100)
+	go func() {
+		collector.Collect(ch)
+		close(ch)
+	}()
+
+	// Check for context utilization metrics
+	foundMetric := false
+	var metricValue float64
+
+	for metric := range ch {
+		desc := metric.Desc()
+		if strings.Contains(desc.String(), "context_utilization_seconds_total") {
+			dto := &dto.Metric{}
+			require.NoError(t, metric.Write(dto))
+			foundMetric = true
+			metricValue = dto.Counter.GetValue()
+			break
+		}
+	}
+
+	require.True(t, foundMetric, "Should find context utilization metric")
+	// 1h30m = 5400 seconds
+	require.InDelta(t, 5400.0, metricValue, 0.01, "Should parse duration correctly from direct OEM location")
 }
 
 // TestGPUTemperatureSensorEdgeCases tests edge cases for GPU temperature collection

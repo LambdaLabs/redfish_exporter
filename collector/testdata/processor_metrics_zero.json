@@ -17,5 +17,10 @@
       "CorrectableECCErrorCount": 0,
       "UncorrectableECCErrorCount": 0
     }
+  },
+  "Oem": {
+    "Nvidia": {
+      "AccumulatedGPUContextUtilizationDuration": "PT0S"
+    }
   }
 }
