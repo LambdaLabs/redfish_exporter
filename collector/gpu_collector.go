@@ -1,12 +1,14 @@
 package collector
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
+	isoDuration "github.com/sosodev/duration"
 	"github.com/stmcginnis/gofish"
 	"github.com/stmcginnis/gofish/redfish"
 )
@@ -128,6 +130,9 @@ func createGPUMetricMap() map[string]Metric {
 	// GPU Memory Power metrics
 	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_power_watts", "GPU memory (DRAM) power consumption in watts", gpuMemoryLabels)
 
+	// GPU Context Utilization metrics
+	addToMetricMap(gpuMetrics, GPUSubsystem, "context_utilization_seconds_total", "Accumulated GPU context utilization duration in seconds", gpuBaseLabels)
+
 	return gpuMetrics
 }
 
@@ -201,6 +206,9 @@ func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
 
 	// Collect GPU memory power sensors using gathered GPU info
 	g.collectGPUMemoryPowerSensors(ch, allSystemGPUs)
+
+	// Collect GPU context utilization metrics
+	g.collectGPUContextUtilization(ch, allSystemGPUs)
 
 	g.collectorScrapeStatus.WithLabelValues("gpu").Set(float64(1))
 }
@@ -761,6 +769,125 @@ func (g *GPUCollector) collectSingleMemoryPower(ch chan<- prometheus.Metric, gpu
 		g.metrics["gpu_memory_power_watts"].desc,
 		prometheus.GaugeValue,
 		float64(sensor.Reading),
+		labels...,
+	)
+}
+
+// collectGPUContextUtilization collects accumulated GPU context utilization duration from ProcessorMetrics
+func (g *GPUCollector) collectGPUContextUtilization(ch chan<- prometheus.Metric, allSystemGPUs []systemGPUInfo) {
+	wg := &sync.WaitGroup{}
+	// Limit concurrent requests
+	sem := make(chan struct{}, 5)
+
+	for _, sysInfo := range allSystemGPUs {
+		for _, gpu := range sysInfo.gpus {
+			wg.Add(1)
+			go func(gpuProcessor *redfish.Processor, systemName, systemID string) {
+				defer wg.Done()
+				sem <- struct{}{}        // Acquire semaphore
+				defer func() { <-sem }() // Release semaphore
+
+				g.collectSingleGPUContextUtilization(ch, gpuProcessor, systemName, systemID)
+			}(gpu, sysInfo.systemName, sysInfo.systemID)
+		}
+	}
+
+	wg.Wait()
+}
+
+// collectSingleGPUContextUtilization collects context utilization for a single GPU
+func (g *GPUCollector) collectSingleGPUContextUtilization(ch chan<- prometheus.Metric, gpuProcessor *redfish.Processor, systemName, systemID string) {
+	// Use gofish's built-in method to get ProcessorMetrics
+	metrics, err := gpuProcessor.Metrics()
+	if err != nil {
+		g.logger.Debug("failed to fetch GPU processor metrics",
+			slog.String("gpu_id", gpuProcessor.ID),
+			slog.Any("error", err),
+		)
+		return
+	}
+
+	if metrics == nil {
+		g.logger.Debug("no processor metrics available",
+			slog.String("gpu_id", gpuProcessor.ID),
+		)
+		return
+	}
+
+	// Parse the OEM field to look for NVIDIA-specific data
+	if len(metrics.OEM) == 0 {
+		g.logger.Debug("no OEM data in processor metrics",
+			slog.String("gpu_id", gpuProcessor.ID),
+		)
+		return
+	}
+
+	var oemData map[string]interface{}
+	if err := json.Unmarshal(metrics.OEM, &oemData); err != nil {
+		g.logger.Warn("failed to parse OEM data",
+			slog.String("gpu_id", gpuProcessor.ID),
+			slog.Any("error", err),
+		)
+		return
+	}
+
+	// Look for AccumulatedGPUContextUtilizationDuration
+	// It could be at top level of OEM or under a vendor key like "Nvidia"
+	var durationStr string
+
+	// Check if it's directly in OEM
+	if val, ok := oemData["AccumulatedGPUContextUtilizationDuration"].(string); ok {
+		durationStr = val
+	} else {
+		// Check under vendor keys (e.g., "Nvidia", "NVIDIA", etc.)
+		for vendorKey, vendorData := range oemData {
+			if vendorMap, ok := vendorData.(map[string]interface{}); ok {
+				if val, ok := vendorMap["AccumulatedGPUContextUtilizationDuration"].(string); ok {
+					durationStr = val
+					g.logger.Debug("found GPU context utilization in OEM vendor section",
+						slog.String("vendor", vendorKey),
+						slog.String("gpu_id", gpuProcessor.ID),
+					)
+					break
+				}
+			}
+		}
+	}
+
+	if durationStr == "" {
+		g.logger.Debug("AccumulatedGPUContextUtilizationDuration not found in OEM data",
+			slog.String("gpu_id", gpuProcessor.ID),
+		)
+		return
+	}
+
+	// Parse ISO 8601 duration using sosodev/duration library
+	duration, err := isoDuration.Parse(durationStr)
+	if err != nil {
+		g.logger.Warn("failed to parse GPU context utilization duration",
+			slog.String("gpu_id", gpuProcessor.ID),
+			slog.String("duration", durationStr),
+			slog.Any("error", err),
+		)
+		return
+	}
+
+	// Convert to seconds (as float64 for Prometheus)
+	seconds := duration.ToTimeDuration().Seconds()
+
+	g.logger.Debug("collected GPU context utilization",
+		slog.String("gpu_id", gpuProcessor.ID),
+		slog.String("duration_str", durationStr),
+		slog.Float64("seconds", seconds),
+	)
+
+	// Emit the metric as a counter (since it's accumulated time)
+	labels := []string{systemName, systemID, gpuProcessor.ID}
+
+	ch <- prometheus.MustNewConstMetric(
+		g.metrics["gpu_context_utilization_seconds_total"].desc,
+		prometheus.CounterValue,
+		seconds,
 		labels...,
 	)
 }

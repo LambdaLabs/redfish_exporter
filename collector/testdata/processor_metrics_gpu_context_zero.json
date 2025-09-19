@@ -1,0 +1,13 @@
+{
+  "@odata.type": "#ProcessorMetrics.v1_6_1.ProcessorMetrics",
+  "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_1/ProcessorMetrics",
+  "Id": "ProcessorMetrics",
+  "Name": "Processor Metrics for GPU_1",
+  "BandwidthPercent": 32.1,
+  "OperatingSpeedMHz": 1980,
+  "Oem": {
+    "Nvidia": {
+      "AccumulatedGPUContextUtilizationDuration": "PT0S"
+    }
+  }
+}

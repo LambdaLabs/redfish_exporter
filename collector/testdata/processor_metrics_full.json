@@ -36,5 +36,10 @@
     }
   ],
   "CorrectableCoreErrorCount": 1,
-  "UncorrectableCoreErrorCount": 0
+  "UncorrectableCoreErrorCount": 0,
+  "Oem": {
+    "Nvidia": {
+      "AccumulatedGPUContextUtilizationDuration": "PT3H15M45S"
+    }
+  }
 }
