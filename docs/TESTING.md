@@ -150,7 +150,7 @@ When a test fails:
 ### Common Issues
 
 **Empty processor collection**
-- Fix: Use `processors_collection_with_cpu1.json` not `processors_collection.json`
+- Fix: Use `schemas/common/processors_collection_with_cpu1.json` not `processors_collection.json`
 
 **Metrics not collected**
 - Check if the fixture has the correct @odata.id links
@@ -167,7 +167,6 @@ When a test fails:
 1. Run `make test` - all tests must pass
 2. Add fixtures for new scenarios
 3. Update this documentation if adding new test patterns
-4. Ensure no debug output in production code
 
 ### Review Checklist
 
