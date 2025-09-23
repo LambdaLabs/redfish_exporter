@@ -1,0 +1,129 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#ProcessorMetrics.ProcessorMetrics",
+  "@odata.type": "#ProcessorMetrics.v1_6_0.ProcessorMetrics",
+  "@odata.id": "/redfish/v1/Systems/System1/Processors/CPU1/ProcessorMetrics",
+  "Id": "ProcessorMetrics",
+  "Name": "Processor Metrics",
+  "BandwidthPercent": 48.7,
+  "KernelPercent": 14.2,
+  "UserPercent": 34.5,
+  "ThrottlingCelsius": 82,
+  "OperatingSpeedMHz": 3400,
+  "FrequencyRatio": 0.94,
+  "Cache": [
+    {
+      "Level": "L1I",
+      "CacheMiss": 234,
+      "HitRatio": 0.96,
+      "CacheMissesPerInstruction": 0.008,
+      "AssociativityType": "FullyAssociative",
+      "CacheType": "Instruction",
+      "CurrentSRAMType": ["Synchronous"],
+      "InstalledSizeKB": 32
+    },
+    {
+      "Level": "L1D",
+      "CacheMiss": 456,
+      "HitRatio": 0.93,
+      "CacheMissesPerInstruction": 0.012,
+      "AssociativityType": "SetAssociative",
+      "CacheType": "Data",
+      "CurrentSRAMType": ["Synchronous"],
+      "InstalledSizeKB": 32
+    },
+    {
+      "Level": "L2",
+      "CacheMiss": 178,
+      "HitRatio": 0.89,
+      "CacheMissesPerInstruction": 0.004,
+      "AssociativityType": "SetAssociative",
+      "CacheType": "Unified",
+      "CurrentSRAMType": ["Synchronous"],
+      "InstalledSizeKB": 256
+    },
+    {
+      "Level": "L3",
+      "CacheMiss": 67,
+      "HitRatio": 0.97,
+      "CacheMissesPerInstruction": 0.001,
+      "AssociativityType": "SetAssociative",
+      "CacheType": "Unified",
+      "CurrentSRAMType": ["Synchronous"],
+      "InstalledSizeKB": 16384
+    }
+  ],
+  "CacheMetricsTotal": {
+    "Level": "L3",
+    "CacheMiss": 1935,
+    "HitRatio": 0.93,
+    "CacheMissesPerInstruction": 0.025,
+    "LifeTime": {
+      "CorrectableECCErrorCount": 18,
+      "UncorrectableECCErrorCount": 1
+    }
+  },
+  "PCIeErrors": {
+    "CorrectableErrorCount": 18,
+    "FatalErrorCount": 0,
+    "L0ToRecoveryCount": 5,
+    "NonFatalErrorCount": 3,
+    "NAKReceivedCount": 4,
+    "NAKSentCount": 2,
+    "ReplayCount": 8,
+    "ReplayRolloverCount": 0,
+    "UnsupportedRequestCount": 1,
+    "ECRCErrorCount": 0,
+    "MalformedTLPCount": 0,
+    "ReceiverOverflowCount": 0,
+    "UnexpectedCompletionCount": 0,
+    "CompleterAbortCount": 0,
+    "CompletionTimeoutCount": 0,
+    "FlowControlProtocolErrorCount": 0,
+    "PoisonedTLPCount": 0,
+    "SurpriseLinkDownCount": 0,
+    "DataLinkLayerProtocolErrorCount": 0,
+    "LinkDeadlaneCount": 0
+  },
+  "CoreMetrics": [
+    {
+      "CoreId": "0",
+      "IOStallCount": 289,
+      "MemoryStallCount": 612,
+      "CoreCache": [
+        {
+          "Level": "L1I",
+          "CacheMiss": 89,
+          "HitRatio": 0.97
+        },
+        {
+          "Level": "L1D",
+          "CacheMiss": 145,
+          "HitRatio": 0.94
+        }
+      ],
+      "CStateResidency": [
+        {
+          "Level": "C0",
+          "Residency": 82.1
+        },
+        {
+          "Level": "C1",
+          "Residency": 12.4
+        },
+        {
+          "Level": "C6",
+          "Residency": 5.5
+        }
+      ]
+    }
+  ],
+  "CXLLogicalDevice": {
+    "SemanticsSupported": ["CXL.cache", "CXL.mem"],
+    "MemorySizeMiB": 32768,
+    "QoSTelemetryCapabilities": {
+      "EgressPortBackpressureSupported": true,
+      "TemporaryThroughputReductionSupported": true
+    }
+  },
+  "_comment": "v1.18.0 - ProcessorMetrics v1.6.0 with CXL metrics, enhanced cache hierarchy with L1I/L1D split"
+}

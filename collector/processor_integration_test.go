@@ -57,7 +57,7 @@ func TestProcessorMetricsIntegration(t *testing.T) {
 				m.setupSystemWithProcessor("System1", "CPU_1")
 
 				// Add processor v1.0.0 (no Metrics field)
-				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/CPU_1", "schemas/v1_0_0_processor.json")
+				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/CPU_1", "schemas/redfish_v1_8_0/processor_v1_0_0.json")
 			},
 			wantMetrics: map[string]float64{
 				// Should have no PCIe or cache metrics
@@ -85,7 +85,11 @@ func TestProcessorMetricsIntegration(t *testing.T) {
 
 			// Verify no unexpected metrics for the "without metrics" case
 			if len(tt.wantMetrics) == 0 {
-				assert.Empty(t, metrics, "Expected no PCIe or cache metrics when ProcessorMetrics unavailable")
+				// processor_state is always collected from basic processor status
+				// Only ProcessorMetrics-specific metrics (cache/PCIe) should be absent
+				for key := range metrics {
+					assert.Equal(t, "processor_state", key, "Only processor_state should be present when ProcessorMetrics unavailable")
+				}
 			}
 		})
 	}
@@ -104,7 +108,7 @@ func TestProcessorMetricsBackwardsCompatibility(t *testing.T) {
 			schemaVersion: "1.0.0",
 			setupMock: func(m *testRedfishServer) {
 				// Processor.v1_0_0 doesn't have Metrics link
-				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/CPU_1", "schemas/v1_0_0_processor.json")
+				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/CPU_1", "schemas/redfish_v1_8_0/processor_v1_0_0.json")
 			},
 			expectMetrics: false,
 		},
@@ -113,9 +117,9 @@ func TestProcessorMetricsBackwardsCompatibility(t *testing.T) {
 			schemaVersion: "1.4.0",
 			setupMock: func(m *testRedfishServer) {
 				// Processor.v1_4_0 has Metrics link
-				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/CPU_1", "schemas/v1_4_0_processor.json")
+				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/CPU_1", "schemas/redfish_v1_11_0/processor_v1_4_0.json")
 				// ProcessorMetrics.v1_0_0 has cache metrics but no PCIe errors yet
-				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/CPU_1/ProcessorMetrics", "schemas/v1_4_0_processor_metrics.json")
+				m.addRouteFromFixture("/redfish/v1/Systems/System1/Processors/CPU_1/ProcessorMetrics", "schemas/redfish_v1_11_0/processor_metrics_v1_0_0.json")
 			},
 			expectMetrics: true,
 		},
@@ -137,7 +141,9 @@ func TestProcessorMetricsBackwardsCompatibility(t *testing.T) {
 			if tt.expectMetrics {
 				assert.NotEmpty(t, metrics, "Expected metrics for schema %s", tt.schemaVersion)
 			} else {
-				assert.Empty(t, metrics, "Expected no metrics for schema %s", tt.schemaVersion)
+				// processor_state is always collected from basic processor status
+				assert.Equal(t, 1, len(metrics), "Should only have processor_state for schema %s", tt.schemaVersion)
+				assert.Contains(t, metrics, "processor_state", "Should have processor_state even without ProcessorMetrics")
 			}
 		})
 	}

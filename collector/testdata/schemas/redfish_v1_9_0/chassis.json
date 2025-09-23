@@ -1,0 +1,38 @@
+{
+  "@odata.type": "#Chassis.v1_10_0.Chassis",
+  "@odata.id": "/redfish/v1/Chassis/Chassis_0",
+  "Id": "Chassis_0",
+  "Name": "Computer System Chassis",
+  "ChassisType": "RackMount",
+  "Manufacturer": "TestManufacturer",
+  "Model": "TestChassisModel",
+  "SerialNumber": "CHASSIS123456",
+  "PartNumber": "CHASSIS-PART-001",
+  "PowerState": "On",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "Thermal": {
+    "@odata.id": "/redfish/v1/Chassis/Chassis_0/Thermal"
+  },
+  "Power": {
+    "@odata.id": "/redfish/v1/Chassis/Chassis_0/Power"
+  },
+  "NetworkAdapters": {
+    "@odata.id": "/redfish/v1/Chassis/Chassis_0/NetworkAdapters"
+  },
+  "Links": {
+    "ComputerSystems": [
+      {
+        "@odata.id": "/redfish/v1/Systems/System1"
+      }
+    ],
+    "ManagedBy": [
+      {
+        "@odata.id": "/redfish/v1/Managers/Manager1"
+      }
+    ]
+  },
+  "_comment": "v1.9.0 chassis - Still using legacy Thermal/Power endpoints, no ThermalSubsystem"
+}

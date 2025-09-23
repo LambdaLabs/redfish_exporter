@@ -1,0 +1,20 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#LeakDetection.LeakDetection",
+  "@odata.type": "#LeakDetection.v1_0_0.LeakDetection",
+  "@odata.id": "/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection",
+  "Id": "LeakDetection",
+  "Name": "Leak Detection",
+  "LeakDetectorGroups": [
+    {
+      "GroupName": "Cooling Loop 1",
+      "HumidityPercent": {
+        "Reading": 45,
+        "DataSourceUri": "/redfish/v1/Chassis/Chassis_0/Sensors/Humidity1"
+      }
+    }
+  ],
+  "LeakDetectors": {
+    "@odata.id": "/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors"
+  },
+  "_comment": "v1.15.1 - LeakDetection for liquid cooled systems"
+}

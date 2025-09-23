@@ -1,0 +1,23 @@
+{
+  "@odata.type": "#ServiceRoot.v1_11_0.ServiceRoot",
+  "@odata.id": "/redfish/v1/",
+  "Id": "ServiceRoot",
+  "Name": "Service Root",
+  "RedfishVersion": "1.18.0",
+  "UUID": "92384634-2938-2342-8820-489239905423",
+  "Systems": {
+    "@odata.id": "/redfish/v1/Systems"
+  },
+  "Chassis": {
+    "@odata.id": "/redfish/v1/Chassis"
+  },
+  "Managers": {
+    "@odata.id": "/redfish/v1/Managers"
+  },
+  "Links": {
+    "Sessions": {
+      "@odata.id": "/redfish/v1/SessionService/Sessions"
+    }
+  },
+  "_comment": "Redfish v1.18.0 - Latest features, CXL metrics, enhanced cache hierarchy"
+}

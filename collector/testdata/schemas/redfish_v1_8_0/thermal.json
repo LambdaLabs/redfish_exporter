@@ -1,0 +1,38 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#Thermal.Thermal",
+  "@odata.type": "#Thermal.v1_5_0.Thermal",
+  "@odata.id": "/redfish/v1/Chassis/Chassis_0/Thermal",
+  "Id": "Thermal",
+  "Name": "Thermal",
+  "Temperatures": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/Chassis_0/Thermal#/Temperatures/0",
+      "MemberId": "0",
+      "Name": "CPU1 Temp",
+      "SensorNumber": 42,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "ReadingCelsius": 45,
+      "UpperThresholdNonCritical": 70,
+      "UpperThresholdCritical": 80,
+      "UpperThresholdFatal": 85
+    }
+  ],
+  "Fans": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/Chassis_0/Thermal#/Fans/0",
+      "MemberId": "0",
+      "Name": "System Fan 1",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Reading": 6000,
+      "ReadingUnits": "RPM",
+      "LowerThresholdCritical": 300
+    }
+  ],
+  "_comment": "v1.8.0 - Legacy Thermal endpoint with Fans and Temperatures"
+}

@@ -1,0 +1,63 @@
+{
+  "@odata.type": "#Power.v1_5_0.Power",
+  "@odata.id": "/redfish/v1/Chassis/Chassis_0/Power",
+  "Id": "Power",
+  "Name": "Power",
+  "PowerControl": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/Chassis_0/Power#/PowerControl/0",
+      "Name": "System Power Control",
+      "PowerConsumedWatts": 250,
+      "PowerRequestedWatts": 300,
+      "PowerAvailableWatts": 500,
+      "PowerCapacityWatts": 600,
+      "PowerAllocatedWatts": 500,
+      "PowerMetrics": {
+        "IntervalInMin": 30,
+        "MinConsumedWatts": 200,
+        "MaxConsumedWatts": 400,
+        "AverageConsumedWatts": 280
+      },
+      "PowerLimit": {
+        "LimitInWatts": 500,
+        "LimitException": "LogEventOnly",
+        "CorrectionInMs": 1000
+      },
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      }
+    }
+  ],
+  "PowerSupplies": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/Chassis_0/Power#/PowerSupplies/0",
+      "Name": "Power Supply 1",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "PowerSupplyType": "AC",
+      "LineInputVoltageType": "AC240V",
+      "PowerCapacityWatts": 750,
+      "LastPowerOutputWatts": 250,
+      "Model": "PS-750-AC",
+      "Manufacturer": "TestPSUManufacturer",
+      "SerialNumber": "PS123456",
+      "PartNumber": "PS-PART-001",
+      "InputRanges": [
+        {
+          "InputType": "AC",
+          "MinimumVoltage": 200,
+          "MaximumVoltage": 240,
+          "MinimumFrequencyHz": 47,
+          "MaximumFrequencyHz": 63,
+          "OutputWattage": 750
+        }
+      ]
+    }
+  ],
+  "Voltages": [],
+  "Redundancy": [],
+  "_comment": "v1.9.0 - Legacy Power endpoint with standard metrics"
+}

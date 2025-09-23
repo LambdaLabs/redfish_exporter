@@ -1,0 +1,41 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#ComputerSystem.ComputerSystem",
+  "@odata.type": "#ComputerSystem.v1_13_0.ComputerSystem",
+  "@odata.id": "/redfish/v1/Systems/System1",
+  "Id": "System1",
+  "Name": "Computer System",
+  "SystemType": "Physical",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "PowerState": "On",
+  "ProcessorSummary": {
+    "Count": 2,
+    "Model": "Intel Xeon",
+    "Status": {
+      "State": "Enabled",
+      "Health": "OK"
+    }
+  },
+  "MemorySummary": {
+    "TotalSystemMemoryGiB": 256,
+    "Status": {
+      "State": "Enabled",
+      "Health": "OK"
+    }
+  },
+  "Processors": {
+    "@odata.id": "/redfish/v1/Systems/System1/Processors"
+  },
+  "Memory": {
+    "@odata.id": "/redfish/v1/Systems/System1/Memory"
+  },
+  "Storage": {
+    "@odata.id": "/redfish/v1/Systems/System1/Storage"
+  },
+  "EthernetInterfaces": {
+    "@odata.id": "/redfish/v1/Systems/System1/EthernetInterfaces"
+  },
+  "_comment": "v1.8.0 - Basic system properties, no advanced metrics"
+}

@@ -174,6 +174,9 @@ func (c *ChassisCollector) Collect(ch chan<- prometheus.Metric) {
 	logger := c.logger.With(slog.String("collector", "ChassisCollector"))
 	service := c.redfishClient.Service
 
+	// Create capability checker using the service version
+	capabilities := NewSchemaCapabilities(service)
+
 	// get a list of chassis from service
 	if chassises, err := service.Chassis(); err != nil {
 		logger.Error("error getting chassis from service", slog.String("operation", "service.Chassis()"), slog.Any("error", err))
@@ -228,24 +231,27 @@ func (c *ChassisCollector) Collect(ch chan<- prometheus.Metric) {
 					go parseChassisFan(ch, chassisID, chassisFan, wg2)
 				}
 			}
-			chassisThermalSubsystem, err := chassis.ThermalSubsystem()
-			if err != nil {
-				chassisLogger.Error("error getting thermal subsystem from chassis", slog.String("operation", "chassis.ThermalSubsystem()"), slog.Any("error", err))
-			} else if chassisThermalSubsystem == nil {
-				chassisLogger.Info("no thermal subsystem found", slog.String("operation", "chassis.ThermalSubsystem()"))
-			} else {
-				// NOTE: Handles some odd (maybe even buggy) OEM implementations of LeakDeteactor
-				leakDetectors := c.getLeakDetectors(chassisThermalSubsystem, chassisLogger)
+			// ThermalSubsystem and LeakDetection were added in Redfish 1.15.1
+			if capabilities.HasThermalSubsystem(chassis) {
+				chassisThermalSubsystem, err := chassis.ThermalSubsystem()
+				if err != nil {
+					chassisLogger.Error("error getting thermal subsystem from chassis", slog.String("operation", "chassis.ThermalSubsystem()"), slog.Any("error", err))
+				} else if chassisThermalSubsystem == nil {
+					chassisLogger.Info("no thermal subsystem found", slog.String("operation", "chassis.ThermalSubsystem()"))
+				} else if capabilities.HasLeakDetection(chassisThermalSubsystem) {
+					// NOTE: Handles some odd (maybe even buggy) OEM implementations of LeakDeteactor
+					leakDetectors := c.getLeakDetectors(chassisThermalSubsystem, chassisLogger)
 
-				if len(leakDetectors) > 0 {
-					wgLD := &sync.WaitGroup{}
-					wgLD.Add(len(leakDetectors))
-					for _, ld := range leakDetectors {
-						go parseLeakDetector(ch, chassisID, ld, wgLD)
+					if len(leakDetectors) > 0 {
+						wgLD := &sync.WaitGroup{}
+						wgLD.Add(len(leakDetectors))
+						for _, ld := range leakDetectors {
+							go parseLeakDetector(ch, chassisID, ld, wgLD)
+						}
+						wgLD.Wait()
+					} else {
+						chassisLogger.Info("no leak detectors found")
 					}
-					wgLD.Wait()
-				} else {
-					chassisLogger.Info("no leak detectors found")
 				}
 			}
 
@@ -326,8 +332,11 @@ func (c *ChassisCollector) Collect(ch chan<- prometheus.Metric) {
 				}
 			}
 
-			// Attempt to collect total GPU power for any chassis that might have it
-			c.collectTotalGPUPower(ch, chassis, chassisLogger)
+			// Controls endpoint was added in Redfish 1.17.0
+			if capabilities.HasControls(chassis) {
+				// Attempt to collect total GPU power for any chassis that might have it
+				c.collectTotalGPUPower(ch, chassis, chassisLogger)
+			}
 
 			chassisLogger.Info("collector scrape completed")
 		}

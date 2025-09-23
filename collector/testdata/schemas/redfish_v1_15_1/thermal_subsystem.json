@@ -1,0 +1,22 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#ThermalSubsystem.ThermalSubsystem",
+  "@odata.type": "#ThermalSubsystem.v1_0_0.ThermalSubsystem",
+  "@odata.id": "/redfish/v1/Chassis/Chassis_0/ThermalSubsystem",
+  "Id": "ThermalSubsystem",
+  "Name": "Thermal Subsystem",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "Fans": {
+    "@odata.id": "/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/Fans"
+  },
+  "ThermalMetrics": {
+    "@odata.id": "/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/ThermalMetrics"
+  },
+  "LeakDetection": {
+    "@odata.id": "/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection",
+    "_comment": "v1.15.1 - LeakDetection endpoint introduced"
+  },
+  "_comment": "v1.15.1 - New structured thermal subsystem"
+}

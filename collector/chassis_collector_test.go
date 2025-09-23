@@ -147,7 +147,8 @@ func TestParseLeakDetector(t *testing.T) {
 
 // TestCollectTotalGPUPower tests the collection of total GPU power metric
 func TestCollectTotalGPUPower(t *testing.T) {
-	server := newTestRedfishServer(t)
+	// Use v1.17.0 for Controls support
+	server := newTestRedfishServerWithVersion(t, "1.17.0")
 
 	// Add chassis collection
 	server.addRoute("/redfish/v1/Chassis", map[string]interface{}{
@@ -247,7 +248,8 @@ func TestCollectTotalGPUPower(t *testing.T) {
 // TestCollectTotalGPUPowerMultipleChassis tests total GPU power collection with multiple chassis
 // where only some have the control endpoint
 func TestCollectTotalGPUPowerMultipleChassis(t *testing.T) {
-	server := newTestRedfishServer(t)
+	// Use v1.17.0 for Controls support
+	server := newTestRedfishServerWithVersion(t, "1.17.0")
 
 	// Add chassis collection with multiple chassis
 	server.addRoute("/redfish/v1/Chassis", map[string]interface{}{
@@ -461,7 +463,8 @@ func TestCollectTotalGPUPowerErrorHandling(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			server := newTestRedfishServer(t)
+			// Use v1.17.0 for Controls support
+			server := newTestRedfishServerWithVersion(t, "1.17.0")
 
 			// Add chassis collection
 			server.addRoute("/redfish/v1/Chassis", map[string]interface{}{
