@@ -1,4 +1,4 @@
-.PHONY: build test mock-test capture clean help lint fmt fmt-check unit-test integration-test coverage check ci
+.PHONY: build test mock-test capture clean help lint fmt fmt-check unit-test integration-test coverage check ci perf-mock perf-live perf-help
 
 # Default target
 help:
@@ -15,6 +15,10 @@ help:
 	@echo "  ci          - Run all CI checks"
 	@echo "  mock-test   - Run mock server with exporter for testing"
 	@echo "  capture     - Capture Redfish data from a BMC"
+	@echo "  perf-mock   - Run performance analysis against mock server"
+	@echo "  perf-live   - Run performance analysis against live system"
+	@echo "  perf-compare - Compare mock vs live performance"
+	@echo "  perf-help   - Show performance analysis help"
 	@echo "  clean       - Clean build artifacts"
 	@echo ""
 	@echo "For mock-test, you can specify TESTDATA:"
@@ -110,3 +114,127 @@ check: fmt lint test
 
 # CI workflow - stricter checks
 ci: fmt-check lint test build
+
+# Performance analysis against mock server
+perf-mock:
+	@echo "Running performance analysis against mock server..."
+	@./tools/performance-analysis/run-analysis.sh mock localhost:8443
+
+# Performance analysis against live system
+perf-live:
+	@if [ -z "$(TARGET)" ]; then \
+		echo "Error: TARGET is required"; \
+		echo "Usage: make perf-live TARGET=<ip-or-hostname>"; \
+		echo ""; \
+		echo "Optional parameters:"; \
+		echo "  RUNS=10             - Number of test runs (default: 5)"; \
+		echo "  VERBOSE=1           - Enable verbose output"; \
+		echo "  REDFISH_USER=admin  - Username for Redfish API"; \
+		echo "  REDFISH_PASS=pass   - Password for Redfish API"; \
+		echo ""; \
+		echo "Examples:"; \
+		echo "  # Using config.yml"; \
+		echo "  make perf-live TARGET=192.168.1.100"; \
+		echo ""; \
+		echo "  # Using environment credentials"; \
+		echo "  REDFISH_USER=admin REDFISH_PASS=password make perf-live TARGET=192.168.1.100"; \
+		exit 1; \
+	fi
+	@echo "Running performance analysis against $(TARGET)..."
+	@REDFISH_USER="$(REDFISH_USER)" REDFISH_PASS="$(REDFISH_PASS)" \
+		./tools/performance-analysis/run-analysis.sh \
+		$(if $(RUNS),-r $(RUNS)) \
+		$(if $(VERBOSE),-v) \
+		live $(TARGET)
+
+# Show performance analysis help
+perf-help:
+	@echo "Performance Analysis Usage:"
+	@echo ""
+	@echo "Test against mock server:"
+	@echo "  make perf-mock"
+	@echo ""
+	@echo "Test against live system (using config.yml):"
+	@echo "  make perf-live TARGET=192.168.1.100"
+	@echo ""
+	@echo "Test against live system (with credentials):"
+	@echo "  REDFISH_USER=admin REDFISH_PASS=password make perf-live TARGET=192.168.1.100"
+	@echo ""
+	@echo "Run multiple iterations:"
+	@echo "  make perf-live TARGET=192.168.1.100 RUNS=10"
+	@echo ""
+	@echo "Enable verbose output:"
+	@echo "  make perf-live TARGET=192.168.1.100 VERBOSE=1"
+	@echo ""
+	@echo "Credentials:"
+	@echo "  - By default, uses config.yml in project root"
+	@echo "  - Can override with REDFISH_USER and REDFISH_PASS environment variables"
+	@echo "  - Temporary config is created and cleaned up automatically"
+	@echo ""
+	@echo "The performance tool will:"
+	@echo "  - Measure scrape duration"
+	@echo "  - Count metrics collected"
+	@echo "  - Calculate statistics (min/max/avg/percentiles)"
+	@echo "  - Identify performance bottlenecks"
+
+# Compare mock vs live performance
+perf-compare:
+	@if [ -z "$(TARGET)" ]; then \
+		echo "Error: TARGET is required for live system"; \
+		echo "Usage: make perf-compare TARGET=<ip-or-hostname>"; \
+		echo ""; \
+		echo "Optional parameters:"; \
+		echo "  RUNS=5              - Number of test runs (default: 3)"; \
+		echo "  REDFISH_USER=admin  - Username for Redfish API"; \
+		echo "  REDFISH_PASS=pass   - Password for Redfish API"; \
+		echo ""; \
+		echo "Example:"; \
+		echo "  REDFISH_USER=admin REDFISH_PASS=password make perf-compare TARGET=192.168.1.100"; \
+		exit 1; \
+	fi
+	@echo "Comparing mock vs live performance..."
+	@echo "This will run tests against both mock server and $(TARGET)"
+	@echo ""
+	@# Build analysis tool if needed
+	@cd tools/performance-analysis && go build -o analyze analyze.go
+	@# Start mock server if needed
+	@if ! curl -k -s "https://localhost:8443/redfish/v1/" > /dev/null 2>&1; then \
+		echo "Starting mock server with HTTPS on port 8443..."; \
+		cd tools/mock-server && go build -o mock-server main.go && \
+		./mock-server -https-port 8443 -auth auth.yml -file testdata/gb300/gb300_host.txt > /dev/null 2>&1 & \
+		MOCK_PID=$$!; \
+		sleep 2; \
+	fi
+	@# Setup configs and run comparison
+	@if [ ! -z "$(REDFISH_USER)" ] && [ ! -z "$(REDFISH_PASS)" ]; then \
+		echo "Creating config for live system..."; \
+		echo "hosts:" > tools/performance-analysis/temp-live-config.yml; \
+		echo "  default:" >> tools/performance-analysis/temp-live-config.yml; \
+		echo "    username: $(REDFISH_USER)" >> tools/performance-analysis/temp-live-config.yml; \
+		echo "    password: $(REDFISH_PASS)" >> tools/performance-analysis/temp-live-config.yml; \
+		echo "  $(TARGET):" >> tools/performance-analysis/temp-live-config.yml; \
+		echo "    username: $(REDFISH_USER)" >> tools/performance-analysis/temp-live-config.yml; \
+		echo "    password: $(REDFISH_PASS)" >> tools/performance-analysis/temp-live-config.yml; \
+		echo "loglevel: info" >> tools/performance-analysis/temp-live-config.yml; \
+		echo "Starting exporters with proper configs..."; \
+		pkill -f redfish_exporter 2>/dev/null || true; \
+		sleep 1; \
+		echo "  Starting mock exporter on :9610..."; \
+		./redfish_exporter --config.file=tools/mock-server/exporter-config.yml --web.listen-address=:9610 > /dev/null 2>&1 & \
+		MOCK_EXPORTER_PID=$$!; \
+		echo "  Starting live exporter on :9611..."; \
+		./redfish_exporter --config.file=tools/performance-analysis/temp-live-config.yml --web.listen-address=:9611 > /dev/null 2>&1 & \
+		LIVE_EXPORTER_PID=$$!; \
+		sleep 2; \
+		echo "Running comparison..."; \
+		cd tools/performance-analysis && ./analyze -compare -mock localhost:8443 -live $(TARGET) -mock-endpoint http://localhost:9610 -live-endpoint http://localhost:9611 -runs $(if $(RUNS),$(RUNS),3); \
+		pkill -f redfish_exporter 2>/dev/null || true; \
+		rm -f temp-live-config.yml; \
+	else \
+		echo "Using existing config.yml..."; \
+		cd tools/performance-analysis && ./analyze -compare -live $(TARGET) -runs $(if $(RUNS),$(RUNS),3); \
+	fi
+	@# Cleanup mock if we started it
+	@if [ ! -z "$$MOCK_PID" ]; then \
+		kill $$MOCK_PID 2>/dev/null || true; \
+	fi
