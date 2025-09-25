@@ -29,6 +29,7 @@ package.json
 package-lock.json
 
 # Mock server test data
+tools/mock-server/mock-server
 tools/mock-server/testdata/
 tools/mock-server/server.crt
 tools/mock-server/server.key
@@ -36,3 +37,7 @@ tools/mock-server/exporter-config.yml
 
 # Capture binary
 tools/capture/capture
+
+# Performance analysis
+tools/performance-analysis/analyze
+tools/performance-analysis/temp-config.yml
