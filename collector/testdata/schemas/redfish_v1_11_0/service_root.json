@@ -1,0 +1,19 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#ServiceRoot.ServiceRoot",
+  "@odata.type": "#ServiceRoot.v1_9_0.ServiceRoot",
+  "@odata.id": "/redfish/v1/",
+  "Id": "ServiceRoot",
+  "Name": "Service Root",
+  "RedfishVersion": "1.11.0",
+  "UUID": "92384634-2938-2342-8820-489239905423",
+  "Systems": {
+    "@odata.id": "/redfish/v1/Systems"
+  },
+  "Chassis": {
+    "@odata.id": "/redfish/v1/Chassis"
+  },
+  "Managers": {
+    "@odata.id": "/redfish/v1/Managers"
+  },
+  "_comment": "Redfish v1.11.0 - ProcessorMetrics introduced"
+}

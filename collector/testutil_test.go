@@ -42,10 +42,42 @@ func newTestRedfishServer(t *testing.T) *testRedfishServer {
 	return trs
 }
 
+// newTestRedfishServerWithVersion creates a test server with a specific Redfish version
+func newTestRedfishServerWithVersion(t *testing.T, version string) *testRedfishServer {
+	t.Helper()
+
+	trs := &testRedfishServer{
+		t:        t,
+		mux:      http.NewServeMux(),
+		requests: make([]string, 0),
+	}
+
+	trs.Server = httptest.NewServer(trs.mux)
+	t.Cleanup(trs.Close)
+
+	// Set up routes with specific version
+	trs.setupRoutesWithVersion(version)
+
+	return trs
+}
+
 // setupDefaultRoutes registers the default Redfish API routes
 func (m *testRedfishServer) setupDefaultRoutes() {
 	// Service root
 	m.addRouteFromFixture("/redfish/v1/", "service_root.json")
+
+	// Systems collection
+	m.addRouteFromFixture("/redfish/v1/Systems", "systems_collection.json")
+}
+
+// setupRoutesWithVersion registers routes with a specific Redfish version
+func (m *testRedfishServer) setupRoutesWithVersion(version string) {
+	// Service root with specific version
+	if version == "1.17.0" {
+		m.addRouteFromFixture("/redfish/v1/", "schemas/redfish_v1_17_0/service_root.json")
+	} else {
+		m.addRouteFromFixture("/redfish/v1/", "service_root.json")
+	}
 
 	// Systems collection
 	m.addRouteFromFixture("/redfish/v1/Systems", "systems_collection.json")
@@ -139,6 +171,8 @@ func collectSystemMetrics(t *testing.T, client *gofish.APIClient) map[string]flo
 		if gauge := dto.GetGauge(); gauge != nil {
 			// Extract processor-related metrics from system collector output
 			switch {
+			case contains(desc, "processor_state"):
+				metrics["processor_state"] = gauge.GetValue()
 			case contains(desc, "processor_pcie_errors_l0_to_recovery_count"):
 				metrics["pcie_l0_recovery"] = gauge.GetValue()
 			case contains(desc, "processor_pcie_errors_correctable_count"):

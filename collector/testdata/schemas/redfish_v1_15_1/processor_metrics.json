@@ -1,0 +1,27 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#ProcessorMetrics.ProcessorMetrics",
+  "@odata.type": "#ProcessorMetrics.v1_3_0.ProcessorMetrics",
+  "@odata.id": "/redfish/v1/Systems/System1/Processors/CPU1/ProcessorMetrics",
+  "Id": "ProcessorMetrics",
+  "Name": "Processor Metrics",
+  "CacheMetricsTotal": {
+    "Level": "L3",
+    "CacheMiss": 1523,
+    "HitRatio": 0.85,
+    "CacheMissesPerInstruction": 0.02,
+    "LifeTime": {
+      "CorrectableECCErrorCount": 8,
+      "UncorrectableECCErrorCount": 0
+    }
+  },
+  "PCIeErrors": {
+    "CorrectableErrorCount": 12,
+    "FatalErrorCount": 0,
+    "L0ToRecoveryCount": 3,
+    "NAKReceivedCount": 2,
+    "NAKSentCount": 1,
+    "ReplayCount": 5,
+    "ReplayRolloverCount": 0
+  },
+  "_comment": "v1.15.1 - Full ProcessorMetrics with CacheMetrics and PCIeErrors"
+}

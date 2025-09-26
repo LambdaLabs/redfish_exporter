@@ -1,0 +1,46 @@
+{
+  "@odata.type": "#ComputerSystem.v1_10_0.ComputerSystem",
+  "@odata.id": "/redfish/v1/Systems/System1",
+  "Id": "System1",
+  "Name": "Test System",
+  "SystemType": "Physical",
+  "Manufacturer": "TestManufacturer",
+  "Model": "TestModel",
+  "SerialNumber": "1234567890",
+  "PartNumber": "PART-001",
+  "Description": "Test system for Redfish v1.9.0",
+  "HostName": "test-system-v1-9-0",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "PowerState": "On",
+  "ProcessorSummary": {
+    "Count": 2,
+    "Model": "Test Processor",
+    "Status": {
+      "State": "Enabled",
+      "Health": "OK"
+    }
+  },
+  "MemorySummary": {
+    "TotalSystemMemoryGiB": 64,
+    "Status": {
+      "State": "Enabled",
+      "Health": "OK"
+    }
+  },
+  "Processors": {
+    "@odata.id": "/redfish/v1/Systems/System1/Processors"
+  },
+  "Memory": {
+    "@odata.id": "/redfish/v1/Systems/System1/Memory"
+  },
+  "Storage": {
+    "@odata.id": "/redfish/v1/Systems/System1/Storage"
+  },
+  "NetworkInterfaces": {
+    "@odata.id": "/redfish/v1/Systems/System1/NetworkInterfaces"
+  },
+  "_comment": "v1.9.0 system - enhanced boot progress, no GPU context metrics yet"
+}
