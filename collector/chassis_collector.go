@@ -135,7 +135,7 @@ func (c *ChassisCollector) getLeakDetectors(thermalSubsystem *redfish.ThermalSub
 		for _, leakDetection := range leakDetectionCollection {
 			detectors, err := leakDetection.LeakDetectors()
 			if err != nil {
-				logger.Error("error fetching leak detectors from collection", slog.Any("error", err))
+				logger.Debug("error fetching leak detectors from collection", slog.Any("error", err))
 			} else if detectors != nil && len(detectors) > 0 {
 				allDetectors = append(allDetectors, detectors...)
 			}
@@ -150,14 +150,14 @@ func (c *ChassisCollector) getLeakDetectors(thermalSubsystem *redfish.ThermalSub
 	leakDetectionURL := thermalSubsystem.ODataID + "/LeakDetection"
 	leakDetection, err := redfish.GetLeakDetection(c.redfishClient.Service.GetClient(), leakDetectionURL)
 	if err != nil {
-		logger.Error("fallback GetLeakDetection failed", slog.Any("error", err))
+		logger.Debug("fallback GetLeakDetection failed", slog.Any("error", err))
 		return allDetectors
 	}
 
 	if leakDetection != nil {
 		detectors, err := leakDetection.LeakDetectors()
 		if err != nil {
-			logger.Error("error fetching leak detectors via fallback method", slog.Any("error", err))
+			logger.Debug("error fetching leak detectors via fallback method", slog.Any("error", err))
 			return nil
 		}
 
