@@ -1,0 +1,23 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#Processor.Processor",
+  "@odata.type": "#Processor.v1_15_1.Processor",
+  "@odata.id": "/redfish/v1/Systems/System1/Processors/CPU1",
+  "Id": "CPU1",
+  "Name": "Processor 1",
+  "ProcessorType": "CPU",
+  "ProcessorArchitecture": "x86",
+  "InstructionSet": "x86-64",
+  "Manufacturer": "Intel",
+  "Model": "Intel(R) Xeon(R) Gold 6348 CPU @ 2.60GHz",
+  "MaxSpeedMHz": 3500,
+  "TotalCores": 28,
+  "TotalThreads": 56,
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "Metrics": {
+    "@odata.id": "/redfish/v1/Systems/System1/Processors/CPU1/ProcessorMetrics"
+  },
+  "_comment": "v1.15.1 - All ProcessorMetrics features available"
+}

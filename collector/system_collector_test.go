@@ -228,11 +228,14 @@ func TestProcessorWithoutMetrics(t *testing.T) {
 	ch := make(chan prometheus.Metric, 100)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	
+
 	// Create a test logger
 	logger := slog.Default()
 
-	go parseProcessor(ch, "test-host", mockProcessor, wg, logger)
+	// Create capabilities checker with v1.18.0 for testing (supports all features)
+	capabilities := NewSchemaCapabilitiesWithVersion("1.18.0")
+
+	go parseProcessor(ch, "test-host", mockProcessor, wg, logger, capabilities)
 	wg.Wait()
 
 	// Collect metrics from channel

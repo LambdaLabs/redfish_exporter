@@ -1,0 +1,48 @@
+{
+  "@odata.type": "#Thermal.v1_5_0.Thermal",
+  "@odata.id": "/redfish/v1/Chassis/Chassis_0/Thermal",
+  "Id": "Thermal",
+  "Name": "Thermal",
+  "Temperatures": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/Chassis_0/Thermal#/Temperatures/0",
+      "Name": "CPU1 Temp",
+      "SensorNumber": 42,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "ReadingCelsius": 45,
+      "UpperThresholdNonCritical": 70,
+      "UpperThresholdCritical": 80,
+      "UpperThresholdFatal": 90,
+      "MinReadingRangeTemp": 0,
+      "MaxReadingRangeTemp": 100,
+      "PhysicalContext": "CPU",
+      "RelatedItem": [
+        {
+          "@odata.id": "/redfish/v1/Systems/System1/Processors/CPU1"
+        }
+      ]
+    }
+  ],
+  "Fans": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/Chassis_0/Thermal#/Fans/0",
+      "Name": "Fan1",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "Reading": 3200,
+      "ReadingUnits": "RPM",
+      "UpperThresholdNonCritical": 5000,
+      "UpperThresholdCritical": 6000,
+      "MinReadingRange": 0,
+      "MaxReadingRange": 7000,
+      "PhysicalContext": "SystemBoard"
+    }
+  ],
+  "Redundancy": [],
+  "_comment": "v1.9.0 - Still using legacy Thermal endpoint with enhanced sensor data"
+}

@@ -1,0 +1,35 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#Chassis.Chassis",
+  "@odata.type": "#Chassis.v1_17_0.Chassis",
+  "@odata.id": "/redfish/v1/Chassis/Chassis_0",
+  "Id": "Chassis_0",
+  "Name": "Computer System Chassis",
+  "ChassisType": "RackMount",
+  "Manufacturer": "Generic",
+  "Model": "Generic Chassis",
+  "SerialNumber": "2M220100SL",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "Thermal": {
+    "@odata.id": "/redfish/v1/Chassis/Chassis_0/Thermal",
+    "_comment": "v1.15.1 - Legacy endpoint still supported but deprecated"
+  },
+  "Power": {
+    "@odata.id": "/redfish/v1/Chassis/Chassis_0/Power",
+    "_comment": "v1.15.1 - Legacy endpoint still supported but deprecated"
+  },
+  "ThermalSubsystem": {
+    "@odata.id": "/redfish/v1/Chassis/Chassis_0/ThermalSubsystem",
+    "_comment": "v1.15.1 - NEW ThermalSubsystem endpoint"
+  },
+  "PowerSubsystem": {
+    "@odata.id": "/redfish/v1/Chassis/Chassis_0/PowerSubsystem",
+    "_comment": "v1.15.1 - NEW PowerSubsystem endpoint"
+  },
+  "NetworkAdapters": {
+    "@odata.id": "/redfish/v1/Chassis/Chassis_0/NetworkAdapters"
+  },
+  "_comment": "v1.15.1 - Both legacy and new endpoints available"
+}

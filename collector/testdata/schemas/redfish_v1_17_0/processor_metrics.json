@@ -1,0 +1,83 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#ProcessorMetrics.ProcessorMetrics",
+  "@odata.type": "#ProcessorMetrics.v1_5_0.ProcessorMetrics",
+  "@odata.id": "/redfish/v1/Systems/System1/Processors/CPU1/ProcessorMetrics",
+  "Id": "ProcessorMetrics",
+  "Name": "Processor Metrics",
+  "BandwidthPercent": 45.2,
+  "KernelPercent": 12.5,
+  "UserPercent": 32.7,
+  "ThrottlingCelsius": 85,
+  "OperatingSpeedMHz": 3200,
+  "FrequencyRatio": 0.89,
+  "Cache": [
+    {
+      "Level": "L1",
+      "CacheMiss": 523,
+      "HitRatio": 0.92,
+      "CacheMissesPerInstruction": 0.01
+    },
+    {
+      "Level": "L2",
+      "CacheMiss": 234,
+      "HitRatio": 0.87,
+      "CacheMissesPerInstruction": 0.005
+    },
+    {
+      "Level": "L3",
+      "CacheMiss": 89,
+      "HitRatio": 0.95,
+      "CacheMissesPerInstruction": 0.002
+    }
+  ],
+  "CacheMetricsTotal": {
+    "Level": "L3",
+    "CacheMiss": 1847,
+    "HitRatio": 0.91,
+    "CacheMissesPerInstruction": 0.017,
+    "LifeTime": {
+      "CorrectableECCErrorCount": 12,
+      "UncorrectableECCErrorCount": 0
+    }
+  },
+  "PCIeErrors": {
+    "CorrectableErrorCount": 15,
+    "FatalErrorCount": 0,
+    "L0ToRecoveryCount": 4,
+    "NonFatalErrorCount": 2,
+    "NAKReceivedCount": 3,
+    "NAKSentCount": 1,
+    "ReplayCount": 6,
+    "ReplayRolloverCount": 0,
+    "UnsupportedRequestCount": 0
+  },
+  "CoreMetrics": [
+    {
+      "CoreId": "0",
+      "IOStallCount": 234,
+      "MemoryStallCount": 567,
+      "CoreCache": [
+        {
+          "Level": "L1",
+          "CacheMiss": 123,
+          "HitRatio": 0.94
+        }
+      ],
+      "CStateResidency": [
+        {
+          "Level": "C0",
+          "Residency": 78.5
+        },
+        {
+          "Level": "C1",
+          "Residency": 15.3
+        },
+        {
+          "Level": "C6",
+          "Residency": 6.2
+        }
+      ]
+    }
+  ],
+  "_comment": "v1.17.0 - ProcessorMetrics v1.5.0 with bandwidth, throttling, enhanced cache hierarchy"
+}

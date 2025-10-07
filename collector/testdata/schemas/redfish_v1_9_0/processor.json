@@ -1,0 +1,27 @@
+{
+  "@odata.type": "#Processor.v1_7_0.Processor",
+  "@odata.id": "/redfish/v1/Systems/System1/Processors/CPU1",
+  "Id": "CPU1",
+  "Name": "CPU 1",
+  "ProcessorType": "CPU",
+  "ProcessorArchitecture": "x86",
+  "InstructionSet": "x86-64",
+  "Manufacturer": "TestManufacturer",
+  "Model": "Test CPU Model v1.9",
+  "MaxSpeedMHz": 3600,
+  "TotalCores": 16,
+  "TotalThreads": 32,
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "Socket": "CPU Socket 1",
+  "ProcessorId": {
+    "VendorId": "TestVendor",
+    "IdentificationRegisters": "0x000106A5"
+  },
+  "AccelerationFunctions": {
+    "@odata.id": "/redfish/v1/Systems/System1/Processors/CPU1/AccelerationFunctions"
+  },
+  "_comment": "v1.9.0 processor - Added FPGA and accelerator types support, NO Metrics link yet"
+}

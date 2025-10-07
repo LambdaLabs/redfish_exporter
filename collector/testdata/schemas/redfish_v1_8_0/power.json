@@ -1,0 +1,37 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#Power.Power",
+  "@odata.type": "#Power.v1_5_0.Power",
+  "@odata.id": "/redfish/v1/Chassis/Chassis_0/Power",
+  "Id": "Power",
+  "Name": "Power",
+  "PowerControl": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/Chassis_0/Power#/PowerControl/0",
+      "MemberId": "0",
+      "Name": "System Power Control",
+      "PowerConsumedWatts": 450,
+      "PowerCapacityWatts": 800,
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      }
+    }
+  ],
+  "PowerSupplies": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/Chassis_0/Power#/PowerSupplies/0",
+      "MemberId": "0",
+      "Name": "Power Supply 1",
+      "Status": {
+        "State": "Enabled",
+        "Health": "OK"
+      },
+      "PowerCapacityWatts": 800,
+      "LastPowerOutputWatts": 450,
+      "Model": "PWR-800W",
+      "Manufacturer": "Generic",
+      "SerialNumber": "PS123456"
+    }
+  ],
+  "_comment": "v1.8.0 - Legacy Power endpoint with PowerControl and PowerSupplies"
+}

@@ -141,6 +141,9 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 	logger := s.logger.With(slog.String("collector", "SystemCollector"))
 	service := s.redfishClient.Service
 
+	// Create capability checker using the service version
+	capabilities := NewSchemaCapabilities(service)
+
 	// get a list of systems from service
 	if systems, err := service.Systems(); err != nil {
 		logger.Error("error getting systems from service", slog.String("operation", "service.Systems()"), slog.Any("error", err))
@@ -220,7 +223,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 			} else {
 				wg2.Add(len(processors))
 				for _, processor := range processors {
-					go parseProcessor(ch, systemHostName, processor, wg2, systemLogger)
+					go parseProcessor(ch, systemHostName, processor, wg2, systemLogger, capabilities)
 				}
 			}
 
@@ -233,13 +236,16 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 			} else {
 				for _, storage := range storages {
 					storageID := storage.ID
-					
-					if volumes, err := storage.Volumes(); err != nil {
-						systemLogger.Error("error getting storage data from system", slog.String("operation", "system.Volumes()"), slog.Any("wrror", err))
-					} else {
-						wg3.Add(len(volumes))
-						for _, volume := range volumes {
-							go parseVolume(ch, systemHostName, volume, wg3)
+
+					// Volumes was added in Storage v1.1.0 (Redfish 1.1.0)
+					if capabilities.HasVolumes(storage) {
+						if volumes, err := storage.Volumes(); err != nil {
+							systemLogger.Error("error getting storage data from system", slog.String("operation", "system.Volumes()"), slog.Any("wrror", err))
+						} else {
+							wg3.Add(len(volumes))
+							for _, volume := range volumes {
+								go parseVolume(ch, systemHostName, volume, wg3)
+							}
 						}
 					}
 
@@ -256,29 +262,33 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 					}
 				}
 			}
-			// process pci devices
-			pcieDevices, err := system.PCIeDevices()
-			if err != nil {
-				systemLogger.Error("error getting PCI-E device data from system", slog.String("operation", "system.PCIeDevices()"), slog.Any("error", err))
-			} else if pcieDevices == nil {
-				systemLogger.Info("no PCI-E device data found", slog.String("operation", "system.PCIeDevices()"))
-			} else {
-				wg5.Add(len(pcieDevices))
-				for _, pcieDevice := range pcieDevices {
-					go parsePcieDevice(ch, systemHostName, pcieDevice, wg5)
+			// process pci devices (added in Redfish 1.1.0)
+			if capabilities.HasPCIeDevices(system) {
+				pcieDevices, err := system.PCIeDevices()
+				if err != nil {
+					systemLogger.Error("error getting PCI-E device data from system", slog.String("operation", "system.PCIeDevices()"), slog.Any("error", err))
+				} else if pcieDevices == nil {
+					systemLogger.Info("no PCI-E device data found", slog.String("operation", "system.PCIeDevices()"))
+				} else {
+					wg5.Add(len(pcieDevices))
+					for _, pcieDevice := range pcieDevices {
+						go parsePcieDevice(ch, systemHostName, pcieDevice, wg5)
+					}
 				}
 			}
 
-			// process networkinterfaces
-			networkInterfaces, err := system.NetworkInterfaces()
-			if err != nil {
-				systemLogger.Error("error getting network interface data from system", slog.String("operation", "system.NetworkInterfaces()"), slog.Any("error", err))
-			} else if networkInterfaces == nil {
-				systemLogger.Info("no network interface data found", slog.String("operation", "system.NetworkInterfaces"))
-			} else {
-				wg6.Add(len(networkInterfaces))
-				for _, networkInterface := range networkInterfaces {
-					go parseNetworkInterface(ch, systemHostName, networkInterface, wg6)
+			// process networkinterfaces (added in Redfish 1.5.0)
+			if capabilities.HasNetworkInterfaces(system) {
+				networkInterfaces, err := system.NetworkInterfaces()
+				if err != nil {
+					systemLogger.Error("error getting network interface data from system", slog.String("operation", "system.NetworkInterfaces()"), slog.Any("error", err))
+				} else if networkInterfaces == nil {
+					systemLogger.Info("no network interface data found", slog.String("operation", "system.NetworkInterfaces"))
+				} else {
+					wg6.Add(len(networkInterfaces))
+					for _, networkInterface := range networkInterfaces {
+						go parseNetworkInterface(ch, systemHostName, networkInterface, wg6)
+					}
 				}
 			}
 
@@ -295,16 +305,18 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 				}
 			}
 
-			// process pci functions
-			pcieFunctions, err := system.PCIeFunctions()
-			if err != nil {
-				systemLogger.Error("error getting PCI-E device function data from system", slog.String("operation", "system.PCIeFunctions()"), slog.Any("error", err))
-			} else if pcieFunctions == nil {
-				systemLogger.Info("no PCI-E device function data found", slog.String("operation", "system.PCIeFunctions()"))
-			} else {
-				wg9.Add(len(pcieFunctions))
-				for _, pcieFunction := range pcieFunctions {
-					go parsePcieFunction(ch, systemHostName, pcieFunction, wg9)
+			// process pci functions (added in Redfish 1.2.0)
+			if capabilities.HasPCIeFunctions(system) {
+				pcieFunctions, err := system.PCIeFunctions()
+				if err != nil {
+					systemLogger.Error("error getting PCI-E device function data from system", slog.String("operation", "system.PCIeFunctions()"), slog.Any("error", err))
+				} else if pcieFunctions == nil {
+					systemLogger.Info("no PCI-E device function data found", slog.String("operation", "system.PCIeFunctions()"))
+				} else {
+					wg9.Add(len(pcieFunctions))
+					for _, pcieFunction := range pcieFunctions {
+						go parsePcieFunction(ch, systemHostName, pcieFunction, wg9)
+					}
 				}
 			}
 
@@ -360,7 +372,7 @@ func parseMemory(ch chan<- prometheus.Metric, systemHostName string, memory *red
 
 }
 
-func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processor *redfish.Processor, wg *sync.WaitGroup, logger *slog.Logger) {
+func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processor *redfish.Processor, wg *sync.WaitGroup, logger *slog.Logger, capabilities *SchemaCapabilities) {
 	defer wg.Done()
 	processorName := processor.Name
 	processorID := processor.ID
@@ -389,19 +401,27 @@ func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processo
 	if err != nil {
 		logger.Error("error getting processor metrics", slog.String("processor", processorID), slog.Any("error", err))
 	} else if processorMetrics != nil {
-		// Emit PCIe error metrics
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_l0_to_recovery_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.L0ToRecoveryCount), systemProcessorLabelValues...)
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_correctable_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.CorrectableErrorCount), systemProcessorLabelValues...)
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_fatal_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.FatalErrorCount), systemProcessorLabelValues...)
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_non_fatal_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.NonFatalErrorCount), systemProcessorLabelValues...)
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_nak_received_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.NAKReceivedCount), systemProcessorLabelValues...)
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_nak_sent_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.NAKSentCount), systemProcessorLabelValues...)
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_replay_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.ReplayCount), systemProcessorLabelValues...)
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_replay_rollover_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.ReplayRolloverCount), systemProcessorLabelValues...)
-		
-		// Emit cache metrics
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_cache_lifetime_uncorrectable_ecc_error_count"].desc, prometheus.GaugeValue, float64(processorMetrics.CacheMetricsTotal.LifeTime.UncorrectableECCErrorCount), systemProcessorLabelValues...)
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_cache_lifetime_correctable_ecc_error_count"].desc, prometheus.GaugeValue, float64(processorMetrics.CacheMetricsTotal.LifeTime.CorrectableECCErrorCount), systemProcessorLabelValues...)
+		// Use capability detection to determine which metrics to emit
+
+		// Only emit PCIe error metrics if the schema supports them
+		if capabilities.HasPCIeErrors(processorMetrics) {
+			ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_l0_to_recovery_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.L0ToRecoveryCount), systemProcessorLabelValues...)
+			ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_correctable_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.CorrectableErrorCount), systemProcessorLabelValues...)
+			ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_fatal_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.FatalErrorCount), systemProcessorLabelValues...)
+			ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_non_fatal_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.NonFatalErrorCount), systemProcessorLabelValues...)
+			ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_nak_received_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.NAKReceivedCount), systemProcessorLabelValues...)
+			ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_nak_sent_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.NAKSentCount), systemProcessorLabelValues...)
+			ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_replay_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.ReplayCount), systemProcessorLabelValues...)
+			ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_replay_rollover_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.ReplayRolloverCount), systemProcessorLabelValues...)
+		}
+
+		// Only emit cache metrics if the schema supports them
+		if capabilities.HasCacheMetrics(processorMetrics) {
+			ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_cache_lifetime_uncorrectable_ecc_error_count"].desc, prometheus.GaugeValue, float64(processorMetrics.CacheMetricsTotal.LifeTime.UncorrectableECCErrorCount), systemProcessorLabelValues...)
+			ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_cache_lifetime_correctable_ecc_error_count"].desc, prometheus.GaugeValue, float64(processorMetrics.CacheMetricsTotal.LifeTime.CorrectableECCErrorCount), systemProcessorLabelValues...)
+		}
+
+		// TODO: Add checks for CoreMetrics and AcceleratorMetrics when those are implemented
 	}
 }
 

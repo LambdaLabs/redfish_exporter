@@ -1,0 +1,23 @@
+{
+  "@odata.type": "#ServiceRoot.v1_5_1.ServiceRoot",
+  "@odata.id": "/redfish/v1/",
+  "Id": "ServiceRoot",
+  "Name": "Service Root",
+  "RedfishVersion": "1.9.0",
+  "UUID": "92384634-2938-2342-8820-489239905423",
+  "Systems": {
+    "@odata.id": "/redfish/v1/Systems"
+  },
+  "Chassis": {
+    "@odata.id": "/redfish/v1/Chassis"
+  },
+  "Managers": {
+    "@odata.id": "/redfish/v1/Managers"
+  },
+  "Links": {
+    "Sessions": {
+      "@odata.id": "/redfish/v1/SessionService/Sessions"
+    }
+  },
+  "_comment": "Redfish v1.9.0 - Incremental improvements, enhanced network stats, FPGA support"
+}

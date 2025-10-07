@@ -167,6 +167,10 @@ func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
 	g.collectorScrapeStatus.WithLabelValues("gpu").Set(float64(0))
 
 	service := g.redfishClient.Service
+
+	// Create capability checker using the service version
+	capabilities := NewSchemaCapabilities(service)
+
 	systems, err := service.Systems()
 	if err != nil {
 		g.logger.Error("failed getting systems",
@@ -181,7 +185,7 @@ func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
 	wg := &sync.WaitGroup{}
 	for _, system := range systems {
 		wg.Add(1)
-		go g.collectSystemGPUs(ch, system, wg, gpuInfoChan)
+		go g.collectSystemGPUs(ch, system, capabilities, wg, gpuInfoChan)
 	}
 
 	// Close channel after all systems are processed
@@ -214,7 +218,7 @@ func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 // collectSystemGPUs collects all GPU-related metrics for a system
-func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *redfish.ComputerSystem, wg *sync.WaitGroup, gpuInfoChan chan<- systemGPUInfo) {
+func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *redfish.ComputerSystem, capabilities *SchemaCapabilities, wg *sync.WaitGroup, gpuInfoChan chan<- systemGPUInfo) {
 	defer wg.Done()
 
 	systemID := system.ID
@@ -282,10 +286,11 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 			if isGPUMemory(memory.MemoryDeviceType) {
 				wgMemory.Add(1)
 				mem := memory // Capture loop variable
+				cap := capabilities // Capture capabilities
 				go func() {
 					semMemory <- struct{}{}        // Acquire semaphore
 					defer func() { <-semMemory }() // Release semaphore
-					g.collectGPUMemory(ch, systemName, systemID, mem, wgMemory)
+					g.collectGPUMemory(ch, systemName, systemID, mem, cap, wgMemory)
 				}()
 			}
 		}
@@ -301,10 +306,11 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 		if processor.ProcessorType == redfish.GPUProcessorType {
 			wgProcessor.Add(1)
 			proc := processor // Capture loop variable
+			cap := capabilities // Capture capabilities
 			go func() {
 				semProcessor <- struct{}{}        // Acquire semaphore
 				defer func() { <-semProcessor }() // Release semaphore
-				g.collectGPUProcessor(ch, systemName, systemID, proc, wgProcessor)
+				g.collectGPUProcessor(ch, systemName, systemID, proc, cap, wgProcessor)
 			}()
 		}
 	}
@@ -314,7 +320,7 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 }
 
 // collectGPUMemory collects GPU memory metrics including OEM fields
-func (g *GPUCollector) collectGPUMemory(ch chan<- prometheus.Metric, systemName, systemID string, memory *redfish.Memory, wg *sync.WaitGroup) {
+func (g *GPUCollector) collectGPUMemory(ch chan<- prometheus.Metric, systemName, systemID string, memory *redfish.Memory, capabilities *SchemaCapabilities, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	memoryID := memory.ID
@@ -425,7 +431,7 @@ func (g *GPUCollector) collectGPUMemory(ch chan<- prometheus.Metric, systemName,
 }
 
 // collectGPUProcessor collects GPU processor metrics including OEM fields
-func (g *GPUCollector) collectGPUProcessor(ch chan<- prometheus.Metric, systemName, systemID string, processor *redfish.Processor, wg *sync.WaitGroup) {
+func (g *GPUCollector) collectGPUProcessor(ch chan<- prometheus.Metric, systemName, systemID string, processor *redfish.Processor, capabilities *SchemaCapabilities, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	processorID := processor.ID
@@ -541,11 +547,11 @@ func (g *GPUCollector) collectGPUProcessor(ch chan<- prometheus.Metric, systemNa
 	}
 
 	// Collect NVLink port metrics
-	g.collectNVLinkPorts(ch, systemName, systemID, processorID, processor)
+	g.collectNVLinkPorts(ch, systemName, systemID, processorID, processor, capabilities)
 }
 
 // collectNVLinkPorts collects NVLink port metrics for a GPU processor
-func (g *GPUCollector) collectNVLinkPorts(ch chan<- prometheus.Metric, systemName, systemID, gpuID string, processor *redfish.Processor) {
+func (g *GPUCollector) collectNVLinkPorts(ch chan<- prometheus.Metric, systemName, systemID, gpuID string, processor *redfish.Processor, capabilities *SchemaCapabilities) {
 	ports, err := processor.Ports()
 	if err != nil {
 		g.logger.Error("failed to get port data")
