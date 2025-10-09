@@ -1149,23 +1149,10 @@ func TestEmitGPUECCMetrics(t *testing.T) {
 	}
 }
 
-func requireGaugeWithValue(t *testing.T, metric *dto.Metric, expected float64) {
-	t.Helper()
-	require.NotNil(t, metric.Gauge, "required a gauge")
-	require.Equal(t, expected, *metric.Gauge.Value)
-}
-
 func requireCounterWithValue(t *testing.T, metric *dto.Metric, expected float64) {
 	t.Helper()
 	require.NotNil(t, metric.Counter, "required a counter")
 	require.Equal(t, expected, *metric.Counter.Value)
-}
-
-func requireMetricDescContains(t *testing.T, m prometheus.Metric, contains string) {
-	t.Helper()
-	desc := m.Desc()
-	assert.NotNil(t, desc)
-	require.Contains(t, desc.String(), contains)
 }
 
 func descContains(m prometheus.Metric, contains string) bool {
