@@ -97,9 +97,16 @@ func (t *TelemetryCollector) Collect(ch chan<- prometheus.Metric) {
 	// Get all metric reports
 	metricReports, err := telemetryService.MetricReports()
 	if err != nil {
-		t.logger.Error("failed to get metric reports",
-			slog.Any("error", err),
-		)
+		// MetricReports may not be available on all TelemetryService implementations
+		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found") {
+			t.logger.Debug("metric reports not available - may not be supported",
+				slog.Any("error", err),
+			)
+		} else {
+			t.logger.Error("failed to get metric reports",
+				slog.Any("error", err),
+			)
+		}
 		return
 	}
 
