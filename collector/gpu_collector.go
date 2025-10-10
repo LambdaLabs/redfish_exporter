@@ -63,6 +63,7 @@ type GPUCollector struct {
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
 	oemClient             *NvidiaOEMClient
+	capabilities          *TelemetryCapabilities
 }
 
 // systemGPUInfo holds GPU information for a system
@@ -137,7 +138,7 @@ func createGPUMetricMap() map[string]Metric {
 }
 
 // NewGPUCollector creates a new GPU collector
-func NewGPUCollector(redfishClient *gofish.APIClient, logger *slog.Logger) *GPUCollector {
+func NewGPUCollector(redfishClient *gofish.APIClient, logger *slog.Logger, capabilities *TelemetryCapabilities) *GPUCollector {
 	return &GPUCollector{
 		redfishClient: redfishClient,
 		metrics:       gpuMetrics,
@@ -150,7 +151,8 @@ func NewGPUCollector(redfishClient *gofish.APIClient, logger *slog.Logger) *GPUC
 			},
 			[]string{"collector"},
 		),
-		oemClient: NewNvidiaOEMClient(redfishClient.GetService().GetClient(), logger),
+		oemClient:    NewNvidiaOEMClient(redfishClient.GetService().GetClient(), logger),
+		capabilities: capabilities,
 	}
 }
 
@@ -266,32 +268,41 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 	}
 
 	// Collect detailed OEM metrics (from HEAD branch)
-	// Collect GPU memory metrics from system level
-	wgMemory := &sync.WaitGroup{}
-	// Use semaphore to limit concurrent goroutines
-	semMemory := make(chan struct{}, 5)
+	// Skip if TelemetryService already collected memory metrics
+	if g.capabilities == nil || !g.capabilities.Has(CapabilityMemoryMetrics) {
+		// Collect GPU memory metrics from system level
+		wgMemory := &sync.WaitGroup{}
+		// Use semaphore to limit concurrent goroutines
+		semMemory := make(chan struct{}, 5)
 
-	if memories, err := system.Memory(); err != nil {
-		g.logger.Error("failed to get memory for system",
-			slog.String("system_id", systemID),
-			slog.Any("error", err),
-		)
-	} else {
-		for _, memory := range memories {
-			// Collect metrics for GPU memory (HBM and GDDR types)
-			if isGPUMemory(memory.MemoryDeviceType) {
-				wgMemory.Add(1)
-				mem := memory // Capture loop variable
-				go func() {
-					semMemory <- struct{}{}        // Acquire semaphore
-					defer func() { <-semMemory }() // Release semaphore
-					g.collectGPUMemory(ch, systemName, systemID, mem, wgMemory)
-				}()
+		if memories, err := system.Memory(); err != nil {
+			g.logger.Error("failed to get memory for system",
+				slog.String("system_id", systemID),
+				slog.Any("error", err),
+			)
+		} else {
+			for _, memory := range memories {
+				// Collect metrics for GPU memory (HBM and GDDR types)
+				if isGPUMemory(memory.MemoryDeviceType) {
+					wgMemory.Add(1)
+					mem := memory // Capture loop variable
+					go func() {
+						semMemory <- struct{}{}        // Acquire semaphore
+						defer func() { <-semMemory }() // Release semaphore
+						g.collectGPUMemory(ch, systemName, systemID, mem, wgMemory)
+					}()
+				}
 			}
 		}
+
+		wgMemory.Wait()
+	} else {
+		g.logger.Debug("skipping detailed memory collection - already collected by TelemetryService",
+			slog.String("system_id", systemID),
+		)
 	}
 
-	// Collect GPU processor metrics (reusing processors from line 182)
+	// Collect GPU processor metrics (reusing processors)
 	wgProcessor := &sync.WaitGroup{}
 	// Use semaphore to limit concurrent goroutines
 	semProcessor := make(chan struct{}, 5)
@@ -309,7 +320,6 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 		}
 	}
 
-	wgMemory.Wait()
 	wgProcessor.Wait()
 }
 

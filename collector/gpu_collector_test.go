@@ -485,7 +485,8 @@ func TestGPUCollectorWithNvidiaGPU(t *testing.T) {
 	defer client.Logout()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector := NewGPUCollector(client, logger)
+	capabilities := NewTelemetryCapabilities()
+	collector := NewGPUCollector(client, logger, capabilities)
 
 	gpuMemoryMetrics, gpuProcessorMetrics, _, metricsFound := collectAndCategorizeMetrics(t, collector)
 
@@ -514,7 +515,8 @@ func TestGPUContextUtilization(t *testing.T) {
 	defer client.Logout()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector := NewGPUCollector(client, logger)
+	capabilities := NewTelemetryCapabilities()
+	collector := NewGPUCollector(client, logger, capabilities)
 
 	// Collect metrics
 	ch := make(chan prometheus.Metric, 100)
@@ -565,7 +567,8 @@ func TestGPUContextUtilizationWithDifferentOEMLocations(t *testing.T) {
 	defer client.Logout()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector := NewGPUCollector(client, logger)
+	capabilities := NewTelemetryCapabilities()
+	collector := NewGPUCollector(client, logger, capabilities)
 
 	ch := make(chan prometheus.Metric, 100)
 	go func() {
@@ -617,7 +620,8 @@ func TestGPUTemperatureSensorEdgeCases(t *testing.T) {
 		defer client.Logout()
 
 		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-		collector := NewGPUCollector(client, logger)
+		capabilities := NewTelemetryCapabilities()
+		collector := NewGPUCollector(client, logger, capabilities)
 
 		// Try to collect from the power sensor path
 		ch := make(chan prometheus.Metric, 10)
@@ -691,7 +695,8 @@ func TestGPUTemperatureSensorEdgeCases(t *testing.T) {
 		defer client.Logout()
 
 		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-		collector := NewGPUCollector(client, logger)
+		capabilities := NewTelemetryCapabilities()
+		collector := NewGPUCollector(client, logger, capabilities)
 
 		ch := make(chan prometheus.Metric, 200)
 		go func() {
@@ -724,7 +729,8 @@ func TestGPUCollectorWithNoGPUs(t *testing.T) {
 	defer client.Logout()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector := NewGPUCollector(client, logger)
+	capabilities := NewTelemetryCapabilities()
+	collector := NewGPUCollector(client, logger, capabilities)
 
 	ch := make(chan prometheus.Metric, 100)
 	go func() {
@@ -1001,7 +1007,8 @@ func TestCollectGPUProcessorMetrics(t *testing.T) {
 			// Create collector and collect metrics
 			client := connectToTestServer(t, server)
 
-			collector := NewGPUCollector(client, slog.Default())
+			capabilities := NewTelemetryCapabilities()
+			collector := NewGPUCollector(client, slog.Default(), capabilities)
 			ch := make(chan prometheus.Metric, 100)
 			go func() {
 				collector.Collect(ch)

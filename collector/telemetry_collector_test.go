@@ -31,7 +31,8 @@ func TestTelemetryCollectorIntegration(t *testing.T) {
 
 	// Create collector
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector := NewTelemetryCollector(client, logger)
+	capabilities := NewTelemetryCapabilities()
+	collector := NewTelemetryCollector(client, logger, capabilities)
 
 	// Collect metrics
 	metricsChan := make(chan prometheus.Metric, 100)
@@ -84,7 +85,8 @@ func TestTelemetryCollectorIntegration(t *testing.T) {
 func TestTelemetryCollectorDescribe(t *testing.T) {
 	// Create a mock client (won't be used for Describe)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector := NewTelemetryCollector(nil, logger)
+	capabilities := NewTelemetryCapabilities()
+	collector := NewTelemetryCollector(nil, logger, capabilities)
 
 	// Describe should work without a client
 	descChan := make(chan *prometheus.Desc, 100)
@@ -221,7 +223,8 @@ func BenchmarkTelemetryCollector(b *testing.B) {
 	defer client.Logout()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector := NewTelemetryCollector(client, logger)
+	capabilities := NewTelemetryCapabilities()
+	collector := NewTelemetryCollector(client, logger, capabilities)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -239,13 +242,15 @@ func BenchmarkTelemetryCollector(b *testing.B) {
 // TestTelemetryMetricCount validates all metrics are properly exposed
 func TestTelemetryMetricCount(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector := NewTelemetryCollector(nil, logger)
+	capabilities := NewTelemetryCapabilities()
+	collector := NewTelemetryCollector(nil, logger, capabilities)
 
 	// Expected metric categories
 	expectedCategories := map[string]int{
 		"cache_ecc":     2, // correctable + uncorrectable
 		"pcie":          9, // various PCIe error types
 		"throttle":      4, // power, thermal, hardware, software
+		"memory":        5, // ecc lifetime (2), bandwidth, capacity_util, operating_speed
 		"scrape_status": 1, // collector status
 	}
 
@@ -276,7 +281,8 @@ func TestTelemetryCollectorGracefulNoService(t *testing.T) {
 	// This would require a mock client that returns an error
 	// For now, just verify the collector can be created without panic
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector := NewTelemetryCollector(nil, logger)
+	capabilities := NewTelemetryCapabilities()
+	collector := NewTelemetryCollector(nil, logger, capabilities)
 
 	// Verify it has the right number of metrics defined
 	if len(collector.metrics) != len(telemetryMetrics) {
