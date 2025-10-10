@@ -185,7 +185,11 @@ func performScrape(config Config) ScrapeResult {
 		result.Error = fmt.Errorf("failed to scrape: %w", err)
 		return result
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			result.Error = fmt.Errorf("error closing response body: %w", closeErr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

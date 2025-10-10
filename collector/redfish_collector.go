@@ -49,12 +49,14 @@ func NewRedfishCollector(host string, username string, password string) *Redfish
 		systemCollector := NewSystemCollector(redfishClient, targetLogger)
 		managerCollector := NewManagerCollector(redfishClient, targetLogger)
 		gpuCollector := NewGPUCollector(redfishClient, targetLogger)
+		telemetryCollector := NewTelemetryCollector(redfishClient, targetLogger)
 
 		collectors = map[string]prometheus.Collector{
-			"chassis": chassisCollector,
-			"system":  systemCollector,
-			"manager": managerCollector,
-			"gpu":     gpuCollector,
+			"chassis":   chassisCollector,
+			"system":    systemCollector,
+			"manager":   managerCollector,
+			"gpu":       gpuCollector,
+			"telemetry": telemetryCollector,
 		}
 	}
 
