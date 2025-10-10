@@ -61,11 +61,10 @@ type TelemetryCollector struct {
 	metrics               map[string]Metric
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
-	capabilities          *TelemetryCapabilities
 }
 
 // NewTelemetryCollector creates a new TelemetryService collector
-func NewTelemetryCollector(redfishClient *gofish.APIClient, logger *slog.Logger, capabilities *TelemetryCapabilities) *TelemetryCollector {
+func NewTelemetryCollector(redfishClient *gofish.APIClient, logger *slog.Logger) *TelemetryCollector {
 	return &TelemetryCollector{
 		redfishClient: redfishClient,
 		metrics:       telemetryMetrics,
@@ -78,7 +77,6 @@ func NewTelemetryCollector(redfishClient *gofish.APIClient, logger *slog.Logger,
 			},
 			[]string{"collector"},
 		),
-		capabilities: capabilities,
 	}
 }
 
@@ -93,11 +91,6 @@ func (t *TelemetryCollector) Describe(ch chan<- *prometheus.Desc) {
 // Collect implements prometheus.Collector
 func (t *TelemetryCollector) Collect(ch chan<- prometheus.Metric) {
 	t.collectorScrapeStatus.WithLabelValues("telemetry").Set(float64(0))
-
-	// Reset capabilities at the start of each scrape
-	if t.capabilities != nil {
-		t.capabilities.Reset()
-	}
 
 	service := t.redfishClient.Service
 
@@ -209,11 +202,6 @@ func (t *TelemetryCollector) collectProcessorMetrics(ch chan<- prometheus.Metric
 	for gpuID, metrics := range metricsByGPU {
 		labels := []string{systemName, systemID, gpuID}
 		t.emitGPUMetrics(ch, labels, metrics)
-	}
-
-	// Register that processor metrics were collected (once per report, not per GPU)
-	if t.capabilities != nil && len(metricsByGPU) > 0 {
-		t.capabilities.Register(CapabilityProcessorMetrics)
 	}
 }
 
@@ -469,11 +457,6 @@ func (t *TelemetryCollector) collectMemoryMetrics(ch chan<- prometheus.Metric, r
 			labels := []string{systemName, systemID, gpuID, memoryID}
 			t.emitMemoryMetrics(ch, labels, metrics)
 		}
-	}
-
-	// Register that memory metrics were collected
-	if t.capabilities != nil {
-		t.capabilities.Register(CapabilityMemoryMetrics)
 	}
 }
 

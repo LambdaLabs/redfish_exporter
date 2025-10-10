@@ -45,17 +45,11 @@ func NewRedfishCollector(host string, username string, password string) *Redfish
 	if err != nil {
 		slog.Error("error creating redfish client", slog.Any("error", err))
 	} else {
-		// Create shared capabilities registry for telemetry service coordination
-		capabilities := NewTelemetryCapabilities()
-
 		chassisCollector := NewChassisCollector(redfishClient, targetLogger)
 		systemCollector := NewSystemCollector(redfishClient, targetLogger)
 		managerCollector := NewManagerCollector(redfishClient, targetLogger)
-
-		// TelemetryCollector runs first and registers what it collects
-		telemetryCollector := NewTelemetryCollector(redfishClient, targetLogger, capabilities)
-		// GPUCollector checks capabilities to avoid redundant collection
-		gpuCollector := NewGPUCollector(redfishClient, targetLogger, capabilities)
+		telemetryCollector := NewTelemetryCollector(redfishClient, targetLogger)
+		gpuCollector := NewGPUCollector(redfishClient, targetLogger)
 
 		collectors = map[string]prometheus.Collector{
 			"chassis":   chassisCollector,
