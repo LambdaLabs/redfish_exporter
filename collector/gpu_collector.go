@@ -269,15 +269,15 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 	// Note: TelemetryService provides aggregated memory statistics (ECC totals, bandwidth, etc.)
 	// while this collects structural health indicators (remapping, banks, state, capacity).
 	// These are complementary, not overlapping, so we always collect both.
+	wgMemory := &sync.WaitGroup{}
+	semMemory := make(chan struct{}, 5)
+
 	if memories, err := system.Memory(); err != nil {
 		g.logger.Error("failed to get memory for system",
 			slog.String("system_id", systemID),
 			slog.Any("error", err),
 		)
 	} else {
-		wgMemory := &sync.WaitGroup{}
-		semMemory := make(chan struct{}, 5)
-
 		for _, memory := range memories {
 			// Collect metrics for GPU memory (HBM and GDDR types)
 			if isGPUMemory(memory.MemoryDeviceType) {
@@ -290,7 +290,6 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 				}()
 			}
 		}
-		wgMemory.Wait()
 	}
 
 	// Collect GPU processor metrics (reusing processors)
@@ -311,6 +310,9 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 		}
 	}
 
+	// Wait for both memory and processor collection to complete
+	// This allows them to run in parallel for maximum efficiency
+	wgMemory.Wait()
 	wgProcessor.Wait()
 }
 
