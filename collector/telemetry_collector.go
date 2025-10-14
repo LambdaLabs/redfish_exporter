@@ -52,6 +52,16 @@ func createTelemetryMetricMap() map[string]Metric {
 	addToMetricMap(metrics, TelemetrySubsystem, "memory_capacity_utilization_percent", "Memory capacity utilization percentage", telemetryMemoryLabels)
 	addToMetricMap(metrics, TelemetrySubsystem, "memory_operating_speed_mhz", "Memory operating speed in MHz", telemetryMemoryLabels)
 
+	// Reset metrics from HGX_ProcessorResetMetrics_0
+	addToMetricMap(metrics, TelemetrySubsystem, "conventional_reset_entry_total", "Total conventional reset entry events", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "conventional_reset_exit_total", "Total conventional reset exit events", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "fundamental_reset_entry_total", "Total fundamental reset entry events", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "fundamental_reset_exit_total", "Total fundamental reset exit events", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "irot_reset_exit_total", "Total IRoT (Internal Root of Trust) reset exit events", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "pf_flr_reset_entry_total", "Total PF FLR (Physical Function Function-Level Reset) entry events", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "pf_flr_reset_exit_total", "Total PF FLR (Physical Function Function-Level Reset) exit events", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "last_reset_type_info", "Last reset type (1=Conventional, 2=Fundamental, 3=IRoT, 4=PF_FLR)", telemetryBaseLabels)
+
 	return metrics
 }
 
@@ -140,12 +150,15 @@ func (t *TelemetryCollector) Collect(ch chan<- prometheus.Metric) {
 	// Process each metric report
 	wg := &sync.WaitGroup{}
 	for _, report := range metricReports {
-		if strings.Contains(report.ID, "HGX_ProcessorMetrics") {
+		if strings.Contains(report.ID, "HGX_ProcessorMetrics") && !strings.Contains(report.ID, "HGX_ProcessorResetMetrics") {
 			wg.Add(1)
 			go t.collectProcessorMetrics(ch, report, systemMap, wg)
 		} else if strings.Contains(report.ID, "HGX_MemoryMetrics") {
 			wg.Add(1)
 			go t.collectMemoryMetrics(ch, report, systemMap, wg)
+		} else if strings.Contains(report.ID, "HGX_ProcessorResetMetrics") {
+			wg.Add(1)
+			go t.collectResetMetrics(ch, report, systemMap, wg)
 		}
 	}
 
@@ -550,6 +563,184 @@ func (t *TelemetryCollector) emitMemoryMetrics(ch chan<- prometheus.Metric, labe
 			t.metrics["telemetry_memory_operating_speed_mhz"].desc,
 			prometheus.GaugeValue,
 			val,
+			labels...,
+		)
+	}
+}
+
+// collectResetMetrics processes a single HGX_ProcessorResetMetrics report
+func (t *TelemetryCollector) collectResetMetrics(ch chan<- prometheus.Metric, report *redfish.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	t.logger.Debug("processing reset metric report",
+		slog.String("report_id", report.ID),
+		slog.Int("metric_count", len(report.MetricValues)),
+	)
+
+	// Group metrics by GPU ID
+	metricsByGPU := make(map[string]map[string]interface{}) // interface{} to handle both float64 and string
+
+	for _, metricValue := range report.MetricValues {
+		// Extract GPU ID and metric name from MetricProperty
+		// Format: /redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_1/Oem/Nvidia/ProcessorResetMetrics#/...
+		gpuID, metricName := parseResetMetricProperty(metricValue.MetricProperty)
+		if gpuID == "" || metricName == "" {
+			continue
+		}
+
+		// For LastResetType, store the string value; for others, parse as float
+		if metricName == "LastResetType" {
+			// Initialize GPU map if needed
+			if metricsByGPU[gpuID] == nil {
+				metricsByGPU[gpuID] = make(map[string]interface{})
+			}
+			metricsByGPU[gpuID][metricName] = metricValue.MetricValue
+		} else {
+			// Parse numeric metric value
+			value, err := parseMetricValue(metricValue.MetricValue)
+			if err != nil {
+				t.logger.Debug("failed to parse reset metric value",
+					slog.String("metric", metricName),
+					slog.String("value", metricValue.MetricValue),
+					slog.Any("error", err),
+				)
+				continue
+			}
+
+			// Initialize GPU map if needed
+			if metricsByGPU[gpuID] == nil {
+				metricsByGPU[gpuID] = make(map[string]interface{})
+			}
+			metricsByGPU[gpuID][metricName] = value
+		}
+	}
+
+	// Extract system ID from metric properties (all should be same system)
+	systemID := extractSystemIDFromReport(report)
+	systemName := systemMap[systemID]
+	if systemName == "" {
+		systemName = systemID
+	}
+
+	// Emit metrics for each GPU
+	for gpuID, metrics := range metricsByGPU {
+		labels := []string{systemName, systemID, gpuID}
+		t.emitResetMetrics(ch, labels, metrics)
+	}
+}
+
+// parseResetMetricProperty extracts GPU ID and metric name from a reset MetricProperty path
+// Example: /redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_1/Oem/Nvidia/ProcessorResetMetrics#/ConventionalResetEntryCount
+// Returns: "GPU_SXM_1", "ConventionalResetEntryCount"
+func parseResetMetricProperty(property string) (gpuID string, metricName string) {
+	// Split on '#' to separate resource path from property path
+	parts := strings.Split(property, "#/")
+	if len(parts) != 2 {
+		return "", ""
+	}
+
+	resourcePath := parts[0]
+	metricName = parts[1]
+
+	// Extract GPU ID from resource path
+	// Look for pattern: /Processors/GPU_SXM_X/
+	if idx := strings.Index(resourcePath, "/Processors/"); idx != -1 {
+		remainder := resourcePath[idx+len("/Processors/"):]
+		if endIdx := strings.Index(remainder, "/"); endIdx != -1 {
+			gpuID = remainder[:endIdx]
+		}
+	}
+
+	return gpuID, metricName
+}
+
+// emitResetMetrics emits Prometheus metrics for GPU reset events
+func (t *TelemetryCollector) emitResetMetrics(ch chan<- prometheus.Metric, labels []string, metrics map[string]interface{}) {
+	// Conventional reset counters
+	if val, ok := metrics["ConventionalResetEntryCount"].(float64); ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_conventional_reset_entry_total"].desc,
+			prometheus.CounterValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["ConventionalResetExitCount"].(float64); ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_conventional_reset_exit_total"].desc,
+			prometheus.CounterValue,
+			val,
+			labels...,
+		)
+	}
+
+	// Fundamental reset counters
+	if val, ok := metrics["FundamentalResetEntryCount"].(float64); ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_fundamental_reset_entry_total"].desc,
+			prometheus.CounterValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["FundamentalResetExitCount"].(float64); ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_fundamental_reset_exit_total"].desc,
+			prometheus.CounterValue,
+			val,
+			labels...,
+		)
+	}
+
+	// IRoT reset counter
+	if val, ok := metrics["IRoTResetExitCount"].(float64); ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_irot_reset_exit_total"].desc,
+			prometheus.CounterValue,
+			val,
+			labels...,
+		)
+	}
+
+	// PF_FLR reset counters
+	if val, ok := metrics["PF_FLR_ResetEntryCount"].(float64); ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_pf_flr_reset_entry_total"].desc,
+			prometheus.CounterValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["PF_FLR_ResetExitCount"].(float64); ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_pf_flr_reset_exit_total"].desc,
+			prometheus.CounterValue,
+			val,
+			labels...,
+		)
+	}
+
+	// LastResetType - convert string to numeric value
+	if val, ok := metrics["LastResetType"].(string); ok {
+		var resetTypeValue float64
+		switch val {
+		case "Conventional":
+			resetTypeValue = 1.0
+		case "Fundamental":
+			resetTypeValue = 2.0
+		case "IRoT":
+			resetTypeValue = 3.0
+		case "PF_FLR":
+			resetTypeValue = 4.0
+		default:
+			// Unknown reset type, skip emitting
+			return
+		}
+
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_last_reset_type_info"].desc,
+			prometheus.GaugeValue,
+			resetTypeValue,
 			labels...,
 		)
 	}

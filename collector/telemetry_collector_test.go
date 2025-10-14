@@ -247,6 +247,7 @@ func TestTelemetryMetricCount(t *testing.T) {
 		"pcie":          9, // various PCIe error types
 		"throttle":      4, // power, thermal, hardware, software
 		"memory":        5, // ecc lifetime (2), bandwidth, capacity_util, operating_speed
+		"reset":         8, // conventional entry/exit, fundamental entry/exit, irot exit, pf_flr entry/exit, last_reset_type
 		"scrape_status": 1, // collector status
 	}
 
@@ -305,4 +306,51 @@ func TestTelemetryMetricNames(t *testing.T) {
 
 func hasPrefix(s, prefix string) bool {
 	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+}
+
+// TestParseResetMetricProperty validates reset metric property parsing
+func TestParseResetMetricProperty(t *testing.T) {
+	tests := []struct {
+		name         string
+		property     string
+		expectedGPU  string
+		expectedName string
+	}{
+		{
+			name:         "conventional_reset_entry",
+			property:     "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_1/Oem/Nvidia/ProcessorResetMetrics#/ConventionalResetEntryCount",
+			expectedGPU:  "GPU_SXM_1",
+			expectedName: "ConventionalResetEntryCount",
+		},
+		{
+			name:         "fundamental_reset_exit",
+			property:     "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_5/Oem/Nvidia/ProcessorResetMetrics#/FundamentalResetExitCount",
+			expectedGPU:  "GPU_SXM_5",
+			expectedName: "FundamentalResetExitCount",
+		},
+		{
+			name:         "last_reset_type",
+			property:     "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_0/Oem/Nvidia/ProcessorResetMetrics#/LastResetType",
+			expectedGPU:  "GPU_SXM_0",
+			expectedName: "LastResetType",
+		},
+		{
+			name:         "irot_reset_exit",
+			property:     "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_7/Oem/Nvidia/ProcessorResetMetrics#/IRoTResetExitCount",
+			expectedGPU:  "GPU_SXM_7",
+			expectedName: "IRoTResetExitCount",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gpuID, metricName := parseResetMetricProperty(tt.property)
+			if gpuID != tt.expectedGPU {
+				t.Errorf("Expected GPU ID %q, got %q", tt.expectedGPU, gpuID)
+			}
+			if metricName != tt.expectedName {
+				t.Errorf("Expected metric name %q, got %q", tt.expectedName, metricName)
+			}
+		})
+	}
 }
