@@ -265,7 +265,7 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 		emitGPUECCMetrics(ch, memWithMetrics, g.logger, commonGPULabels, g.metrics)
 	}
 
-	// Collect detailed OEM metrics (from HEAD branch)
+	// Collect detailed OEM metrics
 	// Note: TelemetryService provides aggregated memory statistics (ECC totals, bandwidth, etc.)
 	// while this collects structural health indicators (remapping, banks, state, capacity).
 	// These are complementary, not overlapping, so we always collect both.
@@ -292,8 +292,6 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 			}
 		}
 	}
-
-	wgMemory.Wait()
 
 	// Collect GPU processor metrics (reusing processors)
 	wgProcessor := &sync.WaitGroup{}
