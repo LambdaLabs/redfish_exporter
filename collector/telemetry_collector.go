@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -15,8 +16,9 @@ import (
 const TelemetrySubsystem = "telemetry"
 
 var (
-	telemetryBaseLabels = []string{"hostname", "system_id", "gpu_id"}
-	telemetryMetrics    = createTelemetryMetricMap()
+	telemetryBaseLabels       = []string{"hostname", "system_id", "gpu_id"}
+	telemetryMemoryLabels     = []string{"hostname", "system_id", "gpu_id", "memory_id"}
+	telemetryMetrics          = createTelemetryMetricMap()
 )
 
 func createTelemetryMetricMap() map[string]Metric {
@@ -42,6 +44,13 @@ func createTelemetryMetricMap() map[string]Metric {
 	addToMetricMap(metrics, TelemetrySubsystem, "thermal_throttle_duration_seconds_total", "Total time GPU was throttled due to thermal limits", telemetryBaseLabels)
 	addToMetricMap(metrics, TelemetrySubsystem, "hardware_violation_throttle_duration_seconds_total", "Total time GPU was throttled due to hardware violations", telemetryBaseLabels)
 	addToMetricMap(metrics, TelemetrySubsystem, "software_violation_throttle_duration_seconds_total", "Total time GPU was throttled due to software violations", telemetryBaseLabels)
+
+	// Memory metrics from HGX_MemoryMetrics_0
+	addToMetricMap(metrics, TelemetrySubsystem, "memory_ecc_correctable_lifetime_total", "Lifetime correctable DRAM ECC errors", telemetryMemoryLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "memory_ecc_uncorrectable_lifetime_total", "Lifetime uncorrectable DRAM ECC errors", telemetryMemoryLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "memory_bandwidth_percent", "Memory bandwidth utilization percentage", telemetryMemoryLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "memory_capacity_utilization_percent", "Memory capacity utilization percentage", telemetryMemoryLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "memory_operating_speed_mhz", "Memory operating speed in MHz", telemetryMemoryLabels)
 
 	return metrics
 }
@@ -131,10 +140,12 @@ func (t *TelemetryCollector) Collect(ch chan<- prometheus.Metric) {
 	// Process each metric report
 	wg := &sync.WaitGroup{}
 	for _, report := range metricReports {
-		// Only process HGX_ProcessorMetrics reports
 		if strings.Contains(report.ID, "HGX_ProcessorMetrics") {
 			wg.Add(1)
 			go t.collectProcessorMetrics(ch, report, systemMap, wg)
+		} else if strings.Contains(report.ID, "HGX_MemoryMetrics") {
+			wg.Add(1)
+			go t.collectMemoryMetrics(ch, report, systemMap, wg)
 		}
 	}
 
@@ -386,6 +397,158 @@ func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels 
 		ch <- prometheus.MustNewConstMetric(
 			t.metrics["telemetry_software_violation_throttle_duration_seconds_total"].desc,
 			prometheus.CounterValue,
+			val,
+			labels...,
+		)
+	}
+}
+
+// collectMemoryMetrics processes a single HGX_MemoryMetrics report
+func (t *TelemetryCollector) collectMemoryMetrics(ch chan<- prometheus.Metric, report *redfish.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	t.logger.Debug("processing memory metric report",
+		slog.String("report_id", report.ID),
+		slog.Int("metric_count", len(report.MetricValues)),
+	)
+
+	// Group metrics by GPU ID and Memory ID
+	// MetricProperty format: /redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_SXM_1_DRAM_0/MemoryMetrics#/...
+	metricsByMemory := make(map[string]map[string]map[string]float64) // systemID -> memoryID -> metricName -> value
+
+	for _, metricValue := range report.MetricValues {
+		// Parse the metric property to extract system ID, memory ID, and metric name
+		systemID, memoryID, metricName := parseMemoryMetricProperty(metricValue.MetricProperty)
+		if systemID == "" || memoryID == "" || metricName == "" {
+			continue
+		}
+
+		// Parse metric value
+		value, err := parseMetricValue(metricValue.MetricValue)
+		if err != nil {
+			t.logger.Debug("failed to parse metric value",
+				slog.String("metric", metricName),
+				slog.String("value", metricValue.MetricValue),
+				slog.Any("error", err),
+			)
+			continue
+		}
+
+		// Initialize maps if needed
+		if metricsByMemory[systemID] == nil {
+			metricsByMemory[systemID] = make(map[string]map[string]float64)
+		}
+		if metricsByMemory[systemID][memoryID] == nil {
+			metricsByMemory[systemID][memoryID] = make(map[string]float64)
+		}
+		metricsByMemory[systemID][memoryID][metricName] = value
+	}
+
+	// Emit metrics for each memory module
+	for systemID, memoryMap := range metricsByMemory {
+		systemName := systemMap[systemID]
+		if systemName == "" {
+			systemName = systemID
+		}
+
+		for memoryID, metrics := range memoryMap {
+			// Extract GPU ID from memory ID (e.g., "GPU_SXM_1_DRAM_0" -> "GPU_SXM_1")
+			gpuID := extractGPUIDFromMemoryID(memoryID)
+			labels := []string{systemName, systemID, gpuID, memoryID}
+			t.emitMemoryMetrics(ch, labels, metrics)
+		}
+	}
+}
+
+// parseMemoryMetricProperty extracts system ID, memory ID, and metric name from a MetricProperty path
+// Example: /redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_SXM_1_DRAM_0/MemoryMetrics#/LifeTime/CorrectableECCErrorCount
+// Returns: "HGX_Baseboard_0", "GPU_SXM_1_DRAM_0", "LifeTime/CorrectableECCErrorCount"
+func parseMemoryMetricProperty(property string) (systemID string, memoryID string, metricName string) {
+	// Split on '#' to separate resource path from property path
+	parts := strings.Split(property, "#/")
+	if len(parts) != 2 {
+		return "", "", ""
+	}
+
+	resourcePath := parts[0]
+	metricName = parts[1]
+
+	// Extract system ID: /Systems/SYSTEM_ID/
+	if idx := strings.Index(resourcePath, "/Systems/"); idx != -1 {
+		remainder := resourcePath[idx+len("/Systems/"):]
+		if endIdx := strings.Index(remainder, "/"); endIdx != -1 {
+			systemID = remainder[:endIdx]
+		}
+	}
+
+	// Extract memory ID: /Memory/MEMORY_ID/
+	if idx := strings.Index(resourcePath, "/Memory/"); idx != -1 {
+		remainder := resourcePath[idx+len("/Memory/"):]
+		if endIdx := strings.Index(remainder, "/"); endIdx != -1 {
+			memoryID = remainder[:endIdx]
+		}
+	}
+
+	return systemID, memoryID, metricName
+}
+
+// extractGPUIDFromMemoryID extracts GPU ID from memory ID
+// Example: "GPU_SXM_1_DRAM_0" -> "GPU_SXM_1"
+func extractGPUIDFromMemoryID(memoryID string) string {
+	// Look for pattern GPU_SXM_N or GPU_N
+	parts := strings.Split(memoryID, "_")
+	if len(parts) >= 2 && parts[0] == "GPU" {
+		if parts[1] == "SXM" && len(parts) >= 3 {
+			// GPU_SXM_N_...
+			return fmt.Sprintf("GPU_SXM_%s", parts[2])
+		}
+		// GPU_N_...
+		return fmt.Sprintf("GPU_%s", parts[1])
+	}
+	return memoryID
+}
+
+// emitMemoryMetrics emits Prometheus metrics for a single memory module
+func (t *TelemetryCollector) emitMemoryMetrics(ch chan<- prometheus.Metric, labels []string, metrics map[string]float64) {
+	// Lifetime ECC errors
+	if val, ok := metrics["LifeTime/CorrectableECCErrorCount"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_memory_ecc_correctable_lifetime_total"].desc,
+			prometheus.CounterValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["LifeTime/UncorrectableECCErrorCount"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_memory_ecc_uncorrectable_lifetime_total"].desc,
+			prometheus.CounterValue,
+			val,
+			labels...,
+		)
+	}
+
+	// Bandwidth and utilization
+	if val, ok := metrics["BandwidthPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_memory_bandwidth_percent"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["CapacityUtilizationPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_memory_capacity_utilization_percent"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["OperatingSpeedMHz"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_memory_operating_speed_mhz"].desc,
+			prometheus.GaugeValue,
 			val,
 			labels...,
 		)

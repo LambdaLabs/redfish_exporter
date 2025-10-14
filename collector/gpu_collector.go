@@ -265,10 +265,11 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 		emitGPUECCMetrics(ch, memWithMetrics, g.logger, commonGPULabels, g.metrics)
 	}
 
-	// Collect detailed OEM metrics (from HEAD branch)
-	// Collect GPU memory metrics from system level
+	// Collect detailed OEM metrics
+	// Note: TelemetryService provides aggregated memory statistics (ECC totals, bandwidth, etc.)
+	// while this collects structural health indicators (remapping, banks, state, capacity).
+	// These are complementary, not overlapping, so we always collect both.
 	wgMemory := &sync.WaitGroup{}
-	// Use semaphore to limit concurrent goroutines
 	semMemory := make(chan struct{}, 5)
 
 	if memories, err := system.Memory(); err != nil {
@@ -291,7 +292,7 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 		}
 	}
 
-	// Collect GPU processor metrics (reusing processors from line 182)
+	// Collect GPU processor metrics (reusing processors)
 	wgProcessor := &sync.WaitGroup{}
 	// Use semaphore to limit concurrent goroutines
 	semProcessor := make(chan struct{}, 5)
@@ -309,6 +310,8 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 		}
 	}
 
+	// Wait for both memory and processor collection to complete
+	// This allows them to run in parallel for maximum efficiency
 	wgMemory.Wait()
 	wgProcessor.Wait()
 }

@@ -246,6 +246,7 @@ func TestTelemetryMetricCount(t *testing.T) {
 		"cache_ecc":     2, // correctable + uncorrectable
 		"pcie":          9, // various PCIe error types
 		"throttle":      4, // power, thermal, hardware, software
+		"memory":        5, // ecc lifetime (2), bandwidth, capacity_util, operating_speed
 		"scrape_status": 1, // collector status
 	}
 
