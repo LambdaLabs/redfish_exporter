@@ -104,6 +104,9 @@ type StatusRegister []string
 // If an error is found, it returns true along with the corresponding status and nil error.
 // If no errors are found, it returns false, 0, and nil error.
 func (s StatusRegister) IsError() (bool, status, error) {
+	if len(s) < 4 {
+		return false, 0, fmt.Errorf("status register must have at least 4 elements, got %d", len(s))
+	}
 	statusValue := s[3]
 	asInt := hexToInt(statusValue)
 	status := status(asInt)
@@ -297,6 +300,7 @@ func (c *smbpbiCollector) collectSMBStreamingMultiprocessorActivity(ch chan<- pr
 				c.logger.Error("failed to send smbpbi command", slog.Any("error", err), slog.Int("gpu_idx", gpuIDX))
 				return
 			}
+			c.logger.Info(fmt.Sprintf("dataout: %v", response.DataOut))
 			percentage := getFloatFromFixedPointSignedInteger(response.DataOut, 8)
 
 			metric, err := c.metrics.GetMetric("sm_activity")
