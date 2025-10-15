@@ -26,10 +26,20 @@ type smbpbiCollector struct {
 }
 
 var (
-	OpcodeNoop                   = 0x00
-	OpcodeGetCapabilities        = 0x01
-	OpcodeGetTemperature         = 0x02
-	OpcodeGetTemperatureExtended = 0x03
+	OpcodeNoop                     = 0x00
+	OpcodeGetCapabilities          = 0x01
+	OpcodeGetTemperature           = 0x02
+	OpcodeGetTemperatureExtended   = 0x03
+	OpcodeGetPower                 = 0x04
+	OpcodeGPUPerformanceMonitoring = 0x28
+)
+
+// Opcode: 0x28 - GPU Performance Monitoring
+var (
+	GPUPerformanceMonitoringMetricGraphicsEngine = 0x00
+	GPUPerformanceMonitoringSMActivity           = 0x01
+	GPUPerformanceMonitoringSMOccupancy          = 0x02
+	GPUPerformanceMonitoringTensorCoreActivity   = 0x03
 )
 
 type status int
@@ -143,6 +153,7 @@ func (m MetricMap) GetMetric(name string) (Metric, error) {
 func createSMBPBIMetricMap() MetricMap {
 	smbpbiMetrics := make(map[string]Metric)
 	addToMetricMap(smbpbiMetrics, SMBPBISubsystem, "temperature", "SMBPBI temperature in Celsius", []string{"gpu_idx"})
+	addToMetricMap(smbpbiMetrics, SMBPBISubsystem, "sm_activity", "Streaming Multiprocessor activity active cycles / total cycles as a percentage.", []string{"gpu_idx"})
 	return smbpbiMetrics
 }
 
@@ -252,7 +263,60 @@ func (c *smbpbiCollector) collectSMBPBITemperature(ch chan<- prometheus.Metric) 
 	}
 }
 
+func getFloatFromFixedPointSignedInteger(dataOut []string, fractionalBits uint) float64 {
+	fixedPointInt := (hexToInt(dataOut[0]) << 24) |
+		(hexToInt(dataOut[1]) << 16) |
+		(hexToInt(dataOut[2]) << 8) |
+		(hexToInt(dataOut[3]) << 0)
+	scalingFactor := 1 << fractionalBits
+	return float64(fixedPointInt) / float64(scalingFactor)
+}
+
+func (c *smbpbiCollector) collectSMBStreamingMultiprocessorActivity(ch chan<- prometheus.Metric) {
+	wg := sync.WaitGroup{}
+	defer wg.Wait()
+
+	// arg1: Bits 7:6 - 0x00 (Return instantaneous metric value)
+	//       Bits 5:0 - Metric type
+	arg1 := (0x00 << 6) | (GPUPerformanceMonitoringSMActivity)
+	// arg2: Select device-level or partition-level
+	//		 0xff: Device-level
+	arg2 := 0xff
+
+	for i := 1; i <= NumGPUs; i++ {
+		jsonBody, err := smbpbiPostBody(i, OpcodeGPUPerformanceMonitoring, arg1, arg2)
+		if err != nil {
+			c.logger.Error("failed to create smbpbi post body", slog.Any("error", err))
+			continue
+		}
+		wg.Add(1)
+		go func(gpuIDX int, jsonBody map[string]any) {
+			defer wg.Done()
+			response, err := c.sendSMBPBICommand(jsonBody)
+			if err != nil {
+				c.logger.Error("failed to send smbpbi command", slog.Any("error", err), slog.Int("gpu_idx", gpuIDX))
+				return
+			}
+			percentage := getFloatFromFixedPointSignedInteger(response.DataOut, 8)
+
+			metric, err := c.metrics.GetMetric("sm_activity")
+			if err != nil {
+				c.logger.Error("failed to get sm_activity metric", slog.Any("error", err))
+				return
+			}
+			c.logger.Info(fmt.Sprintf("sm_activity as float: %f", percentage))
+			ch <- prometheus.MustNewConstMetric(
+				metric.desc,
+				prometheus.GaugeValue,
+				percentage,
+				fmt.Sprintf("%d", gpuIDX),
+			)
+		}(i, jsonBody)
+	}
+}
+
 // Collect is called by the Prometheus registry when collecting metrics.
 func (c *smbpbiCollector) Collect(ch chan<- prometheus.Metric) {
 	c.collectSMBPBITemperature(ch)
+	c.collectSMBStreamingMultiprocessorActivity(ch)
 }

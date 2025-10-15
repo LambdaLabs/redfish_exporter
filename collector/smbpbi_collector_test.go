@@ -42,3 +42,34 @@ func Test_getCelciusFromFixedPointSignedInteger(t *testing.T) {
 		})
 	}
 }
+
+func Test_getFloatFromFixedPointSignedInteger(t *testing.T) {
+	tests := []struct {
+		name string // description of this test case
+		// Named input parameters for target function.
+		dataOut        []string
+		fractionalBits uint
+		want           float64
+	}{
+		{
+			name:           "50% activity",
+			dataOut:        []string{"0x00", "0x00", "0x32", "0x00"},
+			fractionalBits: 8,
+			want:           50.0,
+		},
+		{
+			name:           "90.25% activity",
+			dataOut:        []string{"0x00", "0x00", "0x5A", "0x40"},
+			fractionalBits: 8,
+			want:           90.25,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := getFloatFromFixedPointSignedInteger(tt.dataOut, tt.fractionalBits)
+			if got != tt.want {
+				t.Errorf("getFloatFromFixedPointSignedInteger() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
