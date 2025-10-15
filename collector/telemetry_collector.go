@@ -75,33 +75,33 @@ func createTelemetryMetricMap() map[string]Metric {
 	addToMetricMap(metrics, TelemetrySubsystem, "port_tx_frames_total", "Total frames transmitted on port", telemetryPortLabels)
 	addToMetricMap(metrics, TelemetrySubsystem, "port_tx_discards_total", "Total transmit discards on port", telemetryPortLabels)
 
-	// OEM metrics - link reliability
-	addToMetricMap(metrics, TelemetrySubsystem, "port_intentional_link_down_count_total", "Total intentional link down events", telemetryPortLabels)
-	addToMetricMap(metrics, TelemetrySubsystem, "port_unintentional_link_down_count_total", "Total unintentional link down events", telemetryPortLabels)
-	addToMetricMap(metrics, TelemetrySubsystem, "port_link_down_reason_code", "Last link down reason code", telemetryPortLabels)
+	// NVIDIA OEM metrics - link reliability
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_intentional_link_down_count_total", "Total intentional link down events (NVIDIA OEM)", telemetryPortLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_unintentional_link_down_count_total", "Total unintentional link down events (NVIDIA OEM)", telemetryPortLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_link_down_reason_code", "Last link down reason code (NVIDIA OEM)", telemetryPortLabels)
 
-	// OEM metrics - error counters
-	addToMetricMap(metrics, TelemetrySubsystem, "port_neighbor_mtu_discards_total", "Total neighbor MTU discards", telemetryPortLabels)
-	addToMetricMap(metrics, TelemetrySubsystem, "port_qp1_dropped_total", "Total QP1 packets dropped", telemetryPortLabels)
-	addToMetricMap(metrics, TelemetrySubsystem, "port_rx_remote_physical_errors_total", "Total RX remote physical errors", telemetryPortLabels)
-	addToMetricMap(metrics, TelemetrySubsystem, "port_rx_switch_relay_errors_total", "Total RX switch relay errors", telemetryPortLabels)
-	addToMetricMap(metrics, TelemetrySubsystem, "port_vl15_dropped_total", "Total VL15 packets dropped", telemetryPortLabels)
+	// NVIDIA OEM metrics - error counters
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_neighbor_mtu_discards_total", "Total neighbor MTU discards (NVIDIA OEM)", telemetryPortLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_qp1_dropped_total", "Total QP1 packets dropped (NVIDIA OEM)", telemetryPortLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_rx_remote_physical_errors_total", "Total RX remote physical errors (NVIDIA OEM)", telemetryPortLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_rx_switch_relay_errors_total", "Total RX switch relay errors (NVIDIA OEM)", telemetryPortLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_vl15_dropped_total", "Total VL15 packets dropped (NVIDIA OEM)", telemetryPortLabels)
 
-	// OEM metrics - no-protocol bytes (non-data traffic)
-	addToMetricMap(metrics, TelemetrySubsystem, "port_rx_no_protocol_bytes_total", "Total RX bytes without protocol", telemetryPortLabels)
-	addToMetricMap(metrics, TelemetrySubsystem, "port_tx_no_protocol_bytes_total", "Total TX bytes without protocol", telemetryPortLabels)
+	// NVIDIA OEM metrics - no-protocol bytes (non-data traffic)
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_rx_no_protocol_bytes_total", "Total RX bytes without protocol (NVIDIA OEM)", telemetryPortLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_tx_no_protocol_bytes_total", "Total TX bytes without protocol (NVIDIA OEM)", telemetryPortLabels)
 
-	// OEM metrics - VL15 (management traffic)
-	addToMetricMap(metrics, TelemetrySubsystem, "port_vl15_tx_bytes_total", "Total VL15 bytes transmitted", telemetryPortLabels)
-	addToMetricMap(metrics, TelemetrySubsystem, "port_vl15_tx_packets_total", "Total VL15 packets transmitted", telemetryPortLabels)
+	// NVIDIA OEM metrics - VL15 (management traffic)
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_vl15_tx_bytes_total", "Total VL15 bytes transmitted (NVIDIA OEM)", telemetryPortLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_vl15_tx_packets_total", "Total VL15 packets transmitted (NVIDIA OEM)", telemetryPortLabels)
 
-	// OEM metrics - link width and wait
-	addToMetricMap(metrics, TelemetrySubsystem, "port_rx_width", "Current receive link width", telemetryPortLabels)
-	addToMetricMap(metrics, TelemetrySubsystem, "port_tx_width", "Current transmit link width", telemetryPortLabels)
-	addToMetricMap(metrics, TelemetrySubsystem, "port_tx_wait_total", "Total TX wait time", telemetryPortLabels)
+	// NVIDIA OEM metrics - link width and wait
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_rx_width", "Current receive link width (NVIDIA OEM)", telemetryPortLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_tx_width", "Current transmit link width (NVIDIA OEM)", telemetryPortLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_tx_wait_total", "Total TX wait time (NVIDIA OEM)", telemetryPortLabels)
 
-	// OEM metrics - bit error rate
-	addToMetricMap(metrics, TelemetrySubsystem, "port_total_raw_ber", "Total raw bit error rate", telemetryPortLabels)
+	// NVIDIA OEM metrics - bit error rate
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_total_raw_ber", "Total raw bit error rate (NVIDIA OEM)", telemetryPortLabels)
 
 	return metrics
 }
@@ -954,10 +954,10 @@ func (t *TelemetryCollector) emitPortMetrics(ch chan<- prometheus.Metric, labels
 		)
 	}
 
-	// OEM metrics - link reliability counters
+	// NVIDIA OEM metrics - link reliability counters
 	if val, ok := metrics["Oem/Nvidia/IntentionalLinkDownCount"].(float64); ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_port_intentional_link_down_count_total"].desc,
+			t.metrics["telemetry_port_nvidia_intentional_link_down_count_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -965,7 +965,7 @@ func (t *TelemetryCollector) emitPortMetrics(ch chan<- prometheus.Metric, labels
 	}
 	if val, ok := metrics["Oem/Nvidia/UnintentionalLinkDownCount"].(float64); ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_port_unintentional_link_down_count_total"].desc,
+			t.metrics["telemetry_port_nvidia_unintentional_link_down_count_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -977,7 +977,7 @@ func (t *TelemetryCollector) emitPortMetrics(ch chan<- prometheus.Metric, labels
 		// Parse as integer if possible, otherwise skip
 		if reasonCode, err := strconv.ParseFloat(val, 64); err == nil {
 			ch <- prometheus.MustNewConstMetric(
-				t.metrics["telemetry_port_link_down_reason_code"].desc,
+				t.metrics["telemetry_port_nvidia_link_down_reason_code"].desc,
 				prometheus.GaugeValue,
 				reasonCode,
 				labels...,
@@ -985,10 +985,10 @@ func (t *TelemetryCollector) emitPortMetrics(ch chan<- prometheus.Metric, labels
 		}
 	}
 
-	// OEM metrics - error counters
+	// NVIDIA OEM metrics - error counters
 	if val, ok := metrics["Oem/Nvidia/NeighborMTUDiscards"].(float64); ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_port_neighbor_mtu_discards_total"].desc,
+			t.metrics["telemetry_port_nvidia_neighbor_mtu_discards_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -996,7 +996,7 @@ func (t *TelemetryCollector) emitPortMetrics(ch chan<- prometheus.Metric, labels
 	}
 	if val, ok := metrics["Oem/Nvidia/QP1Dropped"].(float64); ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_port_qp1_dropped_total"].desc,
+			t.metrics["telemetry_port_nvidia_qp1_dropped_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -1004,7 +1004,7 @@ func (t *TelemetryCollector) emitPortMetrics(ch chan<- prometheus.Metric, labels
 	}
 	if val, ok := metrics["Oem/Nvidia/RXRemotePhysicalErrors"].(float64); ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_port_rx_remote_physical_errors_total"].desc,
+			t.metrics["telemetry_port_nvidia_rx_remote_physical_errors_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -1012,7 +1012,7 @@ func (t *TelemetryCollector) emitPortMetrics(ch chan<- prometheus.Metric, labels
 	}
 	if val, ok := metrics["Oem/Nvidia/RXSwitchRelayErrors"].(float64); ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_port_rx_switch_relay_errors_total"].desc,
+			t.metrics["telemetry_port_nvidia_rx_switch_relay_errors_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -1020,17 +1020,17 @@ func (t *TelemetryCollector) emitPortMetrics(ch chan<- prometheus.Metric, labels
 	}
 	if val, ok := metrics["Oem/Nvidia/VL15Dropped"].(float64); ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_port_vl15_dropped_total"].desc,
+			t.metrics["telemetry_port_nvidia_vl15_dropped_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
 		)
 	}
 
-	// OEM metrics - no-protocol bytes
+	// NVIDIA OEM metrics - no-protocol bytes
 	if val, ok := metrics["Oem/Nvidia/RXNoProtocolBytes"].(float64); ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_port_rx_no_protocol_bytes_total"].desc,
+			t.metrics["telemetry_port_nvidia_rx_no_protocol_bytes_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -1038,17 +1038,17 @@ func (t *TelemetryCollector) emitPortMetrics(ch chan<- prometheus.Metric, labels
 	}
 	if val, ok := metrics["Oem/Nvidia/TXNoProtocolBytes"].(float64); ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_port_tx_no_protocol_bytes_total"].desc,
+			t.metrics["telemetry_port_nvidia_tx_no_protocol_bytes_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
 		)
 	}
 
-	// OEM metrics - VL15 (management traffic)
+	// NVIDIA OEM metrics - VL15 (management traffic)
 	if val, ok := metrics["Oem/Nvidia/VL15TXBytes"].(float64); ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_port_vl15_tx_bytes_total"].desc,
+			t.metrics["telemetry_port_nvidia_vl15_tx_bytes_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -1056,17 +1056,17 @@ func (t *TelemetryCollector) emitPortMetrics(ch chan<- prometheus.Metric, labels
 	}
 	if val, ok := metrics["Oem/Nvidia/VL15TXPackets"].(float64); ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_port_vl15_tx_packets_total"].desc,
+			t.metrics["telemetry_port_nvidia_vl15_tx_packets_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
 		)
 	}
 
-	// OEM metrics - link width (current state)
+	// NVIDIA OEM metrics - link width (current state)
 	if val, ok := metrics["Oem/Nvidia/RXWidth"].(float64); ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_port_rx_width"].desc,
+			t.metrics["telemetry_port_nvidia_rx_width"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1074,27 +1074,27 @@ func (t *TelemetryCollector) emitPortMetrics(ch chan<- prometheus.Metric, labels
 	}
 	if val, ok := metrics["Oem/Nvidia/TXWidth"].(float64); ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_port_tx_width"].desc,
+			t.metrics["telemetry_port_nvidia_tx_width"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
 		)
 	}
 
-	// OEM metrics - TX wait (cumulative)
+	// NVIDIA OEM metrics - TX wait (cumulative)
 	if val, ok := metrics["Oem/Nvidia/TXWait"].(float64); ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_port_tx_wait_total"].desc,
+			t.metrics["telemetry_port_nvidia_tx_wait_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
 		)
 	}
 
-	// OEM metrics - bit error rate (current state)
+	// NVIDIA OEM metrics - bit error rate (current state)
 	if val, ok := metrics["Oem/Nvidia/TotalRawBER"].(float64); ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_port_total_raw_ber"].desc,
+			t.metrics["telemetry_port_nvidia_total_raw_ber"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
