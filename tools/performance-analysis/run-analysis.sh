@@ -121,6 +121,48 @@ echo "Runs: $RUNS"
 echo "Config: $CONFIG_FILE"
 echo ""
 
+# If mock mode, ensure mock server is running FIRST before starting exporter
+if [ "$MODE" = "mock" ]; then
+    MOCK_PORT=$(echo "$TARGET" | cut -d: -f2)
+    if [ -z "$MOCK_PORT" ]; then
+        MOCK_PORT="8443"
+        TARGET="localhost:8443"
+    fi
+
+    if ! curl -s -k "https://localhost:${MOCK_PORT}/redfish/v1/" > /dev/null 2>&1; then
+        echo -e "${YELLOW}Warning: Mock server not running on port ${MOCK_PORT}${NC}"
+        echo "Starting mock server..."
+
+        # Kill any existing mock server
+        pkill -f "mock-server.*${MOCK_PORT}" || true
+        sleep 1
+
+        # Build mock server if needed
+        if [ ! -f "${PROJECT_ROOT}/tools/mock-server/mock-server" ]; then
+            echo "Building mock server..."
+            (cd "${PROJECT_ROOT}/tools/mock-server" && go build -o mock-server main.go)
+        fi
+
+        # Start mock server with default test data
+        TESTDATA="${PROJECT_ROOT}/tools/mock-server/testdata/gb300/gb300_host.txt"
+        (cd "${PROJECT_ROOT}/tools/mock-server" && ./mock-server -auth auth.yml -https-port "${MOCK_PORT}" -file "${TESTDATA}" -https=true -http=false) &
+        MOCK_PID=$!
+        echo "Started mock server with PID ${MOCK_PID}"
+
+        # Wait for it to be ready
+        echo -n "Waiting for mock server to be ready..."
+        for i in {1..30}; do
+            if curl -s -k "https://localhost:${MOCK_PORT}/redfish/v1/" > /dev/null 2>&1; then
+                echo " Ready!"
+                break
+            fi
+            echo -n "."
+            sleep 1
+        done
+        echo ""
+    fi
+fi
+
 # For live mode with temp config, always restart the exporter
 # For other modes, only start if not running
 if [ "$TEMP_CONFIG" = "1" ] || ! curl -s "${EXPORTER_URL}/metrics" > /dev/null 2>&1; then
@@ -131,8 +173,8 @@ if [ "$TEMP_CONFIG" = "1" ] || ! curl -s "${EXPORTER_URL}/metrics" > /dev/null 2
         echo "Starting exporter..."
     fi
 
-    # Kill any existing exporter
-    pkill -f redfish_exporter || true
+    # Kill any existing exporter (but not the mock server)
+    pkill -f "^${PROJECT_ROOT}/redfish_exporter" || true
     sleep 1
 
     # Build if needed
@@ -157,48 +199,6 @@ if [ "$TEMP_CONFIG" = "1" ] || ! curl -s "${EXPORTER_URL}/metrics" > /dev/null 2
         sleep 1
     done
     echo ""
-fi
-
-# If mock mode, ensure mock server is running
-if [ "$MODE" = "mock" ]; then
-    MOCK_PORT=$(echo "$TARGET" | cut -d: -f2)
-    if [ -z "$MOCK_PORT" ]; then
-        MOCK_PORT="8443"
-        TARGET="localhost:8443"
-    fi
-
-    if ! curl -s "https://localhost:${MOCK_PORT}/redfish/v1/" > /dev/null 2>&1; then
-        echo -e "${YELLOW}Warning: Mock server not running on port ${MOCK_PORT}${NC}"
-        echo "Starting mock server..."
-
-        # Kill any existing mock server
-        pkill -f "mock-server.*${MOCK_PORT}" || true
-        sleep 1
-
-        # Build mock server if needed
-        if [ ! -f "${PROJECT_ROOT}/tools/mock-server/mock-server" ]; then
-            echo "Building mock server..."
-            (cd "${PROJECT_ROOT}/tools/mock-server" && go build -o mock-server main.go)
-        fi
-
-        # Start mock server with default test data
-        TESTDATA="${PROJECT_ROOT}/tools/mock-server/testdata/gb300/gb300_host.txt"
-        (cd "${PROJECT_ROOT}/tools/mock-server" && ./mock-server -auth auth.yml -port "${MOCK_PORT}" -file "${TESTDATA}" > /dev/null 2>&1) &
-        MOCK_PID=$!
-        echo "Started mock server with PID ${MOCK_PID}"
-
-        # Wait for it to be ready
-        echo -n "Waiting for mock server to be ready..."
-        for i in {1..30}; do
-            if curl -s "https://localhost:${MOCK_PORT}/redfish/v1/" > /dev/null 2>&1; then
-                echo " Ready!"
-                break
-            fi
-            echo -n "."
-            sleep 1
-        done
-        echo ""
-    fi
 fi
 
 # Build the analyzer if needed
