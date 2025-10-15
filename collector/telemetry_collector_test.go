@@ -243,12 +243,13 @@ func TestTelemetryMetricCount(t *testing.T) {
 
 	// Expected metric categories
 	expectedCategories := map[string]int{
-		"cache_ecc":     2, // correctable + uncorrectable
-		"pcie":          9, // various PCIe error types
-		"throttle":      4, // power, thermal, hardware, software
-		"memory":        5, // ecc lifetime (2), bandwidth, capacity_util, operating_speed
-		"reset":         8, // conventional entry/exit, fundamental entry/exit, irot exit, pf_flr entry/exit, last_reset_type
-		"scrape_status": 1, // collector status
+		"cache_ecc":     2,  // correctable + uncorrectable
+		"pcie":          9,  // various PCIe error types
+		"throttle":      4,  // power, thermal, hardware, software
+		"memory":        5,  // ecc lifetime (2), bandwidth, capacity_util, operating_speed
+		"reset":         8,  // conventional entry/exit, fundamental entry/exit, irot exit, pf_flr entry/exit, last_reset_type
+		"port":          23, // port metrics (speed, rx/tx bytes/frames/errors, link down counts, OEM metrics)
+		"scrape_status": 1,  // collector status
 	}
 
 	totalExpected := 0
@@ -347,6 +348,61 @@ func TestParseResetMetricProperty(t *testing.T) {
 			gpuID, metricName := parseResetMetricProperty(tt.property)
 			if gpuID != tt.expectedGPU {
 				t.Errorf("Expected GPU ID %q, got %q", tt.expectedGPU, gpuID)
+			}
+			if metricName != tt.expectedName {
+				t.Errorf("Expected metric name %q, got %q", tt.expectedName, metricName)
+			}
+		})
+	}
+}
+
+// TestParsePortMetricProperty validates port metric property parsing
+func TestParsePortMetricProperty(t *testing.T) {
+	tests := []struct {
+		name         string
+		property     string
+		expectedGPU  string
+		expectedPort string
+		expectedName string
+	}{
+		{
+			name:         "nvlink_rx_bytes",
+			property:     "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_0/Ports/NVLink_0/Metrics#/RXBytes",
+			expectedGPU:  "GPU_SXM_0",
+			expectedPort: "NVLink_0",
+			expectedName: "RXBytes",
+		},
+		{
+			name:         "nvlink_oem_metric",
+			property:     "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_3/Ports/NVLink_17/Metrics#/Oem/Nvidia/TotalRawBER",
+			expectedGPU:  "GPU_SXM_3",
+			expectedPort: "NVLink_17",
+			expectedName: "Oem/Nvidia/TotalRawBER",
+		},
+		{
+			name:         "pcie_speed",
+			property:     "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_1/Ports/PCIe/Metrics#/CurrentSpeedGbps",
+			expectedGPU:  "GPU_SXM_1",
+			expectedPort: "PCIe",
+			expectedName: "CurrentSpeedGbps",
+		},
+		{
+			name:         "nvlink_networking",
+			property:     "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_7/Ports/NVLink_5/Metrics#/Networking/RXFrames",
+			expectedGPU:  "GPU_SXM_7",
+			expectedPort: "NVLink_5",
+			expectedName: "Networking/RXFrames",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gpuID, portID, metricName := parsePortMetricProperty(tt.property)
+			if gpuID != tt.expectedGPU {
+				t.Errorf("Expected GPU ID %q, got %q", tt.expectedGPU, gpuID)
+			}
+			if portID != tt.expectedPort {
+				t.Errorf("Expected port ID %q, got %q", tt.expectedPort, portID)
 			}
 			if metricName != tt.expectedName {
 				t.Errorf("Expected metric name %q, got %q", tt.expectedName, metricName)
