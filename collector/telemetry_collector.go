@@ -16,10 +16,17 @@ import (
 const TelemetrySubsystem = "telemetry"
 
 var (
-	telemetryBaseLabels       = []string{"hostname", "system_id", "gpu_id"}
-	telemetryMemoryLabels     = []string{"hostname", "system_id", "gpu_id", "memory_id"}
-	telemetryPortLabels       = []string{"hostname", "system_id", "gpu_id", "port_id"}
-	telemetryMetrics          = createTelemetryMetricMap()
+	telemetryBaseLabels     = []string{"hostname", "system_id", "gpu_id"}
+	telemetryMemoryLabels   = []string{"hostname", "system_id", "gpu_id", "memory_id"}
+	telemetryPortLabels     = []string{"hostname", "system_id", "gpu_id", "port_id"}
+	telemetryInstanceLabels = []string{"hostname", "system_id", "gpu_id", "instance_id"}
+	telemetryMetrics        = createTelemetryMetricMap()
+
+	// GPM instance metrics - these are the only metrics that have per-instance values
+	gpmInstanceMetrics = map[string]bool{
+		"NVDecInstanceUtilizationPercent": true,
+		"NVJpgInstanceUtilizationPercent": true,
+	}
 )
 
 func createTelemetryMetricMap() map[string]Metric {
@@ -102,6 +109,39 @@ func createTelemetryMetricMap() map[string]Metric {
 
 	// NVIDIA OEM metrics - bit error rate
 	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_total_raw_ber", "Total raw bit error rate (NVIDIA OEM)", telemetryPortLabels)
+
+	// GPM metrics from HGX_ProcessorGPMMetrics_0 - GPU Performance Monitoring (all NVIDIA OEM)
+	// Compute unit utilization
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_tensor_core_activity_percent", "Tensor core activity percentage (NVIDIA GPM)", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_sm_activity_percent", "Streaming Multiprocessor activity percentage (NVIDIA GPM)", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_sm_occupancy_percent", "Streaming Multiprocessor occupancy percentage (NVIDIA GPM)", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_fp16_activity_percent", "FP16 floating point activity percentage (NVIDIA GPM)", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_fp32_activity_percent", "FP32 floating point activity percentage (NVIDIA GPM)", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_fp64_activity_percent", "FP64 floating point activity percentage (NVIDIA GPM)", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_integer_activity_percent", "Integer operation activity percentage (NVIDIA GPM)", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_dmma_utilization_percent", "Double precision Matrix Multiply-Accumulate utilization (NVIDIA GPM)", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_hmma_utilization_percent", "Half precision Matrix Multiply-Accumulate utilization (NVIDIA GPM)", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_imma_utilization_percent", "Integer Matrix Multiply-Accumulate utilization (NVIDIA GPM)", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_graphics_engine_activity_percent", "Graphics engine activity percentage (NVIDIA GPM)", telemetryBaseLabels)
+
+	// Media engine utilization - aggregate
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_nvdec_utilization_percent", "Video decoder overall utilization (NVIDIA GPM)", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_nvjpg_utilization_percent", "JPEG decoder overall utilization (NVIDIA GPM)", telemetryBaseLabels)
+
+	// Media engine utilization - per instance
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_nvdec_instance_utilization_percent", "Video decoder instance utilization (NVIDIA GPM)", telemetryInstanceLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_nvjpg_instance_utilization_percent", "JPEG decoder instance utilization (NVIDIA GPM)", telemetryInstanceLabels)
+
+	// Network bandwidth
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_nvlink_data_rx_bandwidth_gbps", "NVLink data receive bandwidth in Gbps (NVIDIA GPM)", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_nvlink_data_tx_bandwidth_gbps", "NVLink data transmit bandwidth in Gbps (NVIDIA GPM)", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_nvlink_raw_rx_bandwidth_gbps", "NVLink raw receive bandwidth in Gbps including overhead (NVIDIA GPM)", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_nvlink_raw_tx_bandwidth_gbps", "NVLink raw transmit bandwidth in Gbps including overhead (NVIDIA GPM)", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_nvofa_utilization_percent", "NVIDIA Optimized Fabrics Adapter utilization (NVIDIA GPM)", telemetryBaseLabels)
+
+	// PCIe bandwidth
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_pcie_raw_rx_bandwidth_gbps", "PCIe raw receive bandwidth in Gbps (NVIDIA GPM)", telemetryBaseLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "nvidia_pcie_raw_tx_bandwidth_gbps", "PCIe raw transmit bandwidth in Gbps (NVIDIA GPM)", telemetryBaseLabels)
 
 	return metrics
 }
@@ -191,7 +231,10 @@ func (t *TelemetryCollector) Collect(ch chan<- prometheus.Metric) {
 	// Process each metric report
 	wg := &sync.WaitGroup{}
 	for _, report := range metricReports {
-		if strings.Contains(report.ID, "HGX_ProcessorMetrics") && !strings.Contains(report.ID, "HGX_ProcessorResetMetrics") {
+		if strings.Contains(report.ID, "HGX_ProcessorGPMMetrics") {
+			wg.Add(1)
+			go t.collectGPMMetrics(ch, report, systemMap, wg)
+		} else if strings.Contains(report.ID, "HGX_ProcessorMetrics") && !strings.Contains(report.ID, "HGX_ProcessorResetMetrics") && !strings.Contains(report.ID, "HGX_ProcessorPortMetrics") {
 			wg.Add(1)
 			go t.collectProcessorMetrics(ch, report, systemMap, wg)
 		} else if strings.Contains(report.ID, "HGX_MemoryMetrics") {
@@ -1095,6 +1138,324 @@ func (t *TelemetryCollector) emitPortMetrics(ch chan<- prometheus.Metric, labels
 	if val, ok := metrics["Oem/Nvidia/TotalRawBER"].(float64); ok {
 		ch <- prometheus.MustNewConstMetric(
 			t.metrics["telemetry_port_nvidia_total_raw_ber"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+}
+
+// collectGPMMetrics processes a single HGX_ProcessorGPMMetrics report
+func (t *TelemetryCollector) collectGPMMetrics(ch chan<- prometheus.Metric, report *redfish.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	t.logger.Debug("processing GPM metric report",
+		slog.String("report_id", report.ID),
+		slog.Int("metric_count", len(report.MetricValues)),
+	)
+
+	// Group metrics by GPU ID
+	// MetricProperty format: /redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/ProcessorMetrics#/Oem/Nvidia/...
+	metricsByGPU := make(map[string]map[string]float64)
+	instanceMetricsByGPU := make(map[string]map[string]map[string]float64) // gpuID -> instanceID -> metricName -> value
+
+	for _, metricValue := range report.MetricValues {
+		// Parse the metric property
+		gpuID, metricName := parseGPMMetricProperty(metricValue.MetricProperty)
+		if gpuID == "" || metricName == "" {
+			continue
+		}
+
+		// Parse metric value
+		value, err := parseMetricValue(metricValue.MetricValue)
+		if err != nil {
+			t.logger.Debug("failed to parse GPM metric value",
+				slog.String("metric", metricName),
+				slog.String("value", metricValue.MetricValue),
+				slog.Any("error", err),
+			)
+			continue
+		}
+
+		// Check if this is an instance metric (contains /0, /1, etc.)
+		if strings.Contains(metricName, "/") {
+			// Extract metric name and instance ID
+			parts := strings.Split(metricName, "/")
+			if len(parts) == 2 {
+				baseMetricName := parts[0]
+				instanceID := parts[1]
+
+				// Validate this is a known instance metric
+				if !gpmInstanceMetrics[baseMetricName] {
+					t.logger.Debug("skipping unexpected instance-like metric",
+						slog.String("metric", metricName),
+						slog.String("gpu_id", gpuID))
+					continue
+				}
+
+				// Validate instance ID is numeric 0-7
+				if len(instanceID) != 1 || instanceID[0] < '0' || instanceID[0] > '7' {
+					t.logger.Debug("invalid instance ID",
+						slog.String("metric", metricName),
+						slog.String("instance_id", instanceID))
+					continue
+				}
+
+				// Initialize maps if needed
+				if instanceMetricsByGPU[gpuID] == nil {
+					instanceMetricsByGPU[gpuID] = make(map[string]map[string]float64)
+				}
+				if instanceMetricsByGPU[gpuID][instanceID] == nil {
+					instanceMetricsByGPU[gpuID][instanceID] = make(map[string]float64)
+				}
+				instanceMetricsByGPU[gpuID][instanceID][baseMetricName] = value
+			}
+		} else {
+			// Regular metric
+			if metricsByGPU[gpuID] == nil {
+				metricsByGPU[gpuID] = make(map[string]float64)
+			}
+			metricsByGPU[gpuID][metricName] = value
+		}
+	}
+
+	// Extract system ID from metric properties (all should be same system)
+	systemID := extractSystemIDFromReport(report)
+	systemName := systemMap[systemID]
+	if systemName == "" {
+		systemName = systemID
+	}
+
+	// Emit regular metrics for each GPU
+	for gpuID, metrics := range metricsByGPU {
+		labels := []string{systemName, systemID, gpuID}
+		t.emitGPMMetrics(ch, labels, metrics)
+	}
+
+	// Emit instance metrics
+	for gpuID, instances := range instanceMetricsByGPU {
+		for instanceID, metrics := range instances {
+			labels := []string{systemName, systemID, gpuID, instanceID}
+			t.emitGPMInstanceMetrics(ch, labels, metrics)
+		}
+	}
+}
+
+// parseGPMMetricProperty extracts GPU ID and metric name from a GPM MetricProperty path
+// Example: /redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/ProcessorMetrics#/Oem/Nvidia/TensorCoreActivityPercent
+// Returns: "GPU_0", "TensorCoreActivityPercent"
+// Example with instance: /redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/ProcessorMetrics#/Oem/Nvidia/NVDecInstanceUtilizationPercent/0
+// Returns: "GPU_0", "NVDecInstanceUtilizationPercent/0"
+func parseGPMMetricProperty(property string) (gpuID string, metricName string) {
+	// Split on '#' to separate resource path from property path
+	parts := strings.Split(property, "#/")
+	if len(parts) != 2 {
+		return "", ""
+	}
+
+	resourcePath := parts[0]
+	propertyPath := parts[1]
+
+	// Extract GPU ID from resource path: /Processors/GPU_X/
+	if idx := strings.Index(resourcePath, "/Processors/"); idx != -1 {
+		remainder := resourcePath[idx+len("/Processors/"):]
+		if endIdx := strings.Index(remainder, "/"); endIdx != -1 {
+			gpuID = remainder[:endIdx]
+		}
+	}
+
+	// Extract metric name from property path
+	// Remove Oem/Nvidia/ prefix if present
+	metricName = strings.TrimPrefix(propertyPath, "Oem/Nvidia/")
+
+	return gpuID, metricName
+}
+
+// emitGPMMetrics emits Prometheus metrics for GPU Performance Monitoring (non-instance metrics)
+func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels []string, metrics map[string]float64) {
+	// Compute unit utilization
+	if val, ok := metrics["TensorCoreActivityPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_tensor_core_activity_percent"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["SMActivityPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_sm_activity_percent"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["SMOccupancyPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_sm_occupancy_percent"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["FP16ActivityPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_fp16_activity_percent"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["FP32ActivityPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_fp32_activity_percent"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["FP64ActivityPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_fp64_activity_percent"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["IntegerActivityUtilizationPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_integer_activity_percent"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["DMMAUtilizationPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_dmma_utilization_percent"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["HMMAUtilizationPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_hmma_utilization_percent"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["IMMAUtilizationPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_imma_utilization_percent"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["GraphicsEngineActivityPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_graphics_engine_activity_percent"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+
+	// Media engine utilization - aggregate
+	if val, ok := metrics["NVDecUtilizationPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_nvdec_utilization_percent"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["NVJpgUtilizationPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_nvjpg_utilization_percent"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+
+	// Network bandwidth
+	if val, ok := metrics["NVLinkDataRxBandwidthGbps"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_nvlink_data_rx_bandwidth_gbps"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["NVLinkDataTxBandwidthGbps"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_nvlink_data_tx_bandwidth_gbps"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["NVLinkRawRxBandwidthGbps"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_nvlink_raw_rx_bandwidth_gbps"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["NVLinkRawTxBandwidthGbps"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_nvlink_raw_tx_bandwidth_gbps"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["NVOfaUtilizationPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_nvofa_utilization_percent"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+
+	// PCIe bandwidth
+	if val, ok := metrics["PCIeRawRxBandwidthGbps"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_pcie_raw_rx_bandwidth_gbps"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["PCIeRawTxBandwidthGbps"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_pcie_raw_tx_bandwidth_gbps"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+}
+
+// emitGPMInstanceMetrics emits Prometheus metrics for GPU Performance Monitoring instance metrics (NVDec, NVJpg)
+func (t *TelemetryCollector) emitGPMInstanceMetrics(ch chan<- prometheus.Metric, labels []string, metrics map[string]float64) {
+	// Media engine utilization - per instance
+	if val, ok := metrics["NVDecInstanceUtilizationPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_nvdec_instance_utilization_percent"].desc,
+			prometheus.GaugeValue,
+			val,
+			labels...,
+		)
+	}
+	if val, ok := metrics["NVJpgInstanceUtilizationPercent"]; ok {
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics["telemetry_nvidia_nvjpg_instance_utilization_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,

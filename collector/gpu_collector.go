@@ -103,16 +103,9 @@ func createGPUMetricMap() map[string]Metric {
 	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_total_threads", "GPU processor total threads", gpuProcessorLabels)
 
 	// Nvidia GPU Processor OEM metrics
-	addToMetricMap(gpuMetrics, GPUSubsystem, "sm_utilization_percent", "GPU SM utilization percentage", gpuProcessorLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "sm_activity_percent", "GPU SM activity percentage", gpuProcessorLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "sm_occupancy_percent", "GPU SM occupancy percentage", gpuProcessorLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "tensor_core_activity_percent", "GPU tensor core activity percentage", gpuProcessorLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "fp16_activity_percent", "GPU FP16 activity percentage", gpuProcessorLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "fp32_activity_percent", "GPU FP32 activity percentage", gpuProcessorLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "fp64_activity_percent", "GPU FP64 activity percentage", gpuProcessorLabels)
+	// Note: SM utilization, activity, occupancy, tensor/FP activity, and PCIe bandwidth metrics
+	// are now collected via TelemetryService (HGX_ProcessorGPMMetrics_0) for better performance
 	addToMetricMap(gpuMetrics, GPUSubsystem, "sram_ecc_error_threshold_exceeded", "GPU SRAM ECC error threshold exceeded (1 if exceeded)", gpuProcessorLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "pcie_rx_bytes", "GPU PCIe receive bytes", gpuProcessorLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "pcie_tx_bytes", "GPU PCIe transmit bytes", gpuProcessorLabels)
 
 	// NVLink Port metrics
 	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_state", fmt.Sprintf("NVLink port state,%s", CommonStateHelp), gpuPortLabels)
@@ -473,70 +466,19 @@ func (g *GPUCollector) collectGPUProcessor(ch chan<- prometheus.Metric, systemNa
 	)
 
 	// Get ProcessorMetrics OEM data
+	// Note: Most GPU performance metrics (SM activity, tensor cores, FP operations, PCIe bandwidth)
+	// are now collected via TelemetryService (HGX_ProcessorGPMMetrics_0) for better performance.
+	// We only collect SRAM ECC threshold here as it's a health indicator not in GPM.
 	if metrics, err := processor.Metrics(); err == nil && metrics != nil {
 		if metricsOEM, err := g.oemClient.GetProcessorMetricsOEMData(metrics.ODataID); err == nil {
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_sm_utilization_percent"].desc,
-				prometheus.GaugeValue,
-				metricsOEM.SMUtilizationPercent,
-				labels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_sm_activity_percent"].desc,
-				prometheus.GaugeValue,
-				metricsOEM.SMActivityPercent,
-				labels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_sm_occupancy_percent"].desc,
-				prometheus.GaugeValue,
-				metricsOEM.SMOccupancyPercent,
-				labels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_tensor_core_activity_percent"].desc,
-				prometheus.GaugeValue,
-				metricsOEM.TensorCoreActivityPercent,
-				labels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_fp16_activity_percent"].desc,
-				prometheus.GaugeValue,
-				metricsOEM.FP16ActivityPercent,
-				labels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_fp32_activity_percent"].desc,
-				prometheus.GaugeValue,
-				metricsOEM.FP32ActivityPercent,
-				labels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_fp64_activity_percent"].desc,
-				prometheus.GaugeValue,
-				metricsOEM.FP64ActivityPercent,
-				labels...,
-			)
 			ch <- prometheus.MustNewConstMetric(
 				g.metrics["gpu_sram_ecc_error_threshold_exceeded"].desc,
 				prometheus.GaugeValue,
 				boolToFloat64(metricsOEM.SRAMECCErrorThresholdExceeded),
 				labels...,
 			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_pcie_rx_bytes"].desc,
-				prometheus.GaugeValue,
-				float64(metricsOEM.PCIeRXBytes),
-				labels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_pcie_tx_bytes"].desc,
-				prometheus.GaugeValue,
-				float64(metricsOEM.PCIeTXBytes),
-				labels...,
-			)
 		} else {
-			g.logger.Error("failed to get ProcessorMetrics OEM data",
+			g.logger.Debug("failed to get ProcessorMetrics OEM data",
 				slog.String("processor_id", processorID),
 				slog.Any("error", err),
 			)
