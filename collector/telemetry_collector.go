@@ -21,6 +21,12 @@ var (
 	telemetryPortLabels       = []string{"hostname", "system_id", "gpu_id", "port_id"}
 	telemetryInstanceLabels   = []string{"hostname", "system_id", "gpu_id", "instance_id"}
 	telemetryMetrics          = createTelemetryMetricMap()
+
+	// GPM instance metrics - these are the only metrics that have per-instance values
+	gpmInstanceMetrics = map[string]bool{
+		"NVDecInstanceUtilizationPercent": true,
+		"NVJpgInstanceUtilizationPercent": true,
+	}
 )
 
 func createTelemetryMetricMap() map[string]Metric {
@@ -682,6 +688,22 @@ func (t *TelemetryCollector) collectGPMMetrics(ch chan<- prometheus.Metric, repo
 			if len(parts) == 2 {
 				baseMetricName := parts[0]
 				instanceID := parts[1]
+
+				// Validate this is a known instance metric
+				if !gpmInstanceMetrics[baseMetricName] {
+					t.logger.Debug("skipping unexpected instance-like metric",
+						slog.String("metric", metricName),
+						slog.String("gpu_id", gpuID))
+					continue
+				}
+
+				// Validate instance ID is numeric 0-7
+				if len(instanceID) != 1 || instanceID[0] < '0' || instanceID[0] > '7' {
+					t.logger.Debug("invalid instance ID",
+						slog.String("metric", metricName),
+						slog.String("instance_id", instanceID))
+					continue
+				}
 
 				// Initialize maps if needed
 				if instanceMetricsByGPU[gpuID] == nil {
