@@ -249,6 +249,7 @@ func TestTelemetryMetricCount(t *testing.T) {
 		"memory":        5,  // ecc lifetime (2), bandwidth, capacity_util, operating_speed
 		"reset":         8,  // conventional entry/exit, fundamental entry/exit, irot exit, pf_flr entry/exit, last_reset_type
 		"port":          23, // port metrics (speed, rx/tx bytes/frames/errors, link down counts, OEM metrics)
+		"nvidia_gpm":    22, // GPU Performance Monitoring: 11 compute + 2 aggregate media + 2 instance media + 5 network + 2 PCIe
 		"scrape_status": 1,  // collector status
 	}
 
