@@ -1951,13 +1951,17 @@ func (t *TelemetryCollector) emitPlatformGPUMetrics(ch chan<- prometheus.Metric,
 		)
 	}
 
-	// Memory metrics
+	// Emit per-DRAM memory metrics (multiple DRAM modules per GPU)
+	// Each DRAM module gets its own metric instance with unique memory_id label
 	for metricName, value := range metrics {
+		if !strings.HasPrefix(metricName, "memory_") {
+			continue // Skip non-memory metrics
+		}
+
 		if strings.HasPrefix(metricName, "memory_power_") {
 			memoryID := strings.TrimPrefix(metricName, "memory_power_")
 			memoryLabels := []string{systemName, systemID, gpuID, memoryID}
 
-			// Backward-compatible metric name in gpu subsystem
 			ch <- prometheus.MustNewConstMetric(
 				t.metrics["gpu_memory_power_watts"].desc,
 				prometheus.GaugeValue,
@@ -1968,7 +1972,6 @@ func (t *TelemetryCollector) emitPlatformGPUMetrics(ch chan<- prometheus.Metric,
 			memoryID := strings.TrimPrefix(metricName, "memory_temp_")
 			memoryLabels := []string{systemName, systemID, gpuID, memoryID}
 
-			// Telemetry prefixed metric
 			ch <- prometheus.MustNewConstMetric(
 				t.metrics["telemetry_gpu_memory_temperature_celsius"].desc,
 				prometheus.GaugeValue,
