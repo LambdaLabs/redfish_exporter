@@ -15,6 +15,51 @@ import (
 
 const TelemetrySubsystem = "telemetry"
 
+// Sensor ID pattern constants for platform environment metrics parsing
+const (
+	// Sensor ID prefixes
+	sensorPrefixHGXGPU              = "HGX_GPU_"
+	sensorPrefixHGXChassis          = "HGX_Chassis_"
+	sensorPrefixProcessorModule     = "ProcessorModule_"
+	sensorPrefixHGXProcessorModule  = "HGX_ProcessorModule_"
+	sensorPrefixHGXBMC              = "HGX_BMC_"
+	sensorPrefixHGX                 = "HGX_"
+
+	// Sensor ID infixes - metric types
+	sensorInfixDRAM                 = "_DRAM_"
+	sensorInfixEnergy               = "_Energy_"
+	sensorInfixPower                = "_Power_"
+	sensorInfixTemp                 = "_Temp_"
+	sensorInfixCPU                  = "_CPU_"
+	sensorInfixVREGCPU              = "_VREG_CPU_Power_"
+	sensorInfixVREGSOC              = "_VREG_SOC_Power_"
+	sensorInfixVreg0CpuPower        = "_Vreg_0_CpuPower_"
+	sensorInfixVreg0SocPower        = "_Vreg_0_SocPower_"
+	sensorInfixTempAvg              = "_TempAvg_"
+	sensorInfixTempLimit            = "_TempLimit_"
+	sensorInfixEDPCurrentLimit      = "_EDP_Current_Limit_"
+	sensorInfixEDPPeakLimit         = "_EDP_Peak_Limit_"
+	sensorInfixEnforcedEDPc         = "_EnforcedEDPc_"
+	sensorInfixEnforcedEDPp         = "_EnforcedEDPp_"
+	sensorInfixInletTemp            = "_Inlet_Temp_"
+	sensorInfixExhaustTemp          = "_Exhaust_Temp_"
+	sensorInfixTEMP0                = "_TEMP_0"
+	sensorInfixTEMP1                = "_TEMP_1"
+	sensorInfixTemp0                = "_Temp_0"
+	sensorInfixTotalGPUPower        = "TotalGPU_Power"
+
+	// Report ID patterns
+	reportIDProcessorGPMMetrics     = "HGX_ProcessorGPMMetrics"
+	reportIDProcessorMetrics        = "HGX_ProcessorMetrics"
+	reportIDProcessorResetMetrics   = "HGX_ProcessorResetMetrics"
+	reportIDProcessorPortMetrics    = "HGX_ProcessorPortMetrics"
+	reportIDMemoryMetrics           = "HGX_MemoryMetrics"
+	reportIDPlatformEnvMetrics      = "HGX_PlatformEnvironmentMetrics"
+
+	// ISO8601 duration prefix
+	iso8601DurationPrefix           = "P"
+)
+
 var (
 	telemetryBaseLabels     = []string{"hostname", "system_id", "gpu_id"}
 	telemetryMemoryLabels   = []string{"hostname", "system_id", "gpu_id", "memory_id"}
@@ -264,22 +309,22 @@ func (t *TelemetryCollector) Collect(ch chan<- prometheus.Metric) {
 	// Process each metric report
 	wg := &sync.WaitGroup{}
 	for _, report := range metricReports {
-		if strings.Contains(report.ID, "HGX_ProcessorGPMMetrics") {
+		if strings.Contains(report.ID, reportIDProcessorGPMMetrics) {
 			wg.Add(1)
 			go t.collectGPMMetrics(ch, report, systemMap, wg)
-		} else if strings.Contains(report.ID, "HGX_ProcessorMetrics") && !strings.Contains(report.ID, "HGX_ProcessorResetMetrics") && !strings.Contains(report.ID, "HGX_ProcessorPortMetrics") {
+		} else if strings.Contains(report.ID, reportIDProcessorMetrics) && !strings.Contains(report.ID, reportIDProcessorResetMetrics) && !strings.Contains(report.ID, reportIDProcessorPortMetrics) {
 			wg.Add(1)
 			go t.collectProcessorMetrics(ch, report, systemMap, wg)
-		} else if strings.Contains(report.ID, "HGX_MemoryMetrics") {
+		} else if strings.Contains(report.ID, reportIDMemoryMetrics) {
 			wg.Add(1)
 			go t.collectMemoryMetrics(ch, report, systemMap, wg)
-		} else if strings.Contains(report.ID, "HGX_ProcessorResetMetrics") {
+		} else if strings.Contains(report.ID, reportIDProcessorResetMetrics) {
 			wg.Add(1)
 			go t.collectResetMetrics(ch, report, systemMap, wg)
-		} else if strings.Contains(report.ID, "HGX_ProcessorPortMetrics") {
+		} else if strings.Contains(report.ID, reportIDProcessorPortMetrics) {
 			wg.Add(1)
 			go t.collectPortMetrics(ch, report, systemMap, wg)
-		} else if strings.Contains(report.ID, "HGX_PlatformEnvironmentMetrics") {
+		} else if strings.Contains(report.ID, reportIDPlatformEnvMetrics) {
 			wg.Add(1)
 			go t.collectPlatformEnvironmentMetrics(ch, report, systemMap, wg)
 		}
@@ -378,7 +423,7 @@ func parseMetricValue(value string) (float64, error) {
 	}
 
 	// Check if it's an ISO 8601 duration (starts with "P")
-	if strings.HasPrefix(value, "P") || strings.HasPrefix(value, "p") {
+	if strings.HasPrefix(value, iso8601DurationPrefix) || strings.HasPrefix(value, strings.ToLower(iso8601DurationPrefix)) {
 		duration, err := isoDuration.Parse(value)
 		if err != nil {
 			// If duration parsing fails, try as float
@@ -1509,8 +1554,8 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 		slog.Int("metric_count", len(report.MetricValues)),
 	)
 
-	// Parse all sensor paths and group by type
-	// Sensor paths follow pattern: /redfish/v1/Chassis/{ChassisID}/Sensors/{SensorID}
+	// Group metrics by component to enable batch emission with all related values
+	// This reduces the number of Prometheus metric emissions and improves efficiency
 	gpuMetrics := make(map[string]map[string]float64)                // gpuID -> metricType -> value
 	cpuMetrics := make(map[string]map[string]float64)                // cpuID -> metricType -> value
 	ambientMetrics := make(map[string]map[string]map[string]float64) // locationID -> sensorID -> metricType -> value
@@ -1521,7 +1566,6 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 	var chassisID string
 
 	for _, metricValue := range report.MetricValues {
-		// Parse sensor path: /redfish/v1/Chassis/{ChassisID}/Sensors/{SensorID}
 		sensorPath := metricValue.MetricProperty
 		value, err := parseMetricValue(metricValue.MetricValue)
 		if err != nil {
@@ -1533,63 +1577,59 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 			continue
 		}
 
-		// Extract chassis ID and sensor ID
 		chassisIDFromPath, sensorID := parseSensorPath(sensorPath)
 		if chassisIDFromPath == "" || sensorID == "" {
+			t.logger.Debug("failed to parse sensor path",
+				slog.String("sensor_path", sensorPath),
+			)
 			continue
 		}
 
-		// Store chassis ID for later use (should be consistent across all metrics)
+		// Capture chassis ID from first valid metric for system ID mapping
 		if chassisID == "" {
 			chassisID = chassisIDFromPath
 		}
 
-		// Route based on sensor ID pattern
-		if strings.HasPrefix(sensorID, "HGX_GPU_") {
-			// GPU metrics: HGX_GPU_0_Energy_0, HGX_GPU_0_Power_0, HGX_GPU_0_TEMP_0, HGX_GPU_0_TEMP_1, HGX_GPU_0_DRAM_0_Power_0, HGX_GPU_0_DRAM_0_Temp_0
+		// Route to component-specific parser based on sensor ID prefix
+		if strings.HasPrefix(sensorID, sensorPrefixHGXGPU) {
 			t.parseGPUSensorMetric(sensorID, value, gpuMetrics)
-		} else if strings.HasPrefix(sensorID, "HGX_Chassis_") && strings.Contains(sensorID, "TotalGPU_Power") {
-			// Total GPU power: HGX_Chassis_0_TotalGPU_Power_0
+		} else if strings.HasPrefix(sensorID, sensorPrefixHGXChassis) && strings.Contains(sensorID, sensorInfixTotalGPUPower) {
+			// Backward-compatible total GPU power metric (replaces chassis collector)
 			totalGPUPower = value
 			hasTotalGPUPower = true
-		} else if strings.HasPrefix(sensorID, "ProcessorModule_") && strings.Contains(sensorID, "_CPU_") {
-			// CPU metrics: ProcessorModule_0_CPU_0_Energy_0, ProcessorModule_0_CPU_0_Power_0, etc.
+		} else if strings.HasPrefix(sensorID, sensorPrefixProcessorModule) && strings.Contains(sensorID, sensorInfixCPU) {
 			t.parseCPUSensorMetric(sensorID, value, cpuMetrics)
-		} else if strings.HasPrefix(sensorID, "HGX_ProcessorModule_") {
-			// Ambient metrics: HGX_ProcessorModule_0_Inlet_Temp_0, HGX_ProcessorModule_0_Exhaust_Temp_0
+		} else if strings.HasPrefix(sensorID, sensorPrefixHGXProcessorModule) {
 			t.parseAmbientSensorMetric(sensorID, value, ambientMetrics)
-		} else if strings.HasPrefix(sensorID, "HGX_BMC_") && strings.Contains(sensorID, "_Temp_") {
-			// BMC temperature: HGX_BMC_0_Temp_0
+		} else if strings.HasPrefix(sensorID, sensorPrefixHGXBMC) && strings.Contains(sensorID, sensorInfixTemp) {
+			// Single BMC temperature sensor per system
 			bmcTemp = value
 			hasBMCTemp = true
 		}
 	}
 
-	// Extract system ID from report (all metrics should be from same system)
+	// Map chassis ID to system ID for consistent labeling across metrics
 	systemID := extractSystemIDFromChassis(chassisID)
 	systemName := systemMap[systemID]
 	if systemName == "" {
 		systemName = systemID
 	}
 
-	// Emit GPU metrics
+	// Emit grouped metrics for each component
 	for gpuID, metrics := range gpuMetrics {
 		t.emitPlatformGPUMetrics(ch, systemName, systemID, gpuID, metrics)
 	}
 
-	// Emit CPU metrics
 	for cpuID, metrics := range cpuMetrics {
 		t.emitPlatformCPUMetrics(ch, systemName, systemID, cpuID, metrics)
 	}
 
-	// Emit ambient metrics
 	for locationID, sensors := range ambientMetrics {
 		for sensorID, metrics := range sensors {
 			t.emitPlatformAmbientMetrics(ch, systemName, systemID, locationID, sensorID, metrics)
 		}
 	}
 
-	// Emit BMC temperature
 	if hasBMCTemp {
 		ch <- prometheus.MustNewConstMetric(
 			t.metrics["telemetry_bmc_temperature_celsius"].desc,
@@ -1599,7 +1639,6 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 		)
 	}
 
-	// Emit total GPU power (backward-compatible chassis metric)
 	if hasTotalGPUPower {
 		ch <- prometheus.MustNewConstMetric(
 			t.metrics["chassis_gpu_total_power_watts"].desc,
@@ -1610,11 +1649,10 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 	}
 }
 
-// parseSensorPath extracts chassis ID and sensor ID from a sensor path
-// Example: /redfish/v1/Chassis/HGX_GPU_0/Sensors/HGX_GPU_0_Power_0
-// Returns: "HGX_GPU_0", "HGX_GPU_0_Power_0"
+// parseSensorPath extracts chassis ID and sensor ID from a Redfish sensor path.
+// Chassis ID is needed for system ID mapping, sensor ID determines metric routing.
+// Example: /redfish/v1/Chassis/HGX_GPU_0/Sensors/HGX_GPU_0_Power_0 -> "HGX_GPU_0", "HGX_GPU_0_Power_0"
 func parseSensorPath(sensorPath string) (chassisID string, sensorID string) {
-	// Extract chassis ID: /Chassis/CHASSIS_ID/
 	if idx := strings.Index(sensorPath, "/Chassis/"); idx != -1 {
 		remainder := sensorPath[idx+len("/Chassis/"):]
 		if endIdx := strings.Index(remainder, "/"); endIdx != -1 {
@@ -1622,7 +1660,6 @@ func parseSensorPath(sensorPath string) (chassisID string, sensorID string) {
 		}
 	}
 
-	// Extract sensor ID: /Sensors/SENSOR_ID
 	if idx := strings.Index(sensorPath, "/Sensors/"); idx != -1 {
 		sensorID = sensorPath[idx+len("/Sensors/"):]
 	}
@@ -1630,8 +1667,9 @@ func parseSensorPath(sensorPath string) (chassisID string, sensorID string) {
 	return chassisID, sensorID
 }
 
-// parseGPUSensorMetric is a standalone function for parsing GPU sensor metrics (for testing)
-// Returns: gpuID, metricType, memoryID
+// parseGPUSensorMetric parses GPU sensor IDs to extract GPU identifier and metric type.
+// Exported for testability. Memory metrics include memoryID for DRAM-specific labeling.
+// Example: "HGX_GPU_0_DRAM_0_Power_0" -> gpuID="GPU_0", metricType="memory_power", memoryID="GPU_0_DRAM_0"
 func parseGPUSensorMetric(sensorID string) (string, string, string) {
 	parts := strings.Split(sensorID, "_")
 	if len(parts) < 3 {
@@ -1640,61 +1678,62 @@ func parseGPUSensorMetric(sensorID string) (string, string, string) {
 
 	gpuID := fmt.Sprintf("%s_%s", parts[1], parts[2]) // GPU_0
 
-	// Check for memory metrics
-	if strings.Contains(sensorID, "_DRAM_") {
+	if strings.Contains(sensorID, sensorInfixDRAM) {
 		memoryID := extractMemoryIDFromSensor(sensorID)
-		if strings.Contains(sensorID, "_Power_") {
+		if strings.Contains(sensorID, sensorInfixPower) {
 			return gpuID, "memory_power", memoryID
-		} else if strings.Contains(sensorID, "_Temp_") {
+		} else if strings.Contains(sensorID, sensorInfixTemp) {
 			return gpuID, "memory_temp", memoryID
 		}
-	} else if strings.Contains(sensorID, "_Energy_") {
+	} else if strings.Contains(sensorID, sensorInfixEnergy) {
 		return gpuID, "energy", ""
-	} else if strings.Contains(sensorID, "_Power_") {
+	} else if strings.Contains(sensorID, sensorInfixPower) {
 		return gpuID, "power", ""
-	} else if strings.Contains(sensorID, "_TEMP_0") {
+	} else if strings.Contains(sensorID, sensorInfixTEMP0) {
 		return gpuID, "temp0", ""
-	} else if strings.Contains(sensorID, "_TEMP_1") {
+	} else if strings.Contains(sensorID, sensorInfixTEMP1) {
 		return gpuID, "temp1", ""
 	}
 
 	return gpuID, "", ""
 }
 
-// parseCPUSensorMetric is a standalone function for parsing CPU sensor metrics (for testing)
-// Returns: cpuID, metricType
+// parseCPUSensorMetric parses CPU sensor IDs to extract CPU identifier and metric type.
+// Exported for testability. Uses processor module number as CPU ID to match chassis organization.
+// Example: "ProcessorModule_0_CPU_0_Power_0" -> cpuID="CPU_0", metricType="power"
+// Vreg metrics are checked first since they contain "_Power_" but need distinct handling.
 func parseCPUSensorMetric(sensorID string) (string, string) {
 	parts := strings.Split(sensorID, "_")
 	if len(parts) < 4 {
 		return "", ""
 	}
 
-	cpuID := fmt.Sprintf("%s_%s_%s_%s", parts[0], parts[1], parts[2], parts[3]) // ProcessorModule_0_CPU_0
-
-	// Check vreg metrics first (they contain "_Power_" but are more specific)
-	if strings.Contains(sensorID, "_VREG_CPU_Power_") || strings.Contains(sensorID, "_Vreg_0_CpuPower_") {
+	// ProcessorModule_0 maps to CPU_0 (module number becomes CPU ID)
+	cpuID := fmt.Sprintf("CPU_%s", parts[1])
+	if strings.Contains(sensorID, sensorInfixVREGCPU) || strings.Contains(sensorID, sensorInfixVreg0CpuPower) {
 		return cpuID, "vreg_cpu"
-	} else if strings.Contains(sensorID, "_VREG_SOC_Power_") || strings.Contains(sensorID, "_Vreg_0_SocPower_") {
+	} else if strings.Contains(sensorID, sensorInfixVREGSOC) || strings.Contains(sensorID, sensorInfixVreg0SocPower) {
 		return cpuID, "vreg_soc"
-	} else if strings.Contains(sensorID, "_Energy_") {
+	} else if strings.Contains(sensorID, sensorInfixEnergy) {
 		return cpuID, "energy"
-	} else if strings.Contains(sensorID, "_Power_") && strings.Contains(sensorID, "_CPU_") {
+	} else if strings.Contains(sensorID, sensorInfixPower) && strings.Contains(sensorID, sensorInfixCPU) {
 		return cpuID, "power"
-	} else if strings.Contains(sensorID, "_Temp_0") || strings.Contains(sensorID, "_TempAvg_") {
+	} else if strings.Contains(sensorID, sensorInfixTemp0) || strings.Contains(sensorID, sensorInfixTempAvg) {
 		return cpuID, "temp"
-	} else if strings.Contains(sensorID, "_Temp_Limit_") || strings.Contains(sensorID, "_TempLimit_") {
+	} else if strings.Contains(sensorID, sensorInfixTempLimit) {
 		return cpuID, "temp_limit"
-	} else if strings.Contains(sensorID, "_EDP_Current_Limit_") || strings.Contains(sensorID, "_EnforcedEDPc_") {
+	} else if strings.Contains(sensorID, sensorInfixEDPCurrentLimit) || strings.Contains(sensorID, sensorInfixEnforcedEDPc) {
 		return cpuID, "edp_current"
-	} else if strings.Contains(sensorID, "_EDP_Peak_Limit_") || strings.Contains(sensorID, "_EnforcedEDPp_") {
+	} else if strings.Contains(sensorID, sensorInfixEDPPeakLimit) || strings.Contains(sensorID, sensorInfixEnforcedEDPp) {
 		return cpuID, "edp_peak"
 	}
 
 	return cpuID, ""
 }
 
-// parseAmbientSensorMetric is a standalone function for parsing ambient sensor metrics (for testing)
-// Returns: locationID, metricType, sensorID
+// parseAmbientSensorMetric parses ambient temperature sensor IDs to extract location and metric type.
+// Exported for testability. Returns full sensorID for sensor_id label (supports multiple sensors per location).
+// Example: "HGX_ProcessorModule_0_Inlet_Temp_0" -> locationID="ProcessorModule_0", metricType="inlet", sensorID=(full ID)
 func parseAmbientSensorMetric(sensorID string) (string, string, string) {
 	parts := strings.Split(sensorID, "_")
 	if len(parts) < 4 {
@@ -1703,23 +1742,20 @@ func parseAmbientSensorMetric(sensorID string) (string, string, string) {
 
 	locationID := fmt.Sprintf("%s_%s", parts[1], parts[2]) // ProcessorModule_0
 
-	if strings.Contains(sensorID, "_Inlet_Temp_") {
+	if strings.Contains(sensorID, sensorInfixInletTemp) {
 		return locationID, "inlet", sensorID
-	} else if strings.Contains(sensorID, "_Exhaust_Temp_") {
+	} else if strings.Contains(sensorID, sensorInfixExhaustTemp) {
 		return locationID, "exhaust", sensorID
 	}
 
 	return locationID, "", sensorID
 }
 
-// extractSystemIDFromChassis derives system ID from chassis ID
-// Example: "HGX_GPU_0" -> "HGX_Baseboard_0", "HGX_ProcessorModule_0" -> "HGX_Baseboard_0"
-// This is a best-effort mapping; ideally we'd look it up from the chassis->system relationship
+// extractSystemIDFromChassis maps chassis ID to system ID for consistent metric labeling.
+// Uses hardcoded mapping since all HGX chassis belong to HGX_Baseboard_0 system.
+// TODO: Query chassis->system relationship from Redfish API for more robust mapping.
 func extractSystemIDFromChassis(chassisID string) string {
-	// Most chassis IDs follow pattern HGX_XXX_N where N is a number
-	// The system is typically HGX_Baseboard_0
-	// This is a simplification; in a real system we might need to query the relationship
-	if strings.HasPrefix(chassisID, "HGX_") {
+	if strings.HasPrefix(chassisID, sensorPrefixHGX) {
 		return "HGX_Baseboard_0"
 	}
 	return chassisID
@@ -1727,42 +1763,47 @@ func extractSystemIDFromChassis(chassisID string) string {
 
 // parseGPUSensorMetric parses a GPU sensor metric and stores it
 func (t *TelemetryCollector) parseGPUSensorMetric(sensorID string, value float64, gpuMetrics map[string]map[string]float64) {
-	// Pattern: HGX_GPU_0_Energy_0, HGX_GPU_0_Power_0, HGX_GPU_0_TEMP_0, HGX_GPU_0_TEMP_1
-	// Also: HGX_GPU_0_DRAM_0_Power_0, HGX_GPU_0_DRAM_0_Temp_0
-
-	// Extract GPU ID (e.g., "GPU_0")
-	parts := strings.Split(sensorID, "_")
-	if len(parts) < 3 {
+	// Use standalone parsing function to extract GPU ID, metric type, and memory ID
+	gpuID, metricType, memoryID := parseGPUSensorMetric(sensorID)
+	if gpuID == "" || metricType == "" {
+		// Parsing failed or unknown metric type - log at debug level
+		t.logger.Debug("failed to parse GPU sensor metric",
+			slog.String("sensor_id", sensorID),
+		)
 		return
 	}
-
-	gpuID := fmt.Sprintf("%s_%s", parts[1], parts[2]) // GPU_0
 
 	// Initialize GPU map if needed
 	if gpuMetrics[gpuID] == nil {
 		gpuMetrics[gpuID] = make(map[string]float64)
 	}
 
-	// Determine metric type
-	if strings.Contains(sensorID, "_DRAM_") {
-		// Memory metrics: HGX_GPU_0_DRAM_0_Power_0, HGX_GPU_0_DRAM_0_Temp_0
-		memoryID := extractMemoryIDFromSensor(sensorID) // Extract "GPU_0_DRAM_0"
-		if strings.Contains(sensorID, "_Power_") {
-			gpuMetrics[gpuID][fmt.Sprintf("memory_power_%s", memoryID)] = value
-		} else if strings.Contains(sensorID, "_Temp_") {
-			gpuMetrics[gpuID][fmt.Sprintf("memory_temp_%s", memoryID)] = value
-		}
-	} else if strings.Contains(sensorID, "_Energy_") {
-		gpuMetrics[gpuID]["energy"] = value
-	} else if strings.Contains(sensorID, "_Power_") {
-		gpuMetrics[gpuID]["power"] = value
-	} else if strings.Contains(sensorID, "_TEMP_0") {
+	// Map metric type to storage key
+	var storageKey string
+	switch metricType {
+	case "energy":
+		storageKey = "energy"
+	case "power":
+		storageKey = "power"
+	case "temp0":
 		// TEMP_0 is core temperature
-		gpuMetrics[gpuID]["temp_core"] = value
-	} else if strings.Contains(sensorID, "_TEMP_1") {
+		storageKey = "temp_core"
+	case "temp1":
 		// TEMP_1 is TLIMIT temperature headroom
-		gpuMetrics[gpuID]["temp_tlimit"] = value
+		storageKey = "temp_tlimit"
+	case "memory_power":
+		storageKey = fmt.Sprintf("memory_power_%s", memoryID)
+	case "memory_temp":
+		storageKey = fmt.Sprintf("memory_temp_%s", memoryID)
+	default:
+		t.logger.Debug("unknown GPU metric type",
+			slog.String("sensor_id", sensorID),
+			slog.String("metric_type", metricType),
+		)
+		return
 	}
+
+	gpuMetrics[gpuID][storageKey] = value
 }
 
 // extractMemoryIDFromSensor extracts memory ID from sensor ID
@@ -1778,58 +1819,66 @@ func extractMemoryIDFromSensor(sensorID string) string {
 
 // parseCPUSensorMetric parses a CPU sensor metric and stores it
 func (t *TelemetryCollector) parseCPUSensorMetric(sensorID string, value float64, cpuMetrics map[string]map[string]float64) {
-	// Pattern: ProcessorModule_0_CPU_0_Energy_0, ProcessorModule_0_CPU_0_Power_0
-	// Also: ProcessorModule_0_CPU_0_TempAvg_0, ProcessorModule_0_CPU_0_TempLimit_0
-	// Also: ProcessorModule_0_CPU_0_EnforcedEDPc_0, ProcessorModule_0_CPU_0_EnforcedEDPp_0
-	// Also: ProcessorModule_0_Vreg_0_CpuPower_0, ProcessorModule_0_Vreg_0_SocPower_0
-
-	// Extract CPU ID (e.g., "CPU_0" from ProcessorModule_0)
-	parts := strings.Split(sensorID, "_")
-	if len(parts) < 4 {
+	// Use standalone parsing function to extract CPU ID and metric type
+	cpuID, metricType := parseCPUSensorMetric(sensorID)
+	if cpuID == "" || metricType == "" {
+		// Parsing failed or unknown metric type - log at debug level
+		t.logger.Debug("failed to parse CPU sensor metric",
+			slog.String("sensor_id", sensorID),
+		)
 		return
 	}
-
-	// CPU ID is typically "CPU_0" where 0 is the processor module number
-	cpuID := fmt.Sprintf("CPU_%s", parts[1]) // ProcessorModule_0 -> CPU_0
 
 	// Initialize CPU map if needed
 	if cpuMetrics[cpuID] == nil {
 		cpuMetrics[cpuID] = make(map[string]float64)
 	}
 
-	// Determine metric type
-	if strings.Contains(sensorID, "_Energy_") {
-		cpuMetrics[cpuID]["energy"] = value
-	} else if strings.Contains(sensorID, "_CPU_0_Power_") {
-		cpuMetrics[cpuID]["power"] = value
-	} else if strings.Contains(sensorID, "_TempAvg_") {
-		cpuMetrics[cpuID]["temp_avg"] = value
-	} else if strings.Contains(sensorID, "_TempLimit_") {
-		cpuMetrics[cpuID]["temp_limit"] = value
-	} else if strings.Contains(sensorID, "_EnforcedEDPc_") {
-		cpuMetrics[cpuID]["edp_current"] = value
-	} else if strings.Contains(sensorID, "_EnforcedEDPp_") {
-		cpuMetrics[cpuID]["edp_peak"] = value
-	} else if strings.Contains(sensorID, "_Vreg_0_CpuPower_") {
-		cpuMetrics[cpuID]["vreg_cpu_power"] = value
-	} else if strings.Contains(sensorID, "_Vreg_0_SocPower_") {
-		cpuMetrics[cpuID]["vreg_soc_power"] = value
+	// Map metric type to storage key
+	// Note: Some metric types need different storage keys for backward compatibility
+	var storageKey string
+	switch metricType {
+	case "energy":
+		storageKey = "energy"
+	case "power":
+		storageKey = "power"
+	case "temp":
+		storageKey = "temp_avg"
+	case "temp_limit":
+		storageKey = "temp_limit"
+	case "edp_current":
+		storageKey = "edp_current"
+	case "edp_peak":
+		storageKey = "edp_peak"
+	case "vreg_cpu":
+		storageKey = "vreg_cpu_power"
+	case "vreg_soc":
+		storageKey = "vreg_soc_power"
+	default:
+		t.logger.Debug("unknown CPU metric type",
+			slog.String("sensor_id", sensorID),
+			slog.String("metric_type", metricType),
+		)
+		return
 	}
+
+	cpuMetrics[cpuID][storageKey] = value
 }
 
 // parseAmbientSensorMetric parses an ambient sensor metric and stores it
 func (t *TelemetryCollector) parseAmbientSensorMetric(sensorID string, value float64, ambientMetrics map[string]map[string]map[string]float64) {
-	// Pattern: HGX_ProcessorModule_0_Inlet_Temp_0, HGX_ProcessorModule_0_Inlet_Temp_1, HGX_ProcessorModule_0_Exhaust_Temp_0
-
-	// Extract location ID (e.g., "ProcessorModule_0")
-	parts := strings.Split(sensorID, "_")
-	if len(parts) < 4 {
+	// Use standalone parsing function to extract location ID, metric type, and full sensor ID
+	locationID, metricType, fullSensorID := parseAmbientSensorMetric(sensorID)
+	if locationID == "" || metricType == "" {
+		// Parsing failed or unknown metric type - log at debug level
+		t.logger.Debug("failed to parse ambient sensor metric",
+			slog.String("sensor_id", sensorID),
+		)
 		return
 	}
 
-	locationID := fmt.Sprintf("%s_%s", parts[1], parts[2]) // ProcessorModule_0
-
-	// Extract sensor-specific ID (last part: "Temp_0", "Temp_1")
+	// Extract sensor-specific ID (last part of sensor ID)
+	parts := strings.Split(fullSensorID, "_")
 	sensorSpecificID := parts[len(parts)-1] // "0" or "1"
 
 	// Initialize maps if needed
@@ -1840,12 +1889,22 @@ func (t *TelemetryCollector) parseAmbientSensorMetric(sensorID string, value flo
 		ambientMetrics[locationID][sensorSpecificID] = make(map[string]float64)
 	}
 
-	// Determine metric type
-	if strings.Contains(sensorID, "_Inlet_Temp_") {
-		ambientMetrics[locationID][sensorSpecificID]["inlet_temp"] = value
-	} else if strings.Contains(sensorID, "_Exhaust_Temp_") {
-		ambientMetrics[locationID][sensorSpecificID]["exhaust_temp"] = value
+	// Map metric type to storage key
+	var storageKey string
+	switch metricType {
+	case "inlet":
+		storageKey = "inlet_temp"
+	case "exhaust":
+		storageKey = "exhaust_temp"
+	default:
+		t.logger.Debug("unknown ambient metric type",
+			slog.String("sensor_id", sensorID),
+			slog.String("metric_type", metricType),
+		)
+		return
 	}
+
+	ambientMetrics[locationID][sensorSpecificID][storageKey] = value
 }
 
 // emitPlatformGPUMetrics emits GPU environment metrics
