@@ -42,7 +42,7 @@ func TestTelemetryCollectorIntegration(t *testing.T) {
 
 	// Count metrics collected
 	metricCount := 0
-	var cacheECCFound, pcieErrorFound, throttleFound bool
+	var cacheECCFound, pcieErrorFound, throttleFound, platformEnvFound bool
 
 	for metric := range metricsChan {
 		metricCount++
@@ -57,6 +57,11 @@ func TestTelemetryCollectorIntegration(t *testing.T) {
 		}
 		if strings.Contains(metricName, "throttle") {
 			throttleFound = true
+		}
+		// Check for platform environment metrics (GPU temp, CPU temp, ambient, etc.)
+		if strings.Contains(metricName, "gpu_temperature") || strings.Contains(metricName, "cpu_temperature") ||
+		   strings.Contains(metricName, "ambient_") || strings.Contains(metricName, "gpu_power") {
+			platformEnvFound = true
 		}
 	}
 
@@ -75,6 +80,9 @@ func TestTelemetryCollectorIntegration(t *testing.T) {
 		}
 		if !throttleFound {
 			t.Error("Expected to find throttle metrics")
+		}
+		if !platformEnvFound {
+			t.Log("Warning: Platform environment metrics not found (may not be available on this system)")
 		}
 	} else {
 		t.Log("TelemetryService not available on this system (skipping metric validation)")
@@ -243,14 +251,15 @@ func TestTelemetryMetricCount(t *testing.T) {
 
 	// Expected metric categories
 	expectedCategories := map[string]int{
-		"cache_ecc":     2,  // correctable + uncorrectable
-		"pcie":          9,  // various PCIe error types
-		"throttle":      4,  // power, thermal, hardware, software
-		"memory":        5,  // ecc lifetime (2), bandwidth, capacity_util, operating_speed
-		"reset":         8,  // conventional entry/exit, fundamental entry/exit, irot exit, pf_flr entry/exit, last_reset_type
-		"port":          23, // port metrics (speed, rx/tx bytes/frames/errors, link down counts, OEM metrics)
-		"nvidia_gpm":    22, // GPU Performance Monitoring: 11 compute + 2 aggregate media + 2 instance media + 5 network + 2 PCIe
-		"scrape_status": 1,  // collector status
+		"cache_ecc":            2,  // correctable + uncorrectable
+		"pcie":                 9,  // various PCIe error types
+		"throttle":             4,  // power, thermal, hardware, software
+		"memory":               5,  // ecc lifetime (2), bandwidth, capacity_util, operating_speed
+		"reset":                8,  // conventional entry/exit, fundamental entry/exit, irot exit, pf_flr entry/exit, last_reset_type
+		"port":                 23, // port metrics (speed, rx/tx bytes/frames/errors, link down counts, OEM metrics)
+		"nvidia_gpm":           22, // GPU Performance Monitoring: 11 compute + 2 aggregate media + 2 instance media + 5 network + 2 PCIe
+		"platform_environment": 18, // Platform environment metrics: 3 backward-compat + 4 GPU + 8 CPU + 2 ambient + 1 BMC
+		"scrape_status":        1,  // collector status
 	}
 
 	totalExpected := 0
@@ -292,7 +301,19 @@ func TestTelemetryMetricNames(t *testing.T) {
 	// Verify all metric names follow the expected pattern
 	expectedPrefix := "telemetry_"
 
+	// Backward-compatible metrics that don't use telemetry_ prefix
+	backwardCompatMetrics := map[string]bool{
+		"gpu_memory_power_watts":         true,
+		"gpu_temperature_tlimit_celsius": true,
+		"chassis_gpu_total_power_watts":  true,
+	}
+
 	for name := range telemetryMetrics {
+		// Skip backward-compatible metrics
+		if backwardCompatMetrics[name] {
+			continue
+		}
+
 		if !hasPrefix(name, expectedPrefix) {
 			t.Errorf("Metric name %q does not start with %q", name, expectedPrefix)
 		}
@@ -411,3 +432,241 @@ func TestParsePortMetricProperty(t *testing.T) {
 		})
 	}
 }
+
+// TestParseSensorPath validates sensor path parsing for platform environment metrics
+func TestParseSensorPath(t *testing.T) {
+	tests := []struct {
+		name            string
+		sensorPath      string
+		expectedChassis string
+		expectedSensor  string
+	}{
+		{
+			name:            "gpu_temp_sensor",
+			sensorPath:      "/redfish/v1/Chassis/HGX_Baseboard_0/Sensors/HGX_GPU_0_TEMP_0",
+			expectedChassis: "HGX_Baseboard_0",
+			expectedSensor:  "HGX_GPU_0_TEMP_0",
+		},
+		{
+			name:            "gpu_power_sensor",
+			sensorPath:      "/redfish/v1/Chassis/HGX_Baseboard_0/Sensors/HGX_GPU_1_Power_0",
+			expectedChassis: "HGX_Baseboard_0",
+			expectedSensor:  "HGX_GPU_1_Power_0",
+		},
+		{
+			name:            "cpu_temp_sensor",
+			sensorPath:      "/redfish/v1/Chassis/HGX_Baseboard_0/Sensors/ProcessorModule_0_CPU_0_Temp_0",
+			expectedChassis: "HGX_Baseboard_0",
+			expectedSensor:  "ProcessorModule_0_CPU_0_Temp_0",
+		},
+		{
+			name:            "ambient_temp_sensor",
+			sensorPath:      "/redfish/v1/Chassis/HGX_Baseboard_0/Sensors/HGX_ProcessorModule_0_Inlet_Temp_0",
+			expectedChassis: "HGX_Baseboard_0",
+			expectedSensor:  "HGX_ProcessorModule_0_Inlet_Temp_0",
+		},
+		{
+			name:            "gpu_memory_power",
+			sensorPath:      "/redfish/v1/Chassis/HGX_Baseboard_0/Sensors/HGX_GPU_0_DRAM_0_Power_0",
+			expectedChassis: "HGX_Baseboard_0",
+			expectedSensor:  "HGX_GPU_0_DRAM_0_Power_0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			chassisID, sensorID := parseSensorPath(tt.sensorPath)
+			if chassisID != tt.expectedChassis {
+				t.Errorf("Expected chassis ID %q, got %q", tt.expectedChassis, chassisID)
+			}
+			if sensorID != tt.expectedSensor {
+				t.Errorf("Expected sensor ID %q, got %q", tt.expectedSensor, sensorID)
+			}
+		})
+	}
+}
+
+// TestParseGPUSensorMetric validates GPU sensor metric parsing
+func TestParseGPUSensorMetric(t *testing.T) {
+	tests := []struct {
+		name           string
+		sensorID       string
+		expectedGPU    string
+		expectedType   string
+		expectedMemory string
+	}{
+		{
+			name:         "gpu_power",
+			sensorID:     "HGX_GPU_0_Power_0",
+			expectedGPU:  "GPU_0",
+			expectedType: "power",
+		},
+		{
+			name:         "gpu_energy",
+			sensorID:     "HGX_GPU_3_Energy_0",
+			expectedGPU:  "GPU_3",
+			expectedType: "energy",
+		},
+		{
+			name:         "gpu_temp_0",
+			sensorID:     "HGX_GPU_1_TEMP_0",
+			expectedGPU:  "GPU_1",
+			expectedType: "temp0",
+		},
+		{
+			name:         "gpu_temp_1",
+			sensorID:     "HGX_GPU_2_TEMP_1",
+			expectedGPU:  "GPU_2",
+			expectedType: "temp1",
+		},
+		{
+			name:           "gpu_memory_power",
+			sensorID:       "HGX_GPU_0_DRAM_0_Power_0",
+			expectedGPU:    "GPU_0",
+			expectedType:   "memory_power",
+			expectedMemory: "GPU_0_DRAM_0",
+		},
+		{
+			name:           "gpu_memory_temp",
+			sensorID:       "HGX_GPU_5_DRAM_1_Temp_0",
+			expectedGPU:    "GPU_5",
+			expectedType:   "memory_temp",
+			expectedMemory: "GPU_5_DRAM_1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gpuID, metricType, memoryID := parseGPUSensorMetric(tt.sensorID)
+			if gpuID != tt.expectedGPU {
+				t.Errorf("Expected GPU ID %q, got %q", tt.expectedGPU, gpuID)
+			}
+			if metricType != tt.expectedType {
+				t.Errorf("Expected metric type %q, got %q", tt.expectedType, metricType)
+			}
+			if memoryID != tt.expectedMemory {
+				t.Errorf("Expected memory ID %q, got %q", tt.expectedMemory, memoryID)
+			}
+		})
+	}
+}
+
+// TestParseCPUSensorMetric validates CPU sensor metric parsing
+func TestParseCPUSensorMetric(t *testing.T) {
+	tests := []struct {
+		name         string
+		sensorID     string
+		expectedCPU  string
+		expectedType string
+	}{
+		{
+			name:         "cpu_power",
+			sensorID:     "ProcessorModule_0_CPU_0_Power_0",
+			expectedCPU:  "CPU_0",
+			expectedType: "power",
+		},
+		{
+			name:         "cpu_energy",
+			sensorID:     "ProcessorModule_1_CPU_0_Energy_0",
+			expectedCPU:  "CPU_1",
+			expectedType: "energy",
+		},
+		{
+			name:         "cpu_temp",
+			sensorID:     "ProcessorModule_0_CPU_0_Temp_0",
+			expectedCPU:  "CPU_0",
+			expectedType: "temp",
+		},
+		{
+			name:         "cpu_temp_limit",
+			sensorID:     "ProcessorModule_0_CPU_0_TempLimit_0",
+			expectedCPU:  "CPU_0",
+			expectedType: "temp_limit",
+		},
+		{
+			name:         "cpu_edp_current",
+			sensorID:     "ProcessorModule_0_CPU_0_EDP_Current_Limit_0",
+			expectedCPU:  "CPU_0",
+			expectedType: "edp_current",
+		},
+		{
+			name:         "cpu_edp_peak",
+			sensorID:     "ProcessorModule_0_CPU_0_EDP_Peak_Limit_0",
+			expectedCPU:  "CPU_0",
+			expectedType: "edp_peak",
+		},
+		{
+			name:         "cpu_vreg_cpu",
+			sensorID:     "ProcessorModule_0_CPU_0_VREG_CPU_Power_0",
+			expectedCPU:  "CPU_0",
+			expectedType: "vreg_cpu",
+		},
+		{
+			name:         "cpu_vreg_soc",
+			sensorID:     "ProcessorModule_0_CPU_0_VREG_SOC_Power_0",
+			expectedCPU:  "CPU_0",
+			expectedType: "vreg_soc",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cpuID, metricType := parseCPUSensorMetric(tt.sensorID)
+			if cpuID != tt.expectedCPU {
+				t.Errorf("Expected CPU ID %q, got %q", tt.expectedCPU, cpuID)
+			}
+			if metricType != tt.expectedType {
+				t.Errorf("Expected metric type %q, got %q", tt.expectedType, metricType)
+			}
+		})
+	}
+}
+
+// TestParseAmbientSensorMetric validates ambient sensor metric parsing
+func TestParseAmbientSensorMetric(t *testing.T) {
+	tests := []struct {
+		name             string
+		sensorID         string
+		expectedLocation string
+		expectedType     string
+		expectedSensorID string
+	}{
+		{
+			name:             "inlet_temp",
+			sensorID:         "HGX_ProcessorModule_0_Inlet_Temp_0",
+			expectedLocation: "ProcessorModule_0",
+			expectedType:     "inlet",
+			expectedSensorID: "HGX_ProcessorModule_0_Inlet_Temp_0",
+		},
+		{
+			name:             "exhaust_temp",
+			sensorID:         "HGX_ProcessorModule_1_Exhaust_Temp_0",
+			expectedLocation: "ProcessorModule_1",
+			expectedType:     "exhaust",
+			expectedSensorID: "HGX_ProcessorModule_1_Exhaust_Temp_0",
+		},
+		{
+			name:             "inlet_temp_variant",
+			sensorID:         "HGX_ProcessorModule_0_Inlet_Temp_1",
+			expectedLocation: "ProcessorModule_0",
+			expectedType:     "inlet",
+			expectedSensorID: "HGX_ProcessorModule_0_Inlet_Temp_1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			locationID, metricType, sensorID := parseAmbientSensorMetric(tt.sensorID)
+			if locationID != tt.expectedLocation {
+				t.Errorf("Expected location ID %q, got %q", tt.expectedLocation, locationID)
+			}
+			if metricType != tt.expectedType {
+				t.Errorf("Expected metric type %q, got %q", tt.expectedType, metricType)
+			}
+			if sensorID != tt.expectedSensorID {
+				t.Errorf("Expected sensor ID %q, got %q", tt.expectedSensorID, sensorID)
+			}
+		})
+	}
+}
+
