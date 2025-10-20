@@ -117,13 +117,8 @@ func createGPUMetricMap() map[string]Metric {
 	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_symbol_errors", "NVLink symbol error count", gpuPortLabels)
 	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_bit_error_rate", "NVLink bit error rate", gpuPortLabels)
 
-	// GPU Temperature sensor metrics
-	addToMetricMap(gpuMetrics, GPUSubsystem, "temperature_tlimit_celsius", "GPU TLIMIT temperature headroom in Celsius", gpuBaseLabels)
-
-	// GPU Memory Power metrics
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_power_watts", "GPU memory (DRAM) power consumption in watts", gpuMemoryLabels)
-
 	// GPU Context Utilization metrics
+	// Note: GPU temperature and memory power metrics are now collected via TelemetryService (HGX_PlatformEnvironmentMetrics_0)
 	addToMetricMap(gpuMetrics, GPUSubsystem, "context_utilization_seconds_total", "Accumulated GPU context utilization duration in seconds", gpuBaseLabels)
 
 	return gpuMetrics
@@ -194,13 +189,8 @@ func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 	}
 
-	// Collect GPU temperature sensors using gathered GPU info
-	g.collectGPUTemperatureSensors(ch, allSystemGPUs)
-
-	// Collect GPU memory power sensors using gathered GPU info
-	g.collectGPUMemoryPowerSensors(ch, allSystemGPUs)
-
 	// Collect GPU context utilization metrics
+	// Note: GPU temperature and memory power are now collected via TelemetryService (HGX_PlatformEnvironmentMetrics_0)
 	g.collectGPUContextUtilization(ch, allSystemGPUs)
 
 	g.collectorScrapeStatus.WithLabelValues("gpu").Set(float64(1))
@@ -572,150 +562,6 @@ func (g *GPUCollector) collectNVLinkPorts(ch chan<- prometheus.Metric, systemNam
 			}
 		}
 	}
-}
-
-// collectGPUTemperatureSensors collects GPU temperature sensor readings from Chassis
-func (g *GPUCollector) collectGPUTemperatureSensors(ch chan<- prometheus.Metric, allSystemGPUs []systemGPUInfo) {
-	// Use a wait group to collect temperatures concurrently
-	wg := &sync.WaitGroup{}
-	// Limit concurrent requests to avoid overwhelming the server
-	sem := make(chan struct{}, 5)
-
-	for _, sysInfo := range allSystemGPUs {
-		for _, gpu := range sysInfo.gpus {
-			wg.Add(1)
-			go func(gpuID, systemName, systemID string) {
-				defer wg.Done()
-				sem <- struct{}{}        // Acquire semaphore
-				defer func() { <-sem }() // Release semaphore
-
-				g.collectSingleGPUTemperature(ch, gpuID, systemName, systemID)
-			}(gpu.ID, sysInfo.systemName, sysInfo.systemID)
-		}
-	}
-
-	wg.Wait()
-}
-
-// collectSingleGPUTemperature collects temperature for a single GPU
-func (g *GPUCollector) collectSingleGPUTemperature(ch chan<- prometheus.Metric, gpuID, systemName, systemID string) {
-	// Construct the chassis sensor path for this GPU
-	// Pattern: /redfish/v1/Chassis/HGX_{gpuID}/Sensors/HGX_{gpuID}_TEMP_1
-	chassisID := fmt.Sprintf("HGX_%s", gpuID)
-	sensorPath := fmt.Sprintf("/redfish/v1/Chassis/%s/Sensors/%s_TEMP_1", chassisID, chassisID)
-
-	// Use gofish to get the sensor
-	sensor, err := redfish.GetSensor(g.redfishClient, sensorPath)
-	if err != nil {
-		g.logger.Debug("failed to fetch GPU temperature sensor",
-			slog.String("gpu_id", gpuID),
-			slog.String("path", sensorPath),
-			slog.Any("error", err),
-		)
-		return
-	}
-
-	// Verify it's a temperature sensor (defensive check)
-	if sensor.ReadingType != redfish.TemperatureReadingType {
-		g.logger.Warn("sensor is not a temperature type",
-			slog.String("gpu_id", gpuID),
-			slog.String("actual_type", string(sensor.ReadingType)),
-		)
-		return
-	}
-
-	// Log additional sensor info if in debug mode
-	g.logger.Debug("collected GPU temperature sensor",
-		slog.String("gpu_id", gpuID),
-		slog.Float64("reading", float64(sensor.Reading)),
-		slog.String("reading_basis", string(sensor.ReadingBasis)),
-		slog.String("status", string(sensor.Status.Health)),
-	)
-
-	// Emit the temperature metric
-	labels := []string{systemName, systemID, gpuID}
-
-	ch <- prometheus.MustNewConstMetric(
-		g.metrics["gpu_temperature_tlimit_celsius"].desc,
-		prometheus.GaugeValue,
-		float64(sensor.Reading),
-		labels...,
-	)
-}
-
-// collectGPUMemoryPowerSensors collects GPU memory power consumption from Chassis sensors
-func (g *GPUCollector) collectGPUMemoryPowerSensors(ch chan<- prometheus.Metric, allSystemGPUs []systemGPUInfo) {
-	wg := &sync.WaitGroup{}
-	// Limit concurrent requests to avoid overwhelming the server
-	sem := make(chan struct{}, 5)
-
-	for _, sysInfo := range allSystemGPUs {
-		for _, gpu := range sysInfo.gpus {
-			// Assuming each GPU has DRAM_0, we can extend this if there are multiple DRAMs
-			// Pattern: HGX_GPU_{gpu_id}_DRAM_0_Power_0
-			wg.Add(1)
-			go func(gpuID, systemName, systemID string) {
-				defer wg.Done()
-				sem <- struct{}{}        // Acquire semaphore
-				defer func() { <-sem }() // Release semaphore
-
-				// For now, assume DRAM_0. Could be extended to discover all DRAMs
-				memoryID := fmt.Sprintf("%s_DRAM_0", gpuID)
-				g.collectSingleMemoryPower(ch, gpuID, memoryID, systemName, systemID)
-			}(gpu.ID, sysInfo.systemName, sysInfo.systemID)
-		}
-	}
-
-	wg.Wait()
-}
-
-// collectSingleMemoryPower collects power for a single GPU memory module
-func (g *GPUCollector) collectSingleMemoryPower(ch chan<- prometheus.Metric, gpuID, memoryID, systemName, systemID string) {
-	// Construct the chassis sensor path for this GPU memory power
-	// Pattern: /redfish/v1/Chassis/HGX_{gpuID}/Sensors/HGX_{memoryID}_Power_0
-	chassisID := fmt.Sprintf("HGX_%s", gpuID)
-	sensorPath := fmt.Sprintf("/redfish/v1/Chassis/%s/Sensors/HGX_%s_Power_0", chassisID, memoryID)
-
-	// Use gofish to get the sensor
-	sensor, err := redfish.GetSensor(g.redfishClient, sensorPath)
-	if err != nil {
-		g.logger.Debug("failed to fetch GPU memory power sensor",
-			slog.String("gpu_id", gpuID),
-			slog.String("memory_id", memoryID),
-			slog.String("path", sensorPath),
-			slog.Any("error", err),
-		)
-		return
-	}
-
-	// Verify it's a power sensor (defensive check)
-	if sensor.ReadingType != redfish.PowerReadingType {
-		g.logger.Warn("sensor is not a power type",
-			slog.String("gpu_id", gpuID),
-			slog.String("memory_id", memoryID),
-			slog.String("actual_type", string(sensor.ReadingType)),
-		)
-		return
-	}
-
-	// Log additional sensor info if in debug mode
-	g.logger.Debug("collected GPU memory power sensor",
-		slog.String("gpu_id", gpuID),
-		slog.String("memory_id", memoryID),
-		slog.Float64("reading", float64(sensor.Reading)),
-		slog.String("units", string(sensor.ReadingUnits)),
-		slog.String("status", string(sensor.Status.Health)),
-	)
-
-	// Emit the power metric
-	labels := []string{systemName, systemID, gpuID, memoryID}
-
-	ch <- prometheus.MustNewConstMetric(
-		g.metrics["gpu_memory_power_watts"].desc,
-		prometheus.GaugeValue,
-		float64(sensor.Reading),
-		labels...,
-	)
 }
 
 // collectGPUContextUtilization collects accumulated GPU context utilization duration from ProcessorMetrics

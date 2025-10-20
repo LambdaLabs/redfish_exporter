@@ -146,7 +146,9 @@ func TestParseLeakDetector(t *testing.T) {
 }
 
 // TestCollectTotalGPUPower tests the collection of total GPU power metric
+// Note: This metric is now collected via TelemetryService (HGX_PlatformEnvironmentMetrics_0)
 func TestCollectTotalGPUPower(t *testing.T) {
+	t.Skip("chassis_gpu_total_power_watts is now collected via TelemetryCollector from HGX_PlatformEnvironmentMetrics_0")
 	server := newTestRedfishServer(t)
 
 	// Add chassis collection
@@ -246,7 +248,9 @@ func TestCollectTotalGPUPower(t *testing.T) {
 
 // TestCollectTotalGPUPowerMultipleChassis tests total GPU power collection with multiple chassis
 // where only some have the control endpoint
+// Note: This metric is now collected via TelemetryService (HGX_PlatformEnvironmentMetrics_0)
 func TestCollectTotalGPUPowerMultipleChassis(t *testing.T) {
+	t.Skip("chassis_gpu_total_power_watts is now collected via TelemetryCollector from HGX_PlatformEnvironmentMetrics_0")
 	server := newTestRedfishServer(t)
 
 	// Add chassis collection with multiple chassis
@@ -403,7 +407,9 @@ func TestCollectTotalGPUPowerMultipleChassis(t *testing.T) {
 }
 
 // TestCollectTotalGPUPowerErrorHandling tests error handling for GPU power collection
+// Note: This metric is now collected via TelemetryService (HGX_PlatformEnvironmentMetrics_0)
 func TestCollectTotalGPUPowerErrorHandling(t *testing.T) {
+	t.Skip("chassis_gpu_total_power_watts is now collected via TelemetryCollector from HGX_PlatformEnvironmentMetrics_0")
 	testCases := []struct {
 		name              string
 		controlResponse   map[string]interface{}
