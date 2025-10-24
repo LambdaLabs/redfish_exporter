@@ -727,7 +727,9 @@ func TestTelemetryCollector_CollectPlatformGPUMetrics(t *testing.T) {
 				if m.Gauge != nil {
 					require.False(t, math.IsNaN(*m.GetGauge().Value))
 				}
-
+				if strings.Contains(metric.Desc().String(), "stale_reports_last") {
+					require.GreaterOrEqual(t, m.GetGauge().GetValue(), 1.0)
+				}
 			}
 		})
 	}

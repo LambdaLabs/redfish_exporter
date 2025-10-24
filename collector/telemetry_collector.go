@@ -222,6 +222,9 @@ func createTelemetryMetricMap() map[string]Metric {
 	// BMC metrics
 	addToMetricMap(metrics, TelemetrySubsystem, "bmc_temperature_celsius", "BMC temperature in Celsius", telemetryBMCLabels)
 
+	// 'Meta' metrics about the collector/collection process
+	addToMetricMap(metrics, TelemetrySubsystem, "collection_stale_reports_last", "Quantity of stale reports discovered on the last collection loop", []string{})
+
 	return metrics
 }
 
@@ -1567,8 +1570,10 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 	var chassisID string
 
 	staleMarker := []byte(`"MetricValueStale": true`)
+	totalStaleReports := 0.0
 	for _, metricValue := range report.MetricValues {
 		if bytes.Contains(metricValue.OEM, staleMarker) || metricValue.MetricValue == "nan" {
+			totalStaleReports += 1.0
 			continue
 		}
 
@@ -1653,6 +1658,12 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 			"chassis", chassisID,
 		)
 	}
+
+	ch <- prometheus.MustNewConstMetric(
+		t.metrics["telemetry_collection_stale_reports_last"].desc,
+		prometheus.GaugeValue,
+		totalStaleReports,
+	)
 }
 
 // parseSensorPath extracts chassis ID and sensor ID from a Redfish sensor path.
