@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -1565,7 +1566,12 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 	var hasTotalGPUPower bool
 	var chassisID string
 
+	staleMarker := []byte(`"MetricValueStale": true`)
 	for _, metricValue := range report.MetricValues {
+		if bytes.Contains(metricValue.OEM, staleMarker) || metricValue.MetricValue == "nan" {
+			continue
+		}
+
 		sensorPath := metricValue.MetricProperty
 		value, err := parseMetricValue(metricValue.MetricValue)
 		if err != nil {
