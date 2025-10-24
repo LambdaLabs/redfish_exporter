@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -18,46 +19,46 @@ const TelemetrySubsystem = "telemetry"
 // Sensor ID pattern constants for platform environment metrics parsing
 const (
 	// Sensor ID prefixes
-	sensorPrefixHGXGPU              = "HGX_GPU_"
-	sensorPrefixHGXChassis          = "HGX_Chassis_"
-	sensorPrefixProcessorModule     = "ProcessorModule_"
-	sensorPrefixHGXProcessorModule  = "HGX_ProcessorModule_"
-	sensorPrefixHGXBMC              = "HGX_BMC_"
-	sensorPrefixHGX                 = "HGX_"
+	sensorPrefixHGXGPU             = "HGX_GPU_"
+	sensorPrefixHGXChassis         = "HGX_Chassis_"
+	sensorPrefixProcessorModule    = "ProcessorModule_"
+	sensorPrefixHGXProcessorModule = "HGX_ProcessorModule_"
+	sensorPrefixHGXBMC             = "HGX_BMC_"
+	sensorPrefixHGX                = "HGX_"
 
 	// Sensor ID infixes - metric types
-	sensorInfixDRAM                 = "_DRAM_"
-	sensorInfixEnergy               = "_Energy_"
-	sensorInfixPower                = "_Power_"
-	sensorInfixTemp                 = "_Temp_"
-	sensorInfixCPU                  = "_CPU_"
-	sensorInfixVREGCPU              = "_VREG_CPU_Power_"
-	sensorInfixVREGSOC              = "_VREG_SOC_Power_"
-	sensorInfixVreg0CpuPower        = "_Vreg_0_CpuPower_"
-	sensorInfixVreg0SocPower        = "_Vreg_0_SocPower_"
-	sensorInfixTempAvg              = "_TempAvg_"
-	sensorInfixTempLimit            = "_TempLimit_"
-	sensorInfixEDPCurrentLimit      = "_EDP_Current_Limit_"
-	sensorInfixEDPPeakLimit         = "_EDP_Peak_Limit_"
-	sensorInfixEnforcedEDPc         = "_EnforcedEDPc_"
-	sensorInfixEnforcedEDPp         = "_EnforcedEDPp_"
-	sensorInfixInletTemp            = "_Inlet_Temp_"
-	sensorInfixExhaustTemp          = "_Exhaust_Temp_"
-	sensorInfixTEMP0                = "_TEMP_0"
-	sensorInfixTEMP1                = "_TEMP_1"
-	sensorInfixTemp0                = "_Temp_0"
-	sensorInfixTotalGPUPower        = "TotalGPU_Power"
+	sensorInfixDRAM            = "_DRAM_"
+	sensorInfixEnergy          = "_Energy_"
+	sensorInfixPower           = "_Power_"
+	sensorInfixTemp            = "_Temp_"
+	sensorInfixCPU             = "_CPU_"
+	sensorInfixVREGCPU         = "_VREG_CPU_Power_"
+	sensorInfixVREGSOC         = "_VREG_SOC_Power_"
+	sensorInfixVreg0CpuPower   = "_Vreg_0_CpuPower_"
+	sensorInfixVreg0SocPower   = "_Vreg_0_SocPower_"
+	sensorInfixTempAvg         = "_TempAvg_"
+	sensorInfixTempLimit       = "_TempLimit_"
+	sensorInfixEDPCurrentLimit = "_EDP_Current_Limit_"
+	sensorInfixEDPPeakLimit    = "_EDP_Peak_Limit_"
+	sensorInfixEnforcedEDPc    = "_EnforcedEDPc_"
+	sensorInfixEnforcedEDPp    = "_EnforcedEDPp_"
+	sensorInfixInletTemp       = "_Inlet_Temp_"
+	sensorInfixExhaustTemp     = "_Exhaust_Temp_"
+	sensorInfixTEMP0           = "_TEMP_0"
+	sensorInfixTEMP1           = "_TEMP_1"
+	sensorInfixTemp0           = "_Temp_0"
+	sensorInfixTotalGPUPower   = "TotalGPU_Power"
 
 	// Report ID patterns
-	reportIDProcessorGPMMetrics     = "HGX_ProcessorGPMMetrics"
-	reportIDProcessorMetrics        = "HGX_ProcessorMetrics"
-	reportIDProcessorResetMetrics   = "HGX_ProcessorResetMetrics"
-	reportIDProcessorPortMetrics    = "HGX_ProcessorPortMetrics"
-	reportIDMemoryMetrics           = "HGX_MemoryMetrics"
-	reportIDPlatformEnvMetrics      = "HGX_PlatformEnvironmentMetrics"
+	reportIDProcessorGPMMetrics   = "HGX_ProcessorGPMMetrics"
+	reportIDProcessorMetrics      = "HGX_ProcessorMetrics"
+	reportIDProcessorResetMetrics = "HGX_ProcessorResetMetrics"
+	reportIDProcessorPortMetrics  = "HGX_ProcessorPortMetrics"
+	reportIDMemoryMetrics         = "HGX_MemoryMetrics"
+	reportIDPlatformEnvMetrics    = "HGX_PlatformEnvironmentMetrics"
 
 	// ISO8601 duration prefix
-	iso8601DurationPrefix           = "P"
+	iso8601DurationPrefix = "P"
 )
 
 var (
@@ -220,6 +221,9 @@ func createTelemetryMetricMap() map[string]Metric {
 
 	// BMC metrics
 	addToMetricMap(metrics, TelemetrySubsystem, "bmc_temperature_celsius", "BMC temperature in Celsius", telemetryBMCLabels)
+
+	// 'Meta' metrics about the collector/collection process
+	addToMetricMap(metrics, TelemetrySubsystem, "collection_stale_reports_last", "Quantity of stale reports discovered on the last collection loop", []string{})
 
 	return metrics
 }
@@ -1565,7 +1569,14 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 	var hasTotalGPUPower bool
 	var chassisID string
 
+	staleMarker := []byte(`"MetricValueStale": true`)
+	totalStaleReports := 0.0
 	for _, metricValue := range report.MetricValues {
+		if bytes.Contains(metricValue.OEM, staleMarker) || metricValue.MetricValue == "nan" {
+			totalStaleReports += 1.0
+			continue
+		}
+
 		sensorPath := metricValue.MetricProperty
 		value, err := parseMetricValue(metricValue.MetricValue)
 		if err != nil {
@@ -1647,6 +1658,12 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 			"chassis", chassisID,
 		)
 	}
+
+	ch <- prometheus.MustNewConstMetric(
+		t.metrics["telemetry_collection_stale_reports_last"].desc,
+		prometheus.GaugeValue,
+		totalStaleReports,
+	)
 }
 
 // parseSensorPath extracts chassis ID and sensor ID from a Redfish sensor path.
