@@ -60,7 +60,7 @@ func TestTelemetryCollectorIntegration(t *testing.T) {
 		}
 		// Check for platform environment metrics (GPU temp, CPU temp, ambient, etc.)
 		if strings.Contains(metricName, "gpu_temperature") || strings.Contains(metricName, "cpu_temperature") ||
-		   strings.Contains(metricName, "ambient_") || strings.Contains(metricName, "gpu_power") {
+			strings.Contains(metricName, "ambient_") || strings.Contains(metricName, "gpu_power") {
 			platformEnvFound = true
 		}
 	}
