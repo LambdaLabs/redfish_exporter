@@ -3,11 +3,18 @@ package collector
 import (
 	"io"
 	"log/slog"
+	"math"
+	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stmcginnis/gofish"
+	"github.com/stmcginnis/gofish/common"
+	"github.com/stmcginnis/gofish/redfish"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTelemetryCollectorIntegration(t *testing.T) {
@@ -670,3 +677,58 @@ func TestParseAmbientSensorMetric(t *testing.T) {
 	}
 }
 
+func TestTelemetryCollector_CollectPlatformGPUMetrics(t *testing.T) {
+	tT := map[string]struct {
+		report    *redfish.MetricReport
+		systemMap map[string]string
+	}{
+		"stale reports should not be emitted": {
+			report: &redfish.MetricReport{
+				Entity: common.Entity{
+					ID: "HGX_PlatformEnvironmentMetrics_0",
+				},
+				MetricValues: []redfish.MetricValue{
+					{
+						MetricProperty: "/redfish/v1/Chassis/HGX_GPU_1/Sensors/HGX_Chassis_0_TotalGPU_Power_0",
+						MetricValue:    "100",
+						OEM:            []byte(`{"Nvidia": {"@odata.type": "#NvidiaMetricReport.v1_0_0.NvidiaMetricReport","MetricValueStale": false}},`),
+					},
+					{
+						MetricProperty: "/redfish/v1/Chassis/HGX_GPU_0/Sensors/HGX_GPU_Energy_0",
+						MetricValue:    "nan",
+						OEM:            []byte(`"Oem": {"Nvidia": {"@odata.type": "#NvidiaMetricReport.v1_0_0.NvidiaMetricReport","MetricValueStale": true}},`),
+					},
+				},
+			},
+		},
+	}
+
+	for tName, test := range tT {
+		t.Run(tName, func(t *testing.T) {
+			logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			tc := &TelemetryCollector{
+				logger:  logger,
+				metrics: createTelemetryMetricMap(),
+			}
+			testWG := &sync.WaitGroup{}
+			testWG.Add(len(test.report.MetricValues))
+			outCh := make(chan prometheus.Metric, len(test.report.MetricValues))
+			go func() {
+				tc.collectPlatformEnvironmentMetrics(outCh, test.report, map[string]string{"GPU_Energy": "HGX_GPU_0"}, testWG)
+				close(outCh)
+			}()
+
+			for metric := range outCh {
+				m := &dto.Metric{}
+				require.NoError(t, metric.Write(m))
+				if m.Counter != nil {
+					require.False(t, math.IsNaN(*m.GetCounter().Value))
+				}
+				if m.Gauge != nil {
+					require.False(t, math.IsNaN(*m.GetGauge().Value))
+				}
+
+			}
+		})
+	}
+}
