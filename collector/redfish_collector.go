@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"log/slog"
-
 	"github.com/prometheus/client_golang/prometheus"
 	gofish "github.com/stmcginnis/gofish"
 	gofishcommon "github.com/stmcginnis/gofish/common"
@@ -28,41 +26,24 @@ var (
 	)
 )
 
-// RedfishCollector collects redfish metrics. It implements prometheus.Collector.
+// RedfishCollector is an aggregation of various other prometheus.Collector.
+// It implements prometheus.Collector, and at Describe or Collect time will iterate all of
+// its own collectors to yield data.
 type RedfishCollector struct {
 	redfishClient *gofish.APIClient
-	collectors    map[string]prometheus.Collector
+	collectors    []prometheus.Collector
 	redfishUp     prometheus.Gauge
 }
 
-// NewRedfishCollector return RedfishCollector
-func NewRedfishCollector(host string, username string, password string) *RedfishCollector {
-	var collectors map[string]prometheus.Collector
-
-	targetLogger := slog.Default().With(slog.String("target", host))
-
+// NewRedfishCollector returns a *RedfishCollector or an error.
+func NewRedfishCollector(host string, username, password string) (*RedfishCollector, error) {
 	redfishClient, err := newRedfishClient(host, username, password)
 	if err != nil {
-		slog.Error("error creating redfish client", slog.Any("error", err))
-	} else {
-		chassisCollector := NewChassisCollector(redfishClient, targetLogger)
-		systemCollector := NewSystemCollector(redfishClient, targetLogger)
-		managerCollector := NewManagerCollector(redfishClient, targetLogger)
-		telemetryCollector := NewTelemetryCollector(redfishClient, targetLogger)
-		gpuCollector := NewGPUCollector(redfishClient, targetLogger)
-
-		collectors = map[string]prometheus.Collector{
-			"chassis":   chassisCollector,
-			"system":    systemCollector,
-			"manager":   managerCollector,
-			"gpu":       gpuCollector,
-			"telemetry": telemetryCollector,
-		}
+		return nil, err
 	}
 
 	return &RedfishCollector{
 		redfishClient: redfishClient,
-		collectors:    collectors,
 		redfishUp: prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Namespace: namespace,
@@ -71,7 +52,16 @@ func NewRedfishCollector(host string, username string, password string) *Redfish
 				Help:      "redfish up",
 			},
 		),
-	}
+	}, nil
+}
+
+// WithCollectors sets a slice of prometheus.Collector which this aggregated RedfishCollector should use.
+func (r *RedfishCollector) WithCollectors(c []prometheus.Collector) {
+	r.collectors = c
+}
+
+func (r *RedfishCollector) Client() *gofish.APIClient {
+	return r.redfishClient
 }
 
 // Describe implements prometheus.Collector.
@@ -84,7 +74,6 @@ func (r *RedfishCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect implements prometheus.Collector.
 func (r *RedfishCollector) Collect(ch chan<- prometheus.Metric) {
-
 	scrapeTime := time.Now()
 	if r.redfishClient != nil {
 		defer r.redfishClient.Logout()
