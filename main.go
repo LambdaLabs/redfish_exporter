@@ -12,15 +12,13 @@ import (
 	"log/slog"
 
 	"github.com/LambdaLabs/redfish_exporter/collector"
-	kitlog "github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 	"github.com/prometheus/exporter-toolkit/web"
 )
 
 var (
-	webConfig     = flag.String("web.config", "", "Path to web configuration file.")
+	webConfig     = flag.String("web.config-file", "", "Path to web configuration file.")
 	configFile    = flag.String("config.file", "config.yml", "Path to configuration file.")
 	listenAddress = flag.String(
 		"web.listen-address",
@@ -130,8 +128,6 @@ func main() {
 	slog.Info("Starting redfish_exporter")
 	flag.Parse()
 
-	kitlogger := kitlog.NewLogfmtLogger(os.Stderr)
-
 	// load config  first time
 	if err := config.ReloadConfig(*configFile); err != nil {
 		slog.Error("Error parsing config file", slog.Any("error", err))
@@ -195,9 +191,13 @@ func main() {
             </html>`))
 	})
 
+	exporterToolkitConf := web.FlagConfig{
+		WebListenAddresses: &([]string{*listenAddress}),
+		WebConfigFile:      webConfig,
+	}
 	slog.Info("Exporter started", slog.String("listenAddress", *listenAddress))
-	srv := &http.Server{Addr: *listenAddress} //nolint:gosec // TODO: Add ReadHeaderTimeout after determining appropriate value
-	err := web.ListenAndServe(srv, *webConfig, kitlogger)
+	srv := &http.Server{} //nolint:gosec // TODO: Add ReadHeaderTimeout after determining appropriate value
+	err := web.ListenAndServe(srv, &exporterToolkitConf, logger)
 	if err != nil {
 		log.Fatal(err)
 	}
