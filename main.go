@@ -55,8 +55,10 @@ func reloadHandler() http.HandlerFunc {
 	}
 }
 
-// define new http handleer
-func metricsHandler() http.HandlerFunc {
+// metricsHandler provides the client interface for the redfish_exporter.
+// Clients (like Prometheus) MUST provide a target (FQDN or IP)
+// and SHOULD provide a 'module' param.
+func metricsHandler(logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		registry := prometheus.NewRegistry()
 		target := r.URL.Query().Get("target")
@@ -65,7 +67,7 @@ func metricsHandler() http.HandlerFunc {
 			return
 		}
 
-		slog.Info("Scraping target host", slog.String("target", target))
+		logger.Debug("Scraping target host", slog.String("target", target))
 
 		var (
 			hostConfig *HostConfig
@@ -79,7 +81,7 @@ func metricsHandler() http.HandlerFunc {
 		if ok && len(group[0]) >= 1 {
 			// Trying to get hostConfig from group.
 			if hostConfig, err = config.HostConfigForGroup(group[0]); err != nil {
-				slog.Error("error getting credentials", slog.Any("error", err))
+				logger.Error("error getting credentials", slog.Any("error", err))
 				return
 			}
 		}
@@ -87,7 +89,7 @@ func metricsHandler() http.HandlerFunc {
 		// Always falling back to single host config when group config failed.
 		if hostConfig == nil {
 			if hostConfig, err = config.HostConfigForTarget(target); err != nil {
-				slog.Error("error getting credentials", slog.Any("error", err))
+				logger.Error("error getting credentials", slog.Any("error", err))
 				return
 			}
 		}
@@ -171,8 +173,8 @@ func main() {
 		}
 	}()
 
-	http.Handle("/redfish", metricsHandler()) // Regular metrics endpoint for local Redfish metrics.
-	http.Handle("/-/reload", reloadHandler()) // HTTP endpoint for triggering configuration reload
+	http.Handle("/redfish", metricsHandler(logger)) // Regular metrics endpoint for local Redfish metrics.
+	http.Handle("/-/reload", reloadHandler())       // HTTP endpoint for triggering configuration reload
 	http.Handle("/metrics", promhttp.Handler())
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
