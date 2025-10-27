@@ -1297,9 +1297,12 @@ func TestGPUSerialNumberAndUUIDMetrics(t *testing.T) {
 				close(ch)
 			}()
 
-			// Collect serial number and UUID metrics
-			serialNumberMetrics := make(map[string]string) // gpu_id -> serial_number
-			uuidMetrics := make(map[string]string)         // gpu_id -> uuid
+			// Collect gpu_info metrics
+			type gpuInfo struct {
+				serialNumber string
+				uuid         string
+			}
+			gpuInfoMetrics := make(map[string]gpuInfo) // gpu_id -> gpuInfo
 
 			for metric := range ch {
 				desc := metric.Desc()
@@ -1311,59 +1314,55 @@ func TestGPUSerialNumberAndUUIDMetrics(t *testing.T) {
 					continue
 				}
 
-				// Extract labels
-				var gpuID, serialNumber, uuid string
-				for _, label := range dto.Label {
-					switch label.GetName() {
-					case "gpu_id":
-						gpuID = label.GetValue()
-					case "serial_number":
-						serialNumber = label.GetValue()
-					case "uuid":
-						uuid = label.GetValue()
+				// Check for gpu_info metric
+				if strings.Contains(descString, "gpu_info") {
+					var gpuID, serialNumber, uuid string
+					for _, label := range dto.Label {
+						switch label.GetName() {
+						case "gpu_id":
+							gpuID = label.GetValue()
+						case "serial_number":
+							serialNumber = label.GetValue()
+						case "uuid":
+							uuid = label.GetValue()
+						}
 					}
-				}
 
-				// Check serial number metric
-				if strings.Contains(descString, "gpu_serial_number") {
 					require.NotEmpty(t, gpuID, "gpu_id label should be present")
-					require.NotEmpty(t, serialNumber, "serial_number label should be present")
-					require.Equal(t, 1.0, dto.Gauge.GetValue(), "Serial number metric value should be 1")
-					serialNumberMetrics[gpuID] = serialNumber
-				}
-
-				// Check UUID metric
-				if strings.Contains(descString, "gpu_uuid") {
-					require.NotEmpty(t, gpuID, "gpu_id label should be present")
-					require.NotEmpty(t, uuid, "uuid label should be present")
-					require.Equal(t, 1.0, dto.Gauge.GetValue(), "UUID metric value should be 1")
-					uuidMetrics[gpuID] = uuid
+					require.Equal(t, 1.0, dto.Gauge.GetValue(), "Info metric value should be 1")
+					gpuInfoMetrics[gpuID] = gpuInfo{
+						serialNumber: serialNumber,
+						uuid:         uuid,
+					}
 				}
 			}
 
-			// Verify all GPUs emitted both metrics
-			require.Len(t, serialNumberMetrics, len(tt.gpus), "All GPUs should emit serial_number metric")
-			require.Len(t, uuidMetrics, len(tt.gpus), "All GPUs should emit UUID metric")
+			// Verify all GPUs emitted gpu_info metric
+			require.Len(t, gpuInfoMetrics, len(tt.gpus), "All GPUs should emit gpu_info metric")
 
-			// Verify serial numbers match expected values
+			// Verify serial numbers and UUIDs match expected values
 			for _, gpu := range tt.gpus {
-				assert.Equal(t, gpu.serialNumber, serialNumberMetrics[gpu.id],
+				info, ok := gpuInfoMetrics[gpu.id]
+				require.True(t, ok, "GPU %s should have info metric", gpu.id)
+				assert.Equal(t, gpu.serialNumber, info.serialNumber,
 					"GPU %s should have correct serial number", gpu.id)
-				assert.Equal(t, gpu.uuid, uuidMetrics[gpu.id],
+				assert.Equal(t, gpu.uuid, info.uuid,
 					"GPU %s should have correct UUID", gpu.id)
 			}
 
 			// Verify UUID uniqueness
 			uuidSet := make(map[string]bool)
 			hasDuplicateUUIDs := false
-			for gpuID, uuid := range uuidMetrics {
-				if uuidSet[uuid] {
-					hasDuplicateUUIDs = true
-					if tt.expectUniqueUUIDs {
-						t.Errorf("UUID %s is duplicated for GPU %s - UUIDs must always be unique", uuid, gpuID)
+			for gpuID, info := range gpuInfoMetrics {
+				if info.uuid != "" {
+					if uuidSet[info.uuid] {
+						hasDuplicateUUIDs = true
+						if tt.expectUniqueUUIDs {
+							t.Errorf("UUID %s is duplicated for GPU %s - UUIDs must always be unique", info.uuid, gpuID)
+						}
 					}
+					uuidSet[info.uuid] = true
 				}
-				uuidSet[uuid] = true
 			}
 
 			// If we expected duplicate UUIDs (invalid case), verify error was logged
@@ -1375,8 +1374,10 @@ func TestGPUSerialNumberAndUUIDMetrics(t *testing.T) {
 
 			// Verify serial number uniqueness (or lack thereof)
 			serialNumberSet := make(map[string][]string) // serial_number -> list of gpu_ids
-			for gpuID, sn := range serialNumberMetrics {
-				serialNumberSet[sn] = append(serialNumberSet[sn], gpuID)
+			for gpuID, info := range gpuInfoMetrics {
+				if info.serialNumber != "" {
+					serialNumberSet[info.serialNumber] = append(serialNumberSet[info.serialNumber], gpuID)
+				}
 			}
 
 			if tt.expectUniqueSerialNumbers {
@@ -1401,34 +1402,39 @@ func TestGPUSerialNumberAndUUIDMetrics(t *testing.T) {
 // TestGPUMetricsWithMissingSerialOrUUID tests handling of GPUs with missing serial number or UUID
 func TestGPUMetricsWithMissingSerialOrUUID(t *testing.T) {
 	tests := map[string]struct {
-		serialNumber       string
-		uuid               string
-		expectSerialMetric bool
-		expectUUIDMetric   bool
+		serialNumber  string
+		uuid          string
+		expectMetric  bool
+		expectSerial  string
+		expectUUID    string
 	}{
 		"both present": {
-			serialNumber:       "1234567890",
-			uuid:               "e03507e4-8147-2191-d9a5-834772ec93a7",
-			expectSerialMetric: true,
-			expectUUIDMetric:   true,
+			serialNumber: "1234567890",
+			uuid:         "e03507e4-8147-2191-d9a5-834772ec93a7",
+			expectMetric: true,
+			expectSerial: "1234567890",
+			expectUUID:   "e03507e4-8147-2191-d9a5-834772ec93a7",
 		},
 		"missing serial number": {
-			serialNumber:       "",
-			uuid:               "e03507e4-8147-2191-d9a5-834772ec93a7",
-			expectSerialMetric: false,
-			expectUUIDMetric:   true,
+			serialNumber: "",
+			uuid:         "e03507e4-8147-2191-d9a5-834772ec93a7",
+			expectMetric: true,
+			expectSerial: "",
+			expectUUID:   "e03507e4-8147-2191-d9a5-834772ec93a7",
 		},
 		"missing UUID": {
-			serialNumber:       "1234567890",
-			uuid:               "",
-			expectSerialMetric: true,
-			expectUUIDMetric:   false,
+			serialNumber: "1234567890",
+			uuid:         "",
+			expectMetric: true,
+			expectSerial: "1234567890",
+			expectUUID:   "",
 		},
 		"both missing": {
-			serialNumber:       "",
-			uuid:               "",
-			expectSerialMetric: false,
-			expectUUIDMetric:   false,
+			serialNumber: "",
+			uuid:         "",
+			expectMetric: false, // No metric emitted if both are empty
+			expectSerial: "",
+			expectUUID:   "",
 		},
 	}
 
@@ -1489,28 +1495,39 @@ func TestGPUMetricsWithMissingSerialOrUUID(t *testing.T) {
 				close(ch)
 			}()
 
-			foundSerialMetric := false
-			foundUUIDMetric := false
+			foundMetric := false
+			var actualSerial, actualUUID string
 
 			for metric := range ch {
 				desc := metric.Desc()
-				if strings.Contains(desc.String(), "gpu_serial_number") {
-					foundSerialMetric = true
-				}
-				if strings.Contains(desc.String(), "gpu_uuid") {
-					foundUUIDMetric = true
+				if strings.Contains(desc.String(), "gpu_info") {
+					foundMetric = true
+					dto := &dto.Metric{}
+					require.NoError(t, metric.Write(dto))
+
+					for _, label := range dto.Label {
+						switch label.GetName() {
+						case "serial_number":
+							actualSerial = label.GetValue()
+						case "uuid":
+							actualUUID = label.GetValue()
+						}
+					}
 				}
 			}
 
-			assert.Equal(t, tt.expectSerialMetric, foundSerialMetric, "Serial number metric presence mismatch")
-			assert.Equal(t, tt.expectUUIDMetric, foundUUIDMetric, "UUID metric presence mismatch")
+			assert.Equal(t, tt.expectMetric, foundMetric, "gpu_info metric presence mismatch")
+			if foundMetric {
+				assert.Equal(t, tt.expectSerial, actualSerial, "Serial number value mismatch")
+				assert.Equal(t, tt.expectUUID, actualUUID, "UUID value mismatch")
+			}
 
 			// Verify appropriate logging for missing values
 			logOutput := logBuf.String()
-			if !tt.expectSerialMetric {
+			if tt.serialNumber == "" {
 				assert.Contains(t, logOutput, "GPU has no serial number", "Should log when serial number is missing")
 			}
-			if !tt.expectUUIDMetric {
+			if tt.uuid == "" {
 				assert.Contains(t, logOutput, "GPU has no UUID", "Should log when UUID is missing")
 			}
 		})

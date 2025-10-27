@@ -19,12 +19,11 @@ const GPUSubsystem = "gpu"
 // GPU metric label names
 var (
 	// Base labels using the main branch pattern but with system_id instead of system
-	gpuBaseLabels         = []string{"hostname", "system_id", "gpu_id"}
-	gpuMemoryLabels       = baseWithExtraLabels([]string{"memory_id"})
-	gpuProcessorLabels    = baseWithExtraLabels([]string{"processor_name"})
-	gpuPortLabels         = baseWithExtraLabels([]string{"port_id", "port_type", "port_protocol"})
-	gpuSerialNumberLabels = baseWithExtraLabels([]string{"serial_number"})
-	gpuUUIDLabels         = baseWithExtraLabels([]string{"uuid"})
+	gpuBaseLabels      = []string{"hostname", "system_id", "gpu_id"}
+	gpuMemoryLabels    = baseWithExtraLabels([]string{"memory_id"})
+	gpuProcessorLabels = baseWithExtraLabels([]string{"processor_name"})
+	gpuPortLabels      = baseWithExtraLabels([]string{"port_id", "port_type", "port_protocol"})
+	gpuInfoLabels      = baseWithExtraLabels([]string{"serial_number", "uuid"})
 
 	gpuMetrics     = createGPUMetricMap()
 	gpuMemoryTypes = createGPUMemoryTypeSet()
@@ -82,9 +81,8 @@ func createGPUMetricMap() map[string]Metric {
 	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_ecc_correctable", "current correctable memory ecc errors reported on the gpu", gpuMemoryLabels)
 	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_ecc_uncorrectable", "current uncorrectable memory ecc errors reported on the gpu", gpuMemoryLabels)
 
-	// GPU info metrics
-	addToMetricMap(gpuMetrics, GPUSubsystem, "serial_number", "GPU serial number", gpuSerialNumberLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "uuid", "GPU UUID", gpuUUIDLabels)
+	// GPU info metric
+	addToMetricMap(gpuMetrics, GPUSubsystem, "info", "GPU information with serial number and UUID", gpuInfoLabels)
 
 	// GPU Memory metrics
 	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_capacity_mib", "GPU memory capacity in MiB", gpuMemoryLabels)
@@ -465,45 +463,42 @@ func (g *GPUCollector) collectGPUProcessor(ch chan<- prometheus.Metric, systemNa
 		labels...,
 	)
 
-	// Collect GPU serial number info metric
+	// Collect GPU info metric with serial number and UUID
 	serialNumber := processor.SerialNumber
-	if serialNumber != "" {
-		serialNumberLabels := []string{systemName, systemID, processorID, serialNumber}
-		ch <- prometheus.MustNewConstMetric(
-			g.metrics["gpu_serial_number"].desc,
-			prometheus.GaugeValue,
-			1, // Info metrics always have value 1
-			serialNumberLabels...,
-		)
-	} else {
+	uuid := processor.UUID
+
+	// Log if either is missing
+	if serialNumber == "" {
 		g.logger.Debug("GPU has no serial number",
 			slog.String("processor_id", processorID),
 			slog.String("system_id", systemID))
 	}
-
-	// Collect GPU UUID info metric
-	uuid := processor.UUID
-	if uuid != "" {
-		// Check for UUID uniqueness - UUIDs must always be unique
-		if existingGPUID, exists := uuidTracker.LoadOrStore(uuid, processorID); exists {
-			g.logger.Error("duplicate GPU UUID detected - UUIDs must be unique",
-				slog.String("uuid", uuid),
-				slog.String("processor_id", processorID),
-				slog.String("duplicate_processor_id", existingGPUID.(string)),
-				slog.String("system_id", systemID))
-		}
-
-		uuidLabels := []string{systemName, systemID, processorID, uuid}
-		ch <- prometheus.MustNewConstMetric(
-			g.metrics["gpu_uuid"].desc,
-			prometheus.GaugeValue,
-			1, // Info metrics always have value 1
-			uuidLabels...,
-		)
-	} else {
+	if uuid == "" {
 		g.logger.Warn("GPU has no UUID",
 			slog.String("processor_id", processorID),
 			slog.String("system_id", systemID))
+	}
+
+	// Only emit metric if at least one identifier is present
+	if serialNumber != "" || uuid != "" {
+		// Check for UUID uniqueness - UUIDs must always be unique
+		if uuid != "" {
+			if existingGPUID, exists := uuidTracker.LoadOrStore(uuid, processorID); exists {
+				g.logger.Error("duplicate GPU UUID detected - UUIDs must be unique",
+					slog.String("uuid", uuid),
+					slog.String("processor_id", processorID),
+					slog.String("duplicate_processor_id", existingGPUID.(string)),
+					slog.String("system_id", systemID))
+			}
+		}
+
+		infoLabels := []string{systemName, systemID, processorID, serialNumber, uuid}
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_info"].desc,
+			prometheus.GaugeValue,
+			1, // Info metrics always have value 1
+			infoLabels...,
+		)
 	}
 
 	// Get ProcessorMetrics OEM data
