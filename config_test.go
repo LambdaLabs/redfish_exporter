@@ -32,6 +32,7 @@ func TestModulesConfig(t *testing.T) {
 			inputYAML: `
 modules:
   foo:
+    prober: gpu_collector
     gpu_collector:
       collection_deadline: 60s
 `,
@@ -39,6 +40,7 @@ modules:
 			wantConfig: &Config{
 				Modules: map[string]Module{
 					"foo": {
+						Prober: "gpu_collector",
 						GPUCollector: GPUCollectorConfig{
 							CollectionDeadlineDuration: 60 * time.Second,
 						},
@@ -50,12 +52,14 @@ modules:
 			inputYAML: `
 modules:
   foo:
+    prober: gpu_collector
     gpu_collector:
 `,
 			wantErrString: "",
 			wantConfig: &Config{
 				Modules: map[string]Module{
 					"foo": {
+						Prober: "gpu_collector",
 						GPUCollector: GPUCollectorConfig{
 							CollectionDeadlineDuration: 30 * time.Second,
 						},
@@ -68,8 +72,10 @@ modules:
 loglevel: info
 modules:
   foo:
+    prober: gpu_collector
     gpu_collector:
   boo:
+    prober: gpu_collector
     gpu_collector:
       collection_deadline: 10s
 `,
@@ -78,11 +84,13 @@ modules:
 				Loglevel: "info",
 				Modules: map[string]Module{
 					"foo": {
+						Prober: "gpu_collector",
 						GPUCollector: GPUCollectorConfig{
 							CollectionDeadlineDuration: 30 * time.Second,
 						},
 					},
 					"boo": {
+						Prober: "gpu_collector",
 						GPUCollector: GPUCollectorConfig{
 							CollectionDeadlineDuration: 10 * time.Second,
 						},
@@ -94,6 +102,17 @@ modules:
 			inputYAML:     `foo:bar:baz`,
 			wantErrString: "unmarshal errors:\n  line 1: cannot unmarshal !!str",
 			wantConfig:    &Config{},
+		},
+		"modules require a prober field": {
+			inputYAML: `
+modules:
+  foo:
+    gpu_collector:
+`,
+			wantErrString: "modules require a prober to be set",
+			wantConfig: &Config{
+				Modules: map[string]Module{},
+			},
 		},
 	}
 	for tName, test := range tT {

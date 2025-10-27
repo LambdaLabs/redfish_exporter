@@ -36,6 +36,7 @@ func (g *GPUCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
 }
 
 type Module struct {
+	Prober       string             `yaml:"prober"`
 	GPUCollector GPUCollectorConfig `yaml:"gpu_collector"`
 }
 
@@ -44,6 +45,9 @@ func (m *Module) UnmarshalYAML(unmarshal func(any) error) error {
 	type plain Module
 	if err := unmarshal((*plain)(m)); err != nil {
 		return err
+	}
+	if m.Prober == "" {
+		return fmt.Errorf("modules require a prober to be set")
 	}
 	return nil
 }
