@@ -3,11 +3,15 @@ package main
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"sync"
 	"time"
 
 	"os"
 
+	"github.com/LambdaLabs/redfish_exporter/collector"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stmcginnis/gofish"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -85,6 +89,25 @@ func (m *Module) UnmarshalYAML(unmarshal func(any) error) error {
 	return nil
 }
 
+// Collector creates and returns a prometheus.Collector from the module, based on the Module.Prober.
+// Both redfish client and logger are common dependencies, and must be provided as inputs.
+func (m *Module) Collector(rfClient *gofish.APIClient, logger *slog.Logger) prometheus.Collector {
+	switch m.Prober {
+	case "gpu_collector":
+		return collector.NewGPUCollector(rfClient, logger)
+	case "chassis_collector":
+		return collector.NewChassisCollector(rfClient, logger)
+	case "manager_collector":
+		return collector.NewManagerCollector(rfClient, logger)
+	case "system_collector":
+		return collector.NewSystemCollector(rfClient, logger)
+	case "telemetry_collector":
+		return collector.NewTelemetryCollector(rfClient, logger)
+	default:
+	}
+	return nil
+}
+
 type Config struct {
 	Hosts    map[string]HostConfig `yaml:"hosts"`
 	Groups   map[string]HostConfig `yaml:"groups"`
@@ -103,6 +126,10 @@ func (c *Config) UnmarshalYAML(unmarshal func(any) error) error {
 type SafeConfig struct {
 	sync.RWMutex
 	Config *Config
+}
+
+func (sc *SafeConfig) GetModules() map[string]Module {
+	return sc.Config.Modules
 }
 
 type HostConfig struct {
