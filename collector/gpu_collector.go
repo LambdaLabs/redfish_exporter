@@ -23,6 +23,7 @@ var (
 	gpuMemoryLabels    = baseWithExtraLabels([]string{"memory_id"})
 	gpuProcessorLabels = baseWithExtraLabels([]string{"processor_name"})
 	gpuPortLabels      = baseWithExtraLabels([]string{"port_id", "port_type", "port_protocol"})
+	gpuInfoLabels      = baseWithExtraLabels([]string{"serial_number", "uuid"})
 
 	gpuMetrics     = createGPUMetricMap()
 	gpuMemoryTypes = createGPUMemoryTypeSet()
@@ -79,6 +80,9 @@ func createGPUMetricMap() map[string]Metric {
 	addToMetricMap(gpuMetrics, GPUSubsystem, "health", "health of gpu reported by system,1(OK),2(Warning),3(Critical)", gpuBaseLabels)
 	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_ecc_correctable", "current correctable memory ecc errors reported on the gpu", gpuMemoryLabels)
 	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_ecc_uncorrectable", "current uncorrectable memory ecc errors reported on the gpu", gpuMemoryLabels)
+
+	// GPU info metric
+	addToMetricMap(gpuMetrics, GPUSubsystem, "info", "GPU information with serial number and UUID", gpuInfoLabels)
 
 	// GPU Memory metrics
 	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_capacity_mib", "GPU memory capacity in MiB", gpuMemoryLabels)
@@ -167,9 +171,13 @@ func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
 	// Channel to collect GPU info from each system
 	gpuInfoChan := make(chan systemGPUInfo, len(systems))
 	wg := &sync.WaitGroup{}
+
+	// Track UUIDs to detect duplicates
+	uuidTracker := &sync.Map{} // map[uuid]gpuID
+
 	for _, system := range systems {
 		wg.Add(1)
-		go g.collectSystemGPUs(ch, system, wg, gpuInfoChan)
+		go g.collectSystemGPUs(ch, system, wg, gpuInfoChan, uuidTracker)
 	}
 
 	// Close channel after all systems are processed
@@ -197,7 +205,7 @@ func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 // collectSystemGPUs collects all GPU-related metrics for a system
-func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *redfish.ComputerSystem, wg *sync.WaitGroup, gpuInfoChan chan<- systemGPUInfo) {
+func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *redfish.ComputerSystem, wg *sync.WaitGroup, gpuInfoChan chan<- systemGPUInfo, uuidTracker *sync.Map) {
 	defer wg.Done()
 
 	systemID := system.ID
@@ -288,7 +296,7 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 			go func() {
 				semProcessor <- struct{}{}        // Acquire semaphore
 				defer func() { <-semProcessor }() // Release semaphore
-				g.collectGPUProcessor(ch, systemName, systemID, proc, wgProcessor)
+				g.collectGPUProcessor(ch, systemName, systemID, proc, wgProcessor, uuidTracker)
 			}()
 		}
 	}
@@ -411,7 +419,7 @@ func (g *GPUCollector) collectGPUMemory(ch chan<- prometheus.Metric, systemName,
 }
 
 // collectGPUProcessor collects GPU processor metrics including OEM fields
-func (g *GPUCollector) collectGPUProcessor(ch chan<- prometheus.Metric, systemName, systemID string, processor *redfish.Processor, wg *sync.WaitGroup) {
+func (g *GPUCollector) collectGPUProcessor(ch chan<- prometheus.Metric, systemName, systemID string, processor *redfish.Processor, wg *sync.WaitGroup, uuidTracker *sync.Map) {
 	defer wg.Done()
 
 	processorID := processor.ID
@@ -454,6 +462,44 @@ func (g *GPUCollector) collectGPUProcessor(ch chan<- prometheus.Metric, systemNa
 		float64(processor.TotalThreads),
 		labels...,
 	)
+
+	// Collect GPU info metric with serial number and UUID
+	serialNumber := processor.SerialNumber
+	uuid := processor.UUID
+
+	// Log if either is missing
+	if serialNumber == "" {
+		g.logger.Debug("GPU has no serial number",
+			slog.String("processor_id", processorID),
+			slog.String("system_id", systemID))
+	}
+	if uuid == "" {
+		g.logger.Warn("GPU has no UUID",
+			slog.String("processor_id", processorID),
+			slog.String("system_id", systemID))
+	}
+
+	// Only emit metric if at least one identifier is present
+	if serialNumber != "" || uuid != "" {
+		// Check for UUID uniqueness - UUIDs must always be unique
+		if uuid != "" {
+			if existingGPUID, exists := uuidTracker.LoadOrStore(uuid, processorID); exists {
+				g.logger.Error("duplicate GPU UUID detected - UUIDs must be unique",
+					slog.String("uuid", uuid),
+					slog.String("processor_id", processorID),
+					slog.String("duplicate_processor_id", existingGPUID.(string)),
+					slog.String("system_id", systemID))
+			}
+		}
+
+		infoLabels := []string{systemName, systemID, processorID, serialNumber, uuid}
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_info"].desc,
+			prometheus.GaugeValue,
+			1, // Info metrics always have value 1
+			infoLabels...,
+		)
+	}
 
 	// Get ProcessorMetrics OEM data
 	// Note: Most GPU performance metrics (SM activity, tensor cores, FP operations, PCIe bandwidth)
