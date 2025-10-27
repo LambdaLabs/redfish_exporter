@@ -15,10 +15,42 @@ var (
 	DefaultGPUCollector = GPUCollectorConfig{
 		CollectionDeadlineDuration: 30 * time.Second,
 	}
+	DefaultChassisCollector = ChassisCollectorConfig{
+		CollectionDeadlineDuration: 30 * time.Second,
+	}
 	DefaultModule = Module{
-		GPUCollector: DefaultGPUCollector,
+		ChassisCollector: DefaultChassisCollector,
+		GPUCollector:     DefaultGPUCollector,
+	}
+	// NOTE: This map is used as a default when building a collector slice.
+	// In a future release, this will be removed and users will be expected to
+	// define one or more modules, and reference those in HTTP requests.
+	DefaultModuleConfig = map[string]Module{
+		"gpu_collector": {
+			Prober:       "gpu_collector",
+			GPUCollector: DefaultGPUCollector,
+		},
+		"chassis_collector": {
+			Prober:           "chassis_collector",
+			ChassisCollector: DefaultChassisCollector,
+		},
 	}
 )
+
+type ChassisCollectorConfig struct {
+	CollectionDeadlineDuration time.Duration `yaml:"collection_deadline"`
+}
+
+func (c *ChassisCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
+	*c = DefaultChassisCollector
+	type plain ChassisCollectorConfig
+
+	if err := unmarshal((*plain)(c)); err != nil {
+		return err
+	}
+
+	return nil
+}
 
 type GPUCollectorConfig struct {
 	CollectionDeadlineDuration time.Duration `yaml:"collection_deadline"`
@@ -36,8 +68,9 @@ func (g *GPUCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
 }
 
 type Module struct {
-	Prober       string             `yaml:"prober"`
-	GPUCollector GPUCollectorConfig `yaml:"gpu_collector"`
+	Prober           string                 `yaml:"prober"`
+	GPUCollector     GPUCollectorConfig     `yaml:"gpu_collector"`
+	ChassisCollector ChassisCollectorConfig `yaml:"chassis_collector"`
 }
 
 func (m *Module) UnmarshalYAML(unmarshal func(any) error) error {
