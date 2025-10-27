@@ -1162,3 +1162,357 @@ func descContains(m prometheus.Metric, contains string) bool {
 	}
 	return strings.Contains(desc.String(), contains)
 }
+
+// TestGPUSerialNumberAndUUIDMetrics tests that GPU serial number and UUID info metrics are collected correctly
+func TestGPUSerialNumberAndUUIDMetrics(t *testing.T) {
+	tests := map[string]struct {
+		gpus []struct {
+			id           string
+			serialNumber string
+			uuid         string
+		}
+		expectUniqueUUIDs         bool
+		expectUniqueSerialNumbers bool
+	}{
+		"B200 style - unique serial numbers and UUIDs": {
+			gpus: []struct {
+				id           string
+				serialNumber string
+				uuid         string
+			}{
+				{id: "GPU_SXM_1", serialNumber: "1650225122146", uuid: "e03507e4-8147-2191-d9a5-834772ec93a7"},
+				{id: "GPU_SXM_2", serialNumber: "1650225105680", uuid: "5337f4db-707b-da38-9d3c-42678cfd8b17"},
+				{id: "GPU_SXM_3", serialNumber: "1650325051066", uuid: "6f19ea63-bdb8-0115-cb3c-2ac106b1eb1f"},
+				{id: "GPU_SXM_4", serialNumber: "1650325008513", uuid: "d3768332-13de-6427-7e30-14d9e6aa6fe1"},
+			},
+			expectUniqueUUIDs:         true,
+			expectUniqueSerialNumbers: true,
+		},
+		"GB300 style - duplicate serial numbers per pair, unique UUIDs": {
+			gpus: []struct {
+				id           string
+				serialNumber string
+				uuid         string
+			}{
+				{id: "GPU_0", serialNumber: "1652625065599", uuid: "e79b5d32-1fca-41ba-9fff-8be0eafe44e2"},
+				{id: "GPU_1", serialNumber: "1652625065599", uuid: "4bcdb113-2738-8369-3d0e-158a5e1aee44"}, // Duplicate SN
+				{id: "GPU_2", serialNumber: "1652625065919", uuid: "a1b2c3d4-5678-90ab-cdef-123456789012"},
+				{id: "GPU_3", serialNumber: "1652625065919", uuid: "f1e2d3c4-b5a6-9780-1234-567890abcdef"}, // Duplicate SN
+			},
+			expectUniqueUUIDs:         true,
+			expectUniqueSerialNumbers: false, // Serial numbers are allowed to be duplicate
+		},
+		"invalid - duplicate UUIDs should be logged as error": {
+			gpus: []struct {
+				id           string
+				serialNumber string
+				uuid         string
+			}{
+				{id: "GPU_0", serialNumber: "1650225122146", uuid: "e03507e4-8147-2191-d9a5-834772ec93a7"},
+				{id: "GPU_1", serialNumber: "1650225105680", uuid: "e03507e4-8147-2191-d9a5-834772ec93a7"}, // DUPLICATE UUID!
+			},
+			expectUniqueUUIDs:         false, // This case expects duplicate UUIDs (invalid but should be detected)
+			expectUniqueSerialNumbers: true,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Create test server
+			server := &testRedfishServer{
+				t:        t,
+				mux:      http.NewServeMux(),
+				requests: make([]string, 0),
+			}
+			server.Server = httptest.NewServer(server.mux)
+			defer server.Close()
+
+			// Setup service root
+			server.addRouteFromFixture("/redfish/v1/", "service_root.json")
+
+			// Setup systems collection
+			server.addRoute("/redfish/v1/Systems", map[string]interface{}{
+				"@odata.type": "#ComputerSystemCollection.ComputerSystemCollection",
+				"Members": []map[string]string{
+					{"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0"},
+				},
+				"Members@odata.count": 1,
+			})
+
+			// Setup system
+			server.addRoute("/redfish/v1/Systems/HGX_Baseboard_0", map[string]interface{}{
+				"@odata.type": "#ComputerSystem.v1_14_0.ComputerSystem",
+				"Id":          "HGX_Baseboard_0",
+				"Name":        "Test HGX System",
+				"Processors": map[string]string{
+					"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors",
+				},
+			})
+
+			// Build processor collection members
+			members := make([]map[string]string, len(tt.gpus))
+			for i, gpu := range tt.gpus {
+				members[i] = map[string]string{
+					"@odata.id": fmt.Sprintf("/redfish/v1/Systems/HGX_Baseboard_0/Processors/%s", gpu.id),
+				}
+			}
+
+			// Setup processors collection
+			server.addRoute("/redfish/v1/Systems/HGX_Baseboard_0/Processors", map[string]interface{}{
+				"@odata.type":         "#ProcessorCollection.ProcessorCollection",
+				"Members":             members,
+				"Members@odata.count": len(members),
+			})
+
+			// Add each GPU processor with serial number and UUID
+			for _, gpu := range tt.gpus {
+				server.addRoute(fmt.Sprintf("/redfish/v1/Systems/HGX_Baseboard_0/Processors/%s", gpu.id), map[string]interface{}{
+					"@odata.type":   "#Processor.v1_20_0.Processor",
+					"@odata.id":     fmt.Sprintf("/redfish/v1/Systems/HGX_Baseboard_0/Processors/%s", gpu.id),
+					"Id":            gpu.id,
+					"Name":          fmt.Sprintf("GPU %s", gpu.id),
+					"ProcessorType": "GPU",
+					"SerialNumber":  gpu.serialNumber,
+					"UUID":          gpu.uuid,
+					"TotalCores":    128,
+					"TotalThreads":  128,
+					"Status": map[string]string{
+						"State":  "Enabled",
+						"Health": "OK",
+					},
+				})
+			}
+
+			// Create collector with a logger that captures output
+			var logBuf strings.Builder
+			logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+			client := connectToTestServer(t, server)
+			defer client.Logout()
+
+			collector := NewGPUCollector(client, logger)
+			ch := make(chan prometheus.Metric, 200)
+			go func() {
+				collector.Collect(ch)
+				close(ch)
+			}()
+
+			// Collect serial number and UUID metrics
+			serialNumberMetrics := make(map[string]string) // gpu_id -> serial_number
+			uuidMetrics := make(map[string]string)         // gpu_id -> uuid
+
+			for metric := range ch {
+				desc := metric.Desc()
+				descString := desc.String()
+
+				dto := &dto.Metric{}
+				if err := metric.Write(dto); err != nil {
+					t.Errorf("failed to write metric: %v", err)
+					continue
+				}
+
+				// Extract labels
+				var gpuID, serialNumber, uuid string
+				for _, label := range dto.Label {
+					switch label.GetName() {
+					case "gpu_id":
+						gpuID = label.GetValue()
+					case "serial_number":
+						serialNumber = label.GetValue()
+					case "uuid":
+						uuid = label.GetValue()
+					}
+				}
+
+				// Check serial number metric
+				if strings.Contains(descString, "gpu_serial_number") {
+					require.NotEmpty(t, gpuID, "gpu_id label should be present")
+					require.NotEmpty(t, serialNumber, "serial_number label should be present")
+					require.Equal(t, 1.0, dto.Gauge.GetValue(), "Serial number metric value should be 1")
+					serialNumberMetrics[gpuID] = serialNumber
+				}
+
+				// Check UUID metric
+				if strings.Contains(descString, "gpu_uuid") {
+					require.NotEmpty(t, gpuID, "gpu_id label should be present")
+					require.NotEmpty(t, uuid, "uuid label should be present")
+					require.Equal(t, 1.0, dto.Gauge.GetValue(), "UUID metric value should be 1")
+					uuidMetrics[gpuID] = uuid
+				}
+			}
+
+			// Verify all GPUs emitted both metrics
+			require.Len(t, serialNumberMetrics, len(tt.gpus), "All GPUs should emit serial_number metric")
+			require.Len(t, uuidMetrics, len(tt.gpus), "All GPUs should emit UUID metric")
+
+			// Verify serial numbers match expected values
+			for _, gpu := range tt.gpus {
+				assert.Equal(t, gpu.serialNumber, serialNumberMetrics[gpu.id],
+					"GPU %s should have correct serial number", gpu.id)
+				assert.Equal(t, gpu.uuid, uuidMetrics[gpu.id],
+					"GPU %s should have correct UUID", gpu.id)
+			}
+
+			// Verify UUID uniqueness
+			uuidSet := make(map[string]bool)
+			hasDuplicateUUIDs := false
+			for gpuID, uuid := range uuidMetrics {
+				if uuidSet[uuid] {
+					hasDuplicateUUIDs = true
+					if tt.expectUniqueUUIDs {
+						t.Errorf("UUID %s is duplicated for GPU %s - UUIDs must always be unique", uuid, gpuID)
+					}
+				}
+				uuidSet[uuid] = true
+			}
+
+			// If we expected duplicate UUIDs (invalid case), verify error was logged
+			if !tt.expectUniqueUUIDs {
+				logOutput := logBuf.String()
+				assert.True(t, hasDuplicateUUIDs, "Test case expects duplicate UUIDs but none were found")
+				assert.Contains(t, logOutput, "duplicate GPU UUID detected", "Should log error for duplicate UUID")
+			}
+
+			// Verify serial number uniqueness (or lack thereof)
+			serialNumberSet := make(map[string][]string) // serial_number -> list of gpu_ids
+			for gpuID, sn := range serialNumberMetrics {
+				serialNumberSet[sn] = append(serialNumberSet[sn], gpuID)
+			}
+
+			if tt.expectUniqueSerialNumbers {
+				for sn, gpuIDs := range serialNumberSet {
+					assert.Len(t, gpuIDs, 1, "Serial number %s should be unique but found on GPUs: %v", sn, gpuIDs)
+				}
+			} else {
+				// For GB300 style, we expect some duplicates
+				hasDuplicates := false
+				for _, gpuIDs := range serialNumberSet {
+					if len(gpuIDs) > 1 {
+						hasDuplicates = true
+						break
+					}
+				}
+				assert.True(t, hasDuplicates, "Expected duplicate serial numbers for GB300 style test case")
+			}
+		})
+	}
+}
+
+// TestGPUMetricsWithMissingSerialOrUUID tests handling of GPUs with missing serial number or UUID
+func TestGPUMetricsWithMissingSerialOrUUID(t *testing.T) {
+	tests := map[string]struct {
+		serialNumber       string
+		uuid               string
+		expectSerialMetric bool
+		expectUUIDMetric   bool
+	}{
+		"both present": {
+			serialNumber:       "1234567890",
+			uuid:               "e03507e4-8147-2191-d9a5-834772ec93a7",
+			expectSerialMetric: true,
+			expectUUIDMetric:   true,
+		},
+		"missing serial number": {
+			serialNumber:       "",
+			uuid:               "e03507e4-8147-2191-d9a5-834772ec93a7",
+			expectSerialMetric: false,
+			expectUUIDMetric:   true,
+		},
+		"missing UUID": {
+			serialNumber:       "1234567890",
+			uuid:               "",
+			expectSerialMetric: true,
+			expectUUIDMetric:   false,
+		},
+		"both missing": {
+			serialNumber:       "",
+			uuid:               "",
+			expectSerialMetric: false,
+			expectUUIDMetric:   false,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Create test server
+			server := &testRedfishServer{
+				t:        t,
+				mux:      http.NewServeMux(),
+				requests: make([]string, 0),
+			}
+			server.Server = httptest.NewServer(server.mux)
+			defer server.Close()
+
+			// Setup minimal routes
+			server.addRouteFromFixture("/redfish/v1/", "service_root.json")
+			server.addRoute("/redfish/v1/Systems", map[string]interface{}{
+				"@odata.type": "#ComputerSystemCollection.ComputerSystemCollection",
+				"Members":     []map[string]string{{"@odata.id": "/redfish/v1/Systems/System1"}},
+			})
+			server.addRoute("/redfish/v1/Systems/System1", map[string]interface{}{
+				"@odata.type": "#ComputerSystem.v1_14_0.ComputerSystem",
+				"Id":          "System1",
+				"Processors":  map[string]string{"@odata.id": "/redfish/v1/Systems/System1/Processors"},
+			})
+			server.addRoute("/redfish/v1/Systems/System1/Processors", map[string]interface{}{
+				"@odata.type": "#ProcessorCollection.ProcessorCollection",
+				"Members":     []map[string]string{{"@odata.id": "/redfish/v1/Systems/System1/Processors/GPU_0"}},
+			})
+
+			processorData := map[string]interface{}{
+				"@odata.type":   "#Processor.v1_20_0.Processor",
+				"Id":            "GPU_0",
+				"ProcessorType": "GPU",
+				"TotalCores":    128,
+				"TotalThreads":  128,
+				"Status":        map[string]string{"State": "Enabled", "Health": "OK"},
+			}
+			if tt.serialNumber != "" {
+				processorData["SerialNumber"] = tt.serialNumber
+			}
+			if tt.uuid != "" {
+				processorData["UUID"] = tt.uuid
+			}
+			server.addRoute("/redfish/v1/Systems/System1/Processors/GPU_0", processorData)
+
+			// Collect metrics with logger that captures output
+			var logBuf strings.Builder
+			logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+			client := connectToTestServer(t, server)
+			defer client.Logout()
+
+			collector := NewGPUCollector(client, logger)
+			ch := make(chan prometheus.Metric, 100)
+			go func() {
+				collector.Collect(ch)
+				close(ch)
+			}()
+
+			foundSerialMetric := false
+			foundUUIDMetric := false
+
+			for metric := range ch {
+				desc := metric.Desc()
+				if strings.Contains(desc.String(), "gpu_serial_number") {
+					foundSerialMetric = true
+				}
+				if strings.Contains(desc.String(), "gpu_uuid") {
+					foundUUIDMetric = true
+				}
+			}
+
+			assert.Equal(t, tt.expectSerialMetric, foundSerialMetric, "Serial number metric presence mismatch")
+			assert.Equal(t, tt.expectUUIDMetric, foundUUIDMetric, "UUID metric presence mismatch")
+
+			// Verify appropriate logging for missing values
+			logOutput := logBuf.String()
+			if !tt.expectSerialMetric {
+				assert.Contains(t, logOutput, "GPU has no serial number", "Should log when serial number is missing")
+			}
+			if !tt.expectUUIDMetric {
+				assert.Contains(t, logOutput, "GPU has no UUID", "Should log when UUID is missing")
+			}
+		})
+	}
+}
