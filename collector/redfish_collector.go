@@ -45,18 +45,24 @@ func NewRedfishCollector(host string, username string, password string) *Redfish
 	if err != nil {
 		slog.Error("error creating redfish client", slog.Any("error", err))
 	} else {
-		chassisCollector := NewChassisCollector(redfishClient, targetLogger)
-		systemCollector := NewSystemCollector(redfishClient, targetLogger)
-		managerCollector := NewManagerCollector(redfishClient, targetLogger)
-		telemetryCollector := NewTelemetryCollector(redfishClient, targetLogger)
-		gpuCollector := NewGPUCollector(redfishClient, targetLogger)
+		/*
+			chassisCollector := NewChassisCollector(redfishClient, targetLogger)
+			systemCollector := NewSystemCollector(redfishClient, targetLogger)
+			managerCollector := NewManagerCollector(redfishClient, targetLogger)
+			telemetryCollector := NewTelemetryCollector(redfishClient, targetLogger)
+			gpuCollector := NewGPUCollector(redfishClient, targetLogger)
+		*/
+		smbpbiCollector := NewSMBPBICollector(redfishClient, targetLogger)
 
 		collectors = map[string]prometheus.Collector{
-			"chassis":   chassisCollector,
-			"system":    systemCollector,
-			"manager":   managerCollector,
-			"gpu":       gpuCollector,
-			"telemetry": telemetryCollector,
+			/*
+				"chassis":   chassisCollector,
+				"system":    systemCollector,
+				"manager":   managerCollector,
+				"gpu":       gpuCollector,
+				"telemetry": telemetryCollector,
+			*/
+			"smbpbi": smbpbiCollector,
 		}
 	}
 
@@ -112,6 +118,7 @@ func newRedfishClient(host string, username string, password string) (*gofish.AP
 	url := fmt.Sprintf("https://%s", host)
 
 	config := gofish.ClientConfig{
+		BasicAuth:        true,
 		Endpoint:         url,
 		Username:         username,
 		Password:         password,
