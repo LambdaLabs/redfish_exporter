@@ -44,6 +44,18 @@ modules:
 						GPUCollector: GPUCollectorConfig{
 							CollectionDeadlineDuration: 60 * time.Second,
 						},
+						ChassisCollector: ChassisCollectorConfig{
+							CollectionDeadlineDuration: 30 * time.Second,
+						},
+						ManagerCollector: ManagerCollectorConfig{
+							CollectionDeadlineDuration: 30 * time.Second,
+						},
+						SystemCollector: SystemCollectorConfig{
+							CollectionDeadlineDuration: 30 * time.Second,
+						},
+						TelemetryCollector: TelemetryCollectorConfig{
+							CollectionDeadlineDuration: 30 * time.Second,
+						},
 					},
 				},
 			},
@@ -63,6 +75,18 @@ modules:
 						GPUCollector: GPUCollectorConfig{
 							CollectionDeadlineDuration: 30 * time.Second,
 						},
+						ChassisCollector: ChassisCollectorConfig{
+							CollectionDeadlineDuration: 30 * time.Second,
+						},
+						ManagerCollector: ManagerCollectorConfig{
+							CollectionDeadlineDuration: 30 * time.Second,
+						},
+						SystemCollector: SystemCollectorConfig{
+							CollectionDeadlineDuration: 30 * time.Second,
+						},
+						TelemetryCollector: TelemetryCollectorConfig{
+							CollectionDeadlineDuration: 30 * time.Second,
+						},
 					},
 				},
 			},
@@ -76,7 +100,7 @@ modules:
     gpu_collector:
   boo:
     prober: gpu_collector
-    gpu_collector:
+    chassis_collector:
       collection_deadline: 10s
 `,
 			wantErrString: "",
@@ -88,11 +112,35 @@ modules:
 						GPUCollector: GPUCollectorConfig{
 							CollectionDeadlineDuration: 30 * time.Second,
 						},
+						ChassisCollector: ChassisCollectorConfig{
+							CollectionDeadlineDuration: 30 * time.Second,
+						},
+						ManagerCollector: ManagerCollectorConfig{
+							CollectionDeadlineDuration: 30 * time.Second,
+						},
+						SystemCollector: SystemCollectorConfig{
+							CollectionDeadlineDuration: 30 * time.Second,
+						},
+						TelemetryCollector: TelemetryCollectorConfig{
+							CollectionDeadlineDuration: 30 * time.Second,
+						},
 					},
 					"boo": {
 						Prober: "gpu_collector",
 						GPUCollector: GPUCollectorConfig{
+							CollectionDeadlineDuration: 30 * time.Second,
+						},
+						ChassisCollector: ChassisCollectorConfig{
 							CollectionDeadlineDuration: 10 * time.Second,
+						},
+						ManagerCollector: ManagerCollectorConfig{
+							CollectionDeadlineDuration: 30 * time.Second,
+						},
+						SystemCollector: SystemCollectorConfig{
+							CollectionDeadlineDuration: 30 * time.Second,
+						},
+						TelemetryCollector: TelemetryCollectorConfig{
+							CollectionDeadlineDuration: 30 * time.Second,
 						},
 					},
 				},
