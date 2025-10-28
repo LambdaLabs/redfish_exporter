@@ -14,6 +14,7 @@ import (
 	"log/slog"
 
 	"github.com/LambdaLabs/redfish_exporter/collector"
+	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/exporter-toolkit/web"
@@ -29,8 +30,8 @@ var (
 		":9610",
 		"Address to listen on for web interface and telemetry.",
 	)
-	config = &SafeConfig{
-		Config: &Config{},
+	safeConfig = &config.SafeConfig{
+		Config: &config.Config{},
 	}
 	reloadCh chan chan error
 )
@@ -39,7 +40,7 @@ func reloadHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" || r.Method == "PUT" {
 			slog.Info("Triggered configuration reload from /-/reload HTTP endpoint")
-			err := config.ReloadConfig(*configFile)
+			err := safeConfig.ReloadConfig(*configFile)
 			if err != nil {
 				slog.Error("failed to reload config file", slog.Any("error", err))
 				http.Error(w, "failed to reload config file", http.StatusInternalServerError)
@@ -83,7 +84,7 @@ func metricsHandler(logger *slog.Logger) http.HandlerFunc {
 		logger.Debug("Scraping target host", slog.String("target", target))
 
 		var (
-			hostConfig *HostConfig
+			hostConfig *config.HostConfig
 			err        error
 			ok         bool
 			group      []string
@@ -93,7 +94,7 @@ func metricsHandler(logger *slog.Logger) http.HandlerFunc {
 
 		if ok && len(group[0]) >= 1 {
 			// Trying to get hostConfig from group.
-			if hostConfig, err = config.HostConfigForGroup(group[0]); err != nil {
+			if hostConfig, err = safeConfig.HostConfigForGroup(group[0]); err != nil {
 				logger.Error("error getting credentials", slog.Any("error", err))
 				return
 			}
@@ -101,7 +102,7 @@ func metricsHandler(logger *slog.Logger) http.HandlerFunc {
 
 		// Always falling back to single host config when group config failed.
 		if hostConfig == nil {
-			if hostConfig, err = config.HostConfigForTarget(target); err != nil {
+			if hostConfig, err = safeConfig.HostConfigForTarget(target); err != nil {
 				logger.Error("error getting credentials", slog.Any("error", err))
 				return
 			}
@@ -117,7 +118,7 @@ func metricsHandler(logger *slog.Logger) http.HandlerFunc {
 			return
 		}
 
-		collectors := buildCollectorsFor(modules, config.GetModules(), aggregateCollector.Client(), logger)
+		collectors := buildCollectorsFor(modules, safeConfig.GetModules(), aggregateCollector.Client(), logger)
 		aggregateCollector.WithCollectors(collectors)
 		registry.MustRegister(aggregateCollector)
 		gatherers := prometheus.Gatherers{
@@ -136,7 +137,7 @@ func metricsHandler(logger *slog.Logger) http.HandlerFunc {
 // For ease onboarding from existing redfish_exporter deployments,
 // a modules[0] == "rf_exporter_default" will yield a []prometheus.Collector defined
 // in this function. Future relases will remove this behavior and require user input.
-func buildCollectorsFor(modules []string, moduleConfig map[string]Module, rfClient *gofish.APIClient, logger *slog.Logger) []prometheus.Collector {
+func buildCollectorsFor(modules []string, moduleConfig map[string]config.Module, rfClient *gofish.APIClient, logger *slog.Logger) []prometheus.Collector {
 	if modules[0] == "rf_exporter_default" {
 		return buildCollectorsFor([]string{
 			"gpu_collector",
@@ -144,12 +145,12 @@ func buildCollectorsFor(modules []string, moduleConfig map[string]Module, rfClie
 			"manager_collector",
 			"system_collector",
 			"telemetry_collector",
-		}, DefaultModuleConfig, rfClient, logger)
+		}, config.DefaultModuleConfig, rfClient, logger)
 	}
 	c := []prometheus.Collector{}
 	for _, module := range modules {
 		if modConfig, found := moduleConfig[module]; found {
-			c = append(c, modConfig.Collector(rfClient, logger))
+			c = append(c, collector.NewCollectorFromModule(&modConfig, rfClient, logger))
 		}
 	}
 	return c
@@ -179,14 +180,14 @@ func main() {
 	flag.Parse()
 
 	// load config  first time
-	if err := config.ReloadConfig(*configFile); err != nil {
+	if err := safeConfig.ReloadConfig(*configFile); err != nil {
 		slog.Error("Error parsing config file", slog.Any("error", err))
 		os.Exit(1)
 	}
 
 	// Setup dinal logger from config
 	opts := &slog.HandlerOptions{
-		Level: parseLogLevel(config.Config.Loglevel),
+		Level: parseLogLevel(safeConfig.Config.Loglevel),
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, opts))
 	slog.SetDefault(logger)
@@ -202,13 +203,13 @@ func main() {
 		for {
 			select {
 			case <-hup:
-				if err := config.ReloadConfig(*configFile); err != nil {
+				if err := safeConfig.ReloadConfig(*configFile); err != nil {
 					slog.Error("failed to reload config file", slog.Any("error", err))
 					break
 				}
 				slog.Info("config file reload", slog.String("operation", "sc.ReloadConfig"))
 			case rc := <-reloadCh:
-				if err := config.ReloadConfig(*configFile); err != nil {
+				if err := safeConfig.ReloadConfig(*configFile); err != nil {
 					slog.Error("failed to reload config file", slog.Any("error", err))
 					rc <- err
 					break

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
 )
@@ -22,6 +23,7 @@ var (
 // ManagerCollector implements the prometheus.Collector.
 type ManagerCollector struct {
 	redfishClient         *gofish.APIClient
+	config                *config.ManagerCollectorConfig
 	metrics               map[string]Metric
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
@@ -40,9 +42,10 @@ func createManagerMetricMap() map[string]Metric {
 }
 
 // NewManagerCollector returns a collector that collecting memory statistics
-func NewManagerCollector(redfishClient *gofish.APIClient, logger *slog.Logger) *ManagerCollector {
+func NewManagerCollector(redfishClient *gofish.APIClient, logger *slog.Logger, config *config.ManagerCollectorConfig) *ManagerCollector {
 	return &ManagerCollector{
 		redfishClient: redfishClient,
+		config:        config,
 		metrics:       managerMetrics,
 		logger:        logger,
 		collectorScrapeStatus: prometheus.NewGaugeVec(

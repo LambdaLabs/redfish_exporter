@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
 	"github.com/stmcginnis/gofish/redfish"
@@ -34,6 +35,7 @@ var (
 // ChassisCollector implements the prometheus.Collector.
 type ChassisCollector struct {
 	redfishClient         *gofish.APIClient
+	config                *config.ChassisCollectorConfig
 	metrics               map[string]Metric
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
@@ -94,12 +96,13 @@ func createChassisMetricMap() map[string]Metric {
 }
 
 // NewChassisCollector returns a collector that collecting chassis statistics
-func NewChassisCollector(redfishClient *gofish.APIClient, logger *slog.Logger) *ChassisCollector {
+func NewChassisCollector(redfishClient *gofish.APIClient, logger *slog.Logger, config *config.ChassisCollectorConfig) *ChassisCollector {
 	// get service from redfish client
 
 	return &ChassisCollector{
 		redfishClient: redfishClient,
 		metrics:       chassisMetrics,
+		config:        config,
 		logger:        logger,
 		collectorScrapeStatus: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{

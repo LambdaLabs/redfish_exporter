@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	isoDuration "github.com/sosodev/duration"
 	"github.com/stmcginnis/gofish"
@@ -231,15 +232,17 @@ func createTelemetryMetricMap() map[string]Metric {
 // TelemetryCollector collects metrics from Redfish TelemetryService
 type TelemetryCollector struct {
 	redfishClient         *gofish.APIClient
+	config                *config.TelemetryCollectorConfig
 	metrics               map[string]Metric
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
 }
 
 // NewTelemetryCollector creates a new TelemetryService collector
-func NewTelemetryCollector(redfishClient *gofish.APIClient, logger *slog.Logger) *TelemetryCollector {
+func NewTelemetryCollector(redfishClient *gofish.APIClient, logger *slog.Logger, config *config.TelemetryCollectorConfig) *TelemetryCollector {
 	return &TelemetryCollector{
 		redfishClient: redfishClient,
+		config:        config,
 		metrics:       telemetryMetrics,
 		logger:        logger.With(slog.String("collector", "TelemetryCollector")),
 		collectorScrapeStatus: prometheus.NewGaugeVec(

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	isoDuration "github.com/sosodev/duration"
 	"github.com/stmcginnis/gofish"
@@ -60,6 +61,7 @@ func isGPUMemory(deviceType redfish.MemoryDeviceType) bool {
 // GPUCollector collects GPU-specific metrics including Nvidia OEM fields
 type GPUCollector struct {
 	redfishClient         *gofish.APIClient
+	config                *config.GPUCollectorConfig
 	metrics               map[string]Metric
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
@@ -129,10 +131,11 @@ func createGPUMetricMap() map[string]Metric {
 }
 
 // NewGPUCollector creates a new GPU collector
-func NewGPUCollector(redfishClient *gofish.APIClient, logger *slog.Logger) *GPUCollector {
+func NewGPUCollector(redfishClient *gofish.APIClient, logger *slog.Logger, config *config.GPUCollectorConfig) *GPUCollector {
 	return &GPUCollector{
 		redfishClient: redfishClient,
 		metrics:       gpuMetrics,
+		config:        config,
 		logger:        logger.With(slog.String("collector", "GPUCollector")),
 		collectorScrapeStatus: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
