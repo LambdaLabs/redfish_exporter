@@ -124,21 +124,20 @@ func parseLogLevel(level string) slog.Level {
 }
 
 func main() {
-
 	slog.Info("Starting redfish_exporter")
 	flag.Parse()
 
 	// load config  first time
 	if err := config.ReloadConfig(*configFile); err != nil {
 		slog.Error("Error parsing config file", slog.Any("error", err))
-		panic(err)
+		os.Exit(1)
 	}
 
 	// Setup dinal logger from config
 	opts := &slog.HandlerOptions{
 		Level: parseLogLevel(config.Config.Loglevel),
 	}
-	logger := slog.New(slog.NewTextHandler(os.Stdout, opts))
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, opts))
 	slog.SetDefault(logger)
 
 	slog.Info("Config successfully parsed", slog.String("loglevel", opts.Level.Level().String()))
