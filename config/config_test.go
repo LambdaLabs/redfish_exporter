@@ -96,9 +96,11 @@ modules:
   foo:
     gpu_collector:
 `,
-			wantErrString: "modules require a prober to be set",
+			wantErrString: "module foo is not valid: module requires a prober to be configured",
 			wantConfig: &Config{
-				Modules: map[string]Module{},
+				Modules: map[string]Module{
+					"foo": {},
+				},
 			},
 		},
 	}
@@ -106,10 +108,10 @@ modules:
 		t.Run(tName, func(t *testing.T) {
 			byteReader := bytes.NewReader([]byte(test.inputYAML))
 			gotConfig, err := readConfigFrom(byteReader)
-			gta.Assert(t, cmp.DeepEqual(test.wantConfig, gotConfig))
 			if test.wantErrString != "" {
 				gta.ErrorContains(t, err, test.wantErrString)
 			}
+			gta.Assert(t, cmp.DeepEqual(test.wantConfig, gotConfig))
 		})
 	}
 }

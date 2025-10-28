@@ -149,9 +149,14 @@ func (m *Module) UnmarshalYAML(unmarshal func(any) error) error {
 	if err := unmarshal((*plain)(m)); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (m *Module) Validate() error {
 	if m.Prober == "" {
-		return fmt.Errorf("modules require a prober to be set")
+		return fmt.Errorf("module requires a prober to be configured")
 	}
+
 	return nil
 }
 
@@ -169,6 +174,17 @@ func (c *Config) UnmarshalYAML(unmarshal func(any) error) error {
 	type plain Config
 	if err := unmarshal((*plain)(c)); err != nil {
 		return err
+	}
+
+	return c.Validate()
+}
+
+// Validate runs end-of-parsing validations against a Config.
+func (c *Config) Validate() error {
+	for modName, mod := range c.Modules {
+		if err := mod.Validate(); err != nil {
+			return fmt.Errorf("module %s is not valid: %w", modName, err)
+		}
 	}
 	return nil
 }
