@@ -5,6 +5,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/pprof"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,11 +17,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/exporter-toolkit/web"
+	"github.com/stmcginnis/gofish"
 )
 
 var (
 	webConfig     = flag.String("web.config-file", "", "Path to web configuration file.")
 	configFile    = flag.String("config.file", "config.yml", "Path to configuration file.")
+	pprofEnabled  = flag.Bool("pprof.enabled", false, "Enable pprof handler at /pprof")
 	listenAddress = flag.String(
 		"web.listen-address",
 		":9610",
@@ -168,11 +172,29 @@ func main() {
 		}
 	}()
 
-	http.Handle("/redfish", metricsHandler(logger)) // Regular metrics endpoint for local Redfish metrics.
-	http.Handle("/-/reload", reloadHandler())       // HTTP endpoint for triggering configuration reload
-	http.Handle("/metrics", promhttp.Handler())
+	mux := http.NewServeMux()
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/redfish", metricsHandler(logger)) // Regular metrics endpoint for local Redfish metrics.
+	mux.Handle("/-/reload", reloadHandler())       // HTTP endpoint for triggering configuration reload
+	mux.Handle("/metrics", promhttp.Handler())
+
+	if *pprofEnabled {
+		mux.HandleFunc("/debug/pprof/", pprof.Index)
+		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+		mux.Handle("/debug/pprof/heap", pprof.Handler("heap"))
+		mux.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
+		mux.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
+		mux.Handle("/debug/pprof/block", pprof.Handler("block"))
+		mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
+		mux.Handle("/debug/pprof/allocs", pprof.Handler("allocs"))
+
+		slog.Info("pprof endpoints enabled", slog.Any("endpoint", "/debug/pprof/"))
+	}
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// nolint
 		w.Write([]byte(`<html>
             <head>
@@ -195,7 +217,9 @@ func main() {
 		WebConfigFile:      webConfig,
 	}
 	slog.Info("Exporter started", slog.String("listenAddress", *listenAddress))
-	srv := &http.Server{} //nolint:gosec // TODO: Add ReadHeaderTimeout after determining appropriate value
+	srv := &http.Server{
+		Handler: mux,
+	}
 	err := web.ListenAndServe(srv, &exporterToolkitConf, logger)
 	if err != nil {
 		log.Fatal(err)
