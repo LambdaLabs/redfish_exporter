@@ -16,19 +16,37 @@ import (
 )
 
 var (
+	// DefaultGPUCollector is a default unless the user provides particular values.
 	DefaultGPUCollector = GPUCollectorConfig{
 		CollectionDeadlineDuration: 30 * time.Second,
 	}
+	// DefaultChassisCollector is a default unless the user provides particular values.
 	DefaultChassisCollector = ChassisCollectorConfig{
 		CollectionDeadlineDuration: 30 * time.Second,
 	}
-	DefaultModule = Module{
-		ChassisCollector: DefaultChassisCollector,
-		GPUCollector:     DefaultGPUCollector,
+	// DefaultManagerCollector is a default unless the user provides particular values.
+	DefaultManagerCollector = ManagerCollectorConfig{
+		CollectionDeadlineDuration: 30 * time.Second,
 	}
-	// NOTE: This map is used as a default when building a collector slice.
+	// DefaultSystemCollector is a default unless the user provides particular values.
+	DefaultSystemCollector = SystemCollectorConfig{
+		CollectionDeadlineDuration: 30 * time.Second,
+	}
+	// DefaultTelemetryCollector is a default unless the user provides particular values.
+	DefaultTelemetryCollector = TelemetryCollectorConfig{
+		CollectionDeadlineDuration: 30 * time.Second,
+	}
+	// DefaultModule is a default Module
+	DefaultModule = Module{
+		ChassisCollector:   DefaultChassisCollector,
+		GPUCollector:       DefaultGPUCollector,
+		ManagerCollector:   DefaultManagerCollector,
+		SystemCollector:    DefaultSystemCollector,
+		TelemetryCollector: DefaultTelemetryCollector,
+	}
+	// DefaultModuleConfig is used as a default when building a collector slice.
 	// In a future release, this will be removed and users will be expected to
-	// define one or more modules, and reference those in HTTP requests.
+	// define one or more modules in their config, and reference those as HTTP query params.
 	DefaultModuleConfig = map[string]Module{
 		"gpu_collector": {
 			Prober:       "gpu_collector",
@@ -38,13 +56,27 @@ var (
 			Prober:           "chassis_collector",
 			ChassisCollector: DefaultChassisCollector,
 		},
+		"manager_collector": {
+			Prober:           "manager_collector",
+			ManagerCollector: DefaultManagerCollector,
+		},
+		"system_collector": {
+			Prober:          "system_collector",
+			SystemCollector: DefaultSystemCollector,
+		},
+		"telemetry_collector": {
+			Prober:             "telemetry_collector",
+			TelemetryCollector: DefaultTelemetryCollector,
+		},
 	}
 )
 
+// ChassisCollectorConfig is a prober configuration.
 type ChassisCollectorConfig struct {
 	CollectionDeadlineDuration time.Duration `yaml:"collection_deadline"`
 }
 
+// UnmarshalYAML implements the yaml.Unmarshaler interface
 func (c *ChassisCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
 	*c = DefaultChassisCollector
 	type plain ChassisCollectorConfig
@@ -56,10 +88,12 @@ func (c *ChassisCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error 
 	return nil
 }
 
+// GPUCollectorConfig is a prober configuration.
 type GPUCollectorConfig struct {
 	CollectionDeadlineDuration time.Duration `yaml:"collection_deadline"`
 }
 
+// UnmarshalYAML implements the yaml.Unmarshaler interface
 func (g *GPUCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
 	*g = DefaultGPUCollector
 	type plain GPUCollectorConfig
@@ -71,12 +105,70 @@ func (g *GPUCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
 	return nil
 }
 
-type Module struct {
-	Prober           string                 `yaml:"prober"`
-	GPUCollector     GPUCollectorConfig     `yaml:"gpu_collector"`
-	ChassisCollector ChassisCollectorConfig `yaml:"chassis_collector"`
+// ManagerCollectorConfig is a prober configuration.
+type ManagerCollectorConfig struct {
+	CollectionDeadlineDuration time.Duration `yaml:"collection_deadline"`
 }
 
+// UnmarshalYAML implements the yaml.Unmarshaler interface
+func (m *ManagerCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
+	*m = DefaultManagerCollector
+	type plain ManagerCollectorConfig
+
+	if err := unmarshal((*plain)(m)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SystemCollectorConfig is a prober configuration.
+type SystemCollectorConfig struct {
+	CollectionDeadlineDuration time.Duration `yaml:"collection_deadline"`
+}
+
+// UnmarshalYAML implements the yaml.Unmarshaler interface
+func (s *SystemCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
+	*s = DefaultSystemCollector
+	type plain SystemCollectorConfig
+
+	if err := unmarshal((*plain)(s)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// TelemetryCollectorConfig is a prober configuration.
+type TelemetryCollectorConfig struct {
+	CollectionDeadlineDuration time.Duration `yaml:"collection_deadline"`
+}
+
+// UnmarshalYAML implements the yaml.Unmarshaler interface
+func (t *TelemetryCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
+	*t = DefaultTelemetryCollector
+	type plain TelemetryCollectorConfig
+
+	if err := unmarshal((*plain)(t)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Module is a struct which represents some particular behavior the redfish_exporter should have
+// when executed against a host.
+// Modules are expected to specify a 'prober', and then a particular collector.
+type Module struct {
+	Prober             string                   `yaml:"prober"`
+	GPUCollector       GPUCollectorConfig       `yaml:"gpu_collector"`
+	ChassisCollector   ChassisCollectorConfig   `yaml:"chassis_collector"`
+	ManagerCollector   ManagerCollectorConfig   `yaml:"manager_collector"`
+	SystemCollector    SystemCollectorConfig    `yaml:"system_collector"`
+	TelemetryCollector TelemetryCollectorConfig `yaml:"telemetry_collector"`
+}
+
+// UnmarshalYAML implements the yaml.Unmarshaler interface
 func (m *Module) UnmarshalYAML(unmarshal func(any) error) error {
 	*m = DefaultModule
 	type plain Module
@@ -89,8 +181,9 @@ func (m *Module) UnmarshalYAML(unmarshal func(any) error) error {
 	return nil
 }
 
-// Collector creates and returns a prometheus.Collector from the module, based on the Module.Prober.
-// Both redfish client and logger are common dependencies, and must be provided as inputs.
+// Collector creates and returns a prometheus.Collector from the Module, based on the Prober.
+// Both redfish client and logger are common dependencies for any redfish_exporter collector,
+// and must be provided as inputs.
 func (m *Module) Collector(rfClient *gofish.APIClient, logger *slog.Logger) prometheus.Collector {
 	switch m.Prober {
 	case "gpu_collector":
@@ -108,6 +201,7 @@ func (m *Module) Collector(rfClient *gofish.APIClient, logger *slog.Logger) prom
 	return nil
 }
 
+// Config represents the redfish_exporter config file
 type Config struct {
 	Hosts    map[string]HostConfig `yaml:"hosts"`
 	Groups   map[string]HostConfig `yaml:"groups"`
@@ -115,6 +209,8 @@ type Config struct {
 	Modules  map[string]Module     `yaml:"modules"`
 }
 
+// UnmarshalYAML is a custom YAML unmarshaler.
+// It is heavily inspired by blackbox_exporter.
 func (c *Config) UnmarshalYAML(unmarshal func(any) error) error {
 	type plain Config
 	if err := unmarshal((*plain)(c)); err != nil {
@@ -123,21 +219,24 @@ func (c *Config) UnmarshalYAML(unmarshal func(any) error) error {
 	return nil
 }
 
+// SafeConfig is a mutex-enabled Config.
 type SafeConfig struct {
 	sync.RWMutex
 	Config *Config
 }
 
+// GetModules exposes the modules map from this SafeConfig
 func (sc *SafeConfig) GetModules() map[string]Module {
 	return sc.Config.Modules
 }
 
+// HostConfig holds the Redfish Username/Password for a host or group of hosts
 type HostConfig struct {
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
 }
 
-// Read exporter config from file
+// Read exporter config from an input file path.
 func NewConfigFromFile(configFilePath string) (*Config, error) {
 	file, err := os.Open(configFilePath)
 	defer file.Close()
@@ -156,6 +255,8 @@ func readConfigFrom(r io.Reader) (*Config, error) {
 	return config, nil
 }
 
+// ReloadConfig reads a given configuration file.
+// If successfully read, the SafeConfig mutex is obtained and config structure rebuilt.
 func (sc *SafeConfig) ReloadConfig(configFile string) error {
 	var c, err = NewConfigFromFile(configFile)
 	if err != nil {
@@ -169,6 +270,7 @@ func (sc *SafeConfig) ReloadConfig(configFile string) error {
 	return nil
 }
 
+// HostConfigForTarget safely looks up a specific target auth configuration from the config file.
 func (sc *SafeConfig) HostConfigForTarget(target string) (*HostConfig, error) {
 	sc.Lock()
 	defer sc.Unlock()
@@ -198,6 +300,7 @@ func (sc *SafeConfig) HostConfigForGroup(group string) (*HostConfig, error) {
 	return &HostConfig{}, fmt.Errorf("no credentials found for group %s", group)
 }
 
+// AppLogLevel applies a log level to the application.
 func (sc *SafeConfig) AppLogLevel() string {
 	sc.Lock()
 	defer sc.Unlock()
