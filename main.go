@@ -63,10 +63,21 @@ func reloadHandler() http.HandlerFunc {
 func metricsHandler(logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		registry := prometheus.NewRegistry()
-		target := r.URL.Query().Get("target")
+		urlQuery, urlErr := url.ParseQuery(r.URL.RawQuery)
+		if urlErr != nil {
+			logger.Error("request query was not parsed", slog.Any("error", urlErr))
+			http.Error(w, "failed to successfully parse incoming query", 400)
+			return
+		}
+		target := urlQuery.Get("target")
 		if target == "" {
 			http.Error(w, "'target' parameter must be specified", 400)
 			return
+		}
+		modules, modulesDefined := urlQuery["module"]
+		if !modulesDefined || len(modules) == 0 {
+			logger.Debug("incoming request included no modules. using default modules, and a future release will result in failed collection without one or more modules configured and provided")
+			modules = []string{"rf_exporter_default"}
 		}
 
 		logger.Debug("Scraping target host", slog.String("target", target))
@@ -78,7 +89,7 @@ func metricsHandler(logger *slog.Logger) http.HandlerFunc {
 			group      []string
 		)
 
-		group, ok = r.URL.Query()["group"]
+		group, ok = urlQuery["group"]
 
 		if ok && len(group[0]) >= 1 {
 			// Trying to get hostConfig from group.
@@ -96,8 +107,19 @@ func metricsHandler(logger *slog.Logger) http.HandlerFunc {
 			}
 		}
 
-		collector := collector.NewRedfishCollector(target, hostConfig.Username, hostConfig.Password)
-		registry.MustRegister(collector)
+		aggregateCollector, err := collector.NewRedfishCollector(target,
+			hostConfig.Username,
+			hostConfig.Password)
+
+		if err != nil {
+			logger.Error("unable to create redfish client, bailing", slog.Any("error", err))
+			http.Error(w, "unable to construct redfish client", 500)
+			return
+		}
+
+		collectors := buildCollectorsFor(modules, config.GetModules(), aggregateCollector.Client(), logger)
+		aggregateCollector.WithCollectors(collectors)
+		registry.MustRegister(aggregateCollector)
 		gatherers := prometheus.Gatherers{
 			prometheus.DefaultGatherer,
 			registry,
@@ -106,6 +128,31 @@ func metricsHandler(logger *slog.Logger) http.HandlerFunc {
 		h := promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{})
 		h.ServeHTTP(w, r)
 	}
+}
+
+// buildCollectorsFor accepts a list of modules and map of moduleConfig, yielding a slice of
+// prometheus.Collector built from the module config.
+// It silently discards modules for which there is no module config.
+// For ease onboarding from existing redfish_exporter deployments,
+// a modules[0] == "rf_exporter_default" will yield a []prometheus.Collector defined
+// in this function. Future relases will remove this behavior and require user input.
+func buildCollectorsFor(modules []string, moduleConfig map[string]Module, rfClient *gofish.APIClient, logger *slog.Logger) []prometheus.Collector {
+	if modules[0] == "rf_exporter_default" {
+		return buildCollectorsFor([]string{
+			"gpu_collector",
+			"chassis_collector",
+			"manager_collector",
+			"system_collector",
+			"telemetry_collector",
+		}, DefaultModuleConfig, rfClient, logger)
+	}
+	c := []prometheus.Collector{}
+	for _, module := range modules {
+		if modConfig, found := moduleConfig[module]; found {
+			c = append(c, modConfig.Collector(rfClient, logger))
+		}
+	}
+	return c
 }
 
 // Parse the log leven from input
@@ -205,6 +252,7 @@ func main() {
             <form action="/redfish">
             <label>Target:</label> <input type="text" name="target" placeholder="X.X.X.X" value="1.2.3.4"><br>
             <label>Group:</label> <input type="text" name="group" placeholder="group (optional)" value=""><br>
+            <label>Module:</label> <input type="text" name="module" placeholder="module (optional)" value=""><br>
             <input type="submit" value="Submit">
 						</form>
 						<p><a href="/metrics">Local metrics</a></p>
