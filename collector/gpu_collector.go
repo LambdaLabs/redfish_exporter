@@ -527,9 +527,18 @@ func (g *GPUCollector) collectGPUProcessor(ch chan<- prometheus.Metric, systemNa
 
 // collectNVLinkPorts collects NVLink port metrics for a GPU processor
 func (g *GPUCollector) collectNVLinkPorts(ch chan<- prometheus.Metric, systemName, systemID, gpuID string, processor *redfish.Processor) {
-	ports, err := processor.Ports()
+	// Note: processor.Ports() won't return GPU ports per gofish code, and
+	// processor.GraphicsController().Ports() doesn't work on current hardware.
+	// Using direct URL construction as a workaround.
+	portsURL := processor.ODataID + "/Ports"
+	ports, err := redfish.ListReferencedPorts(processor.GetClient(), portsURL)
 	if err != nil {
-		g.logger.Error("failed to get port data")
+		g.logger.Error("failed to get ports",
+			slog.String("gpu_id", gpuID),
+			slog.String("system_id", systemID),
+			slog.String("ports_url", portsURL),
+			slog.Any("error", err))
+		return
 	}
 
 	for _, port := range ports {
