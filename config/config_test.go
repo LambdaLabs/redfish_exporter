@@ -1,9 +1,8 @@
-package main
+package config
 
 import (
 	"bytes"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	gta "gotest.tools/v3/assert"
@@ -11,7 +10,7 @@ import (
 )
 
 func TestConfigFromFile(t *testing.T) {
-	configFile := "config.example.yml"
+	configFile := "testdata/config.example.yml"
 
 	config, err := NewConfigFromFile(configFile)
 	assert.NoError(t, err)
@@ -20,6 +19,9 @@ func TestConfigFromFile(t *testing.T) {
 	assert.Equal(t, "info", config.Loglevel)
 	assert.Equal(t, config.Hosts["default"], HostConfig{Username: "user", Password: "pass"})
 	assert.Equal(t, config.Groups["group1"], HostConfig{Username: "group1_user", Password: "group1_pass"})
+	assert.NotNil(t, config.Modules["foo"])
+	assert.NotNil(t, config.Modules["foo"].GPUCollector)
+	assert.Equal(t, "gpu_collector", config.Modules["foo"].Prober)
 }
 
 func TestModulesConfig(t *testing.T) {
@@ -28,39 +30,7 @@ func TestModulesConfig(t *testing.T) {
 		wantErrString string
 		wantConfig    *Config
 	}{
-		"GPU Collector with a deadline": {
-			inputYAML: `
-modules:
-  foo:
-    prober: gpu_collector
-    gpu_collector:
-      collection_deadline: 60s
-`,
-			wantErrString: "",
-			wantConfig: &Config{
-				Modules: map[string]Module{
-					"foo": {
-						Prober: "gpu_collector",
-						GPUCollector: GPUCollectorConfig{
-							CollectionDeadlineDuration: 60 * time.Second,
-						},
-						ChassisCollector: ChassisCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
-						ManagerCollector: ManagerCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
-						SystemCollector: SystemCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
-						TelemetryCollector: TelemetryCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
-					},
-				},
-			},
-		},
-		"GPU Collector without deadline gets a default": {
+		"GPU Collector exists": {
 			inputYAML: `
 modules:
   foo:
@@ -71,22 +41,12 @@ modules:
 			wantConfig: &Config{
 				Modules: map[string]Module{
 					"foo": {
-						Prober: "gpu_collector",
-						GPUCollector: GPUCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
-						ChassisCollector: ChassisCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
-						ManagerCollector: ManagerCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
-						SystemCollector: SystemCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
-						TelemetryCollector: TelemetryCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
+						Prober:             "gpu_collector",
+						GPUCollector:       GPUCollectorConfig{},
+						ChassisCollector:   ChassisCollectorConfig{},
+						ManagerCollector:   ManagerCollectorConfig{},
+						SystemCollector:    SystemCollectorConfig{},
+						TelemetryCollector: TelemetryCollectorConfig{},
 					},
 				},
 			},
@@ -99,49 +59,28 @@ modules:
     prober: gpu_collector
     gpu_collector:
   boo:
-    prober: gpu_collector
+    prober: chassis_collector
     chassis_collector:
-      collection_deadline: 10s
 `,
 			wantErrString: "",
 			wantConfig: &Config{
 				Loglevel: "info",
 				Modules: map[string]Module{
 					"foo": {
-						Prober: "gpu_collector",
-						GPUCollector: GPUCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
-						ChassisCollector: ChassisCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
-						ManagerCollector: ManagerCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
-						SystemCollector: SystemCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
-						TelemetryCollector: TelemetryCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
+						Prober:             "gpu_collector",
+						GPUCollector:       GPUCollectorConfig{},
+						ChassisCollector:   ChassisCollectorConfig{},
+						ManagerCollector:   ManagerCollectorConfig{},
+						SystemCollector:    SystemCollectorConfig{},
+						TelemetryCollector: TelemetryCollectorConfig{},
 					},
 					"boo": {
-						Prober: "gpu_collector",
-						GPUCollector: GPUCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
-						ChassisCollector: ChassisCollectorConfig{
-							CollectionDeadlineDuration: 10 * time.Second,
-						},
-						ManagerCollector: ManagerCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
-						SystemCollector: SystemCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
-						TelemetryCollector: TelemetryCollectorConfig{
-							CollectionDeadlineDuration: 30 * time.Second,
-						},
+						Prober:             "chassis_collector",
+						GPUCollector:       GPUCollectorConfig{},
+						ChassisCollector:   ChassisCollectorConfig{},
+						ManagerCollector:   ManagerCollectorConfig{},
+						SystemCollector:    SystemCollectorConfig{},
+						TelemetryCollector: TelemetryCollectorConfig{},
 					},
 				},
 			},

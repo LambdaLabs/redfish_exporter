@@ -1,41 +1,25 @@
-package main
+package config
 
 import (
 	"fmt"
 	"io"
-	"log/slog"
-	"sync"
-	"time"
-
 	"os"
+	"sync"
 
-	"github.com/LambdaLabs/redfish_exporter/collector"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stmcginnis/gofish"
 	yaml "gopkg.in/yaml.v3"
 )
 
 var (
 	// DefaultGPUCollector is a default unless the user provides particular values.
-	DefaultGPUCollector = GPUCollectorConfig{
-		CollectionDeadlineDuration: 30 * time.Second,
-	}
+	DefaultGPUCollector = GPUCollectorConfig{}
 	// DefaultChassisCollector is a default unless the user provides particular values.
-	DefaultChassisCollector = ChassisCollectorConfig{
-		CollectionDeadlineDuration: 30 * time.Second,
-	}
+	DefaultChassisCollector = ChassisCollectorConfig{}
 	// DefaultManagerCollector is a default unless the user provides particular values.
-	DefaultManagerCollector = ManagerCollectorConfig{
-		CollectionDeadlineDuration: 30 * time.Second,
-	}
+	DefaultManagerCollector = ManagerCollectorConfig{}
 	// DefaultSystemCollector is a default unless the user provides particular values.
-	DefaultSystemCollector = SystemCollectorConfig{
-		CollectionDeadlineDuration: 30 * time.Second,
-	}
+	DefaultSystemCollector = SystemCollectorConfig{}
 	// DefaultTelemetryCollector is a default unless the user provides particular values.
-	DefaultTelemetryCollector = TelemetryCollectorConfig{
-		CollectionDeadlineDuration: 30 * time.Second,
-	}
+	DefaultTelemetryCollector = TelemetryCollectorConfig{}
 	// DefaultModule is a default Module
 	DefaultModule = Module{
 		ChassisCollector:   DefaultChassisCollector,
@@ -72,9 +56,7 @@ var (
 )
 
 // ChassisCollectorConfig is a prober configuration.
-type ChassisCollectorConfig struct {
-	CollectionDeadlineDuration time.Duration `yaml:"collection_deadline"`
-}
+type ChassisCollectorConfig struct{}
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface
 func (c *ChassisCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
@@ -89,9 +71,7 @@ func (c *ChassisCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error 
 }
 
 // GPUCollectorConfig is a prober configuration.
-type GPUCollectorConfig struct {
-	CollectionDeadlineDuration time.Duration `yaml:"collection_deadline"`
-}
+type GPUCollectorConfig struct{}
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface
 func (g *GPUCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
@@ -106,9 +86,7 @@ func (g *GPUCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
 }
 
 // ManagerCollectorConfig is a prober configuration.
-type ManagerCollectorConfig struct {
-	CollectionDeadlineDuration time.Duration `yaml:"collection_deadline"`
-}
+type ManagerCollectorConfig struct{}
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface
 func (m *ManagerCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
@@ -123,9 +101,7 @@ func (m *ManagerCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error 
 }
 
 // SystemCollectorConfig is a prober configuration.
-type SystemCollectorConfig struct {
-	CollectionDeadlineDuration time.Duration `yaml:"collection_deadline"`
-}
+type SystemCollectorConfig struct{}
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface
 func (s *SystemCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
@@ -140,9 +116,7 @@ func (s *SystemCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
 }
 
 // TelemetryCollectorConfig is a prober configuration.
-type TelemetryCollectorConfig struct {
-	CollectionDeadlineDuration time.Duration `yaml:"collection_deadline"`
-}
+type TelemetryCollectorConfig struct{}
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface
 func (t *TelemetryCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
@@ -177,26 +151,6 @@ func (m *Module) UnmarshalYAML(unmarshal func(any) error) error {
 	}
 	if m.Prober == "" {
 		return fmt.Errorf("modules require a prober to be set")
-	}
-	return nil
-}
-
-// Collector creates and returns a prometheus.Collector from the Module, based on the Prober.
-// Both redfish client and logger are common dependencies for any redfish_exporter collector,
-// and must be provided as inputs.
-func (m *Module) Collector(rfClient *gofish.APIClient, logger *slog.Logger) prometheus.Collector {
-	switch m.Prober {
-	case "gpu_collector":
-		return collector.NewGPUCollector(rfClient, logger)
-	case "chassis_collector":
-		return collector.NewChassisCollector(rfClient, logger)
-	case "manager_collector":
-		return collector.NewManagerCollector(rfClient, logger)
-	case "system_collector":
-		return collector.NewSystemCollector(rfClient, logger)
-	case "telemetry_collector":
-		return collector.NewTelemetryCollector(rfClient, logger)
-	default:
 	}
 	return nil
 }

@@ -11,3 +11,20 @@ groups:
     password: group1_pass
 # loglevel can be one of "debug", "info", "warn", "error"
 loglevel: info
+
+# The modules map defines various collectors the exporter may use, at client discretion.
+# Clients like Prometheus should specify one or more 'modules' HTTP query parameters
+# for each scrape, mapping to one or more of the defined modules below.
+# Clients requesting a module which does not exist in this map, will not receive metrics
+# beyond internal telemetry.
+modules:
+  chassis:
+    prober: chassis_collector
+  gpu:
+    prober: gpu_collector
+  manager:
+    prober: manager_collector
+  system:
+    prober: system_collector
+  telemetry:
+    prober: telemetry_collector
