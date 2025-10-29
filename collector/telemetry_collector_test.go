@@ -266,6 +266,7 @@ func TestTelemetryMetricCount(t *testing.T) {
 		"port":                 23, // port metrics (speed, rx/tx bytes/frames/errors, link down counts, OEM metrics)
 		"nvidia_gpm":           22, // GPU Performance Monitoring: 11 compute + 2 aggregate media + 2 instance media + 5 network + 2 PCIe
 		"platform_environment": 18, // Platform environment metrics: 3 backward-compat + 4 GPU + 8 CPU + 2 ambient + 1 BMC
+		"info":                 1,  // GPU Info series
 		"scrape_status":        1,  // collector status
 	}
 

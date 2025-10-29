@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
 	"github.com/stmcginnis/gofish/redfish"
@@ -32,6 +33,7 @@ var (
 // SystemCollector implements the prometheus.Collector.
 type SystemCollector struct {
 	redfishClient *gofish.APIClient
+	config        *config.SystemCollectorConfig
 	metrics       map[string]Metric
 	logger        *slog.Logger
 	prometheus.Collector
@@ -56,14 +58,13 @@ func createSystemMetricMap() map[string]Metric {
 	addToMetricMap(systemMetrics, SystemSubsystem, "memory_state", fmt.Sprintf("system memory state,%s", CommonStateHelp), SystemMemoryLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "memory_health_state", fmt.Sprintf("system memory health state,%s", CommonHealthHelp), SystemMemoryLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "memory_capacity", "system memory capacity, MiB", SystemMemoryLabelNames)
-	
 
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_state", fmt.Sprintf("system processor state,%s", CommonStateHelp), SystemProcessorLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_health_state", fmt.Sprintf("system processor health state,%s", CommonHealthHelp), SystemProcessorLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_health_rollup", fmt.Sprintf("system processor health rollup,%s", CommonHealthHelp), SystemProcessorLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_total_threads", "system processor total threads", SystemProcessorLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_total_cores", "system processor total cores", SystemProcessorLabelNames)
-	
+
 	// PCIe error metrics for processors/GPUs
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_pcie_errors_l0_to_recovery_count", "system processor PCIe L0 to recovery state transition count", SystemProcessorLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_pcie_errors_correctable_count", "system processor PCIe correctable error count", SystemProcessorLabelNames)
@@ -73,7 +74,7 @@ func createSystemMetricMap() map[string]Metric {
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_pcie_errors_nak_sent_count", "system processor PCIe NAK sent count", SystemProcessorLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_pcie_errors_replay_count", "system processor PCIe replay count", SystemProcessorLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_pcie_errors_replay_rollover_count", "system processor PCIe replay rollover count", SystemProcessorLabelNames)
-	
+
 	// Cache metrics for processors/GPUs
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_cache_lifetime_uncorrectable_ecc_error_count", "system processor cache lifetime uncorrectable ECC error count", SystemProcessorLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "processor_cache_lifetime_correctable_ecc_error_count", "system processor cache lifetime correctable ECC error count", SystemProcessorLabelNames)
@@ -85,7 +86,6 @@ func createSystemMetricMap() map[string]Metric {
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_drive_state", fmt.Sprintf("system storage drive state,%s", CommonStateHelp), SystemDriveLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_drive_health_state", fmt.Sprintf("system storage drive health state,%s", CommonHealthHelp), SystemDriveLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_drive_capacity", "system storage drive capacity, Bytes", SystemDriveLabelNames)
-	
 
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_controller_state", fmt.Sprintf("system storage controller state,%s", CommonStateHelp), SystemStorageControllerLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "storage_controller_health_state", fmt.Sprintf("system storage controller health state,%s", CommonHealthHelp), SystemStorageControllerLabelNames)
@@ -111,9 +111,10 @@ func createSystemMetricMap() map[string]Metric {
 }
 
 // NewSystemCollector returns a collector that collecting memory statistics
-func NewSystemCollector(redfishClient *gofish.APIClient, logger *slog.Logger) *SystemCollector {
+func NewSystemCollector(redfishClient *gofish.APIClient, logger *slog.Logger, config *config.SystemCollectorConfig) *SystemCollector {
 	return &SystemCollector{
 		redfishClient: redfishClient,
+		config:        config,
 		metrics:       systemMetrics,
 		logger:        logger,
 		collectorScrapeStatus: prometheus.NewGaugeVec(
@@ -233,7 +234,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 			} else {
 				for _, storage := range storages {
 					storageID := storage.ID
-					
+
 					if volumes, err := storage.Volumes(); err != nil {
 						systemLogger.Error("error getting storage data from system", slog.String("operation", "system.Volumes()"), slog.Any("wrror", err))
 					} else {
@@ -383,7 +384,7 @@ func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processo
 	}
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_total_threads"].desc, prometheus.GaugeValue, float64(processorTotalThreads), systemProcessorLabelValues...)
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_total_cores"].desc, prometheus.GaugeValue, float64(processorTotalCores), systemProcessorLabelValues...)
-	
+
 	// Fetch and emit ProcessorMetrics if available
 	processorMetrics, err := processor.Metrics()
 	if err != nil {
@@ -398,7 +399,7 @@ func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processo
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_nak_sent_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.NAKSentCount), systemProcessorLabelValues...)
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_replay_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.ReplayCount), systemProcessorLabelValues...)
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_replay_rollover_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.ReplayRolloverCount), systemProcessorLabelValues...)
-		
+
 		// Emit cache metrics
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_cache_lifetime_uncorrectable_ecc_error_count"].desc, prometheus.GaugeValue, float64(processorMetrics.CacheMetricsTotal.LifeTime.UncorrectableECCErrorCount), systemProcessorLabelValues...)
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_cache_lifetime_correctable_ecc_error_count"].desc, prometheus.GaugeValue, float64(processorMetrics.CacheMetricsTotal.LifeTime.CorrectableECCErrorCount), systemProcessorLabelValues...)
@@ -438,8 +439,6 @@ func parseDrive(ch chan<- prometheus.Metric, systemHostName string, drive *redfi
 	}
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_drive_capacity"].desc, prometheus.GaugeValue, float64(driveCapacityBytes), systemdriveLabelValues...)
 }
-
-
 
 func parsePcieDevice(ch chan<- prometheus.Metric, systemHostName string, pcieDevice *redfish.PCIeDevice, wg *sync.WaitGroup) {
 	defer wg.Done()

@@ -1,0 +1,16 @@
+hosts:
+  default:
+    username: user
+    password: pass
+  # 192.168.100.1:
+  #   username: different_user
+  #   password: different_pass
+groups:
+  group1:
+    username: group1_user
+    password: group1_pass
+# loglevel can be one of "debug", "info", "warn", "error"
+loglevel: info
+modules:
+  foo:
+    prober: gpu_collector
