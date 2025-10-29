@@ -44,6 +44,7 @@ modules:
 						Prober:             "gpu_collector",
 						GPUCollector:       GPUCollectorConfig{},
 						ChassisCollector:   ChassisCollectorConfig{},
+						JSONCollector:      JSONCollectorConfig{},
 						ManagerCollector:   ManagerCollectorConfig{},
 						SystemCollector:    SystemCollectorConfig{},
 						TelemetryCollector: TelemetryCollectorConfig{},
@@ -70,6 +71,7 @@ modules:
 						Prober:             "gpu_collector",
 						GPUCollector:       GPUCollectorConfig{},
 						ChassisCollector:   ChassisCollectorConfig{},
+						JSONCollector:      JSONCollectorConfig{},
 						ManagerCollector:   ManagerCollectorConfig{},
 						SystemCollector:    SystemCollectorConfig{},
 						TelemetryCollector: TelemetryCollectorConfig{},
@@ -78,6 +80,7 @@ modules:
 						Prober:             "chassis_collector",
 						GPUCollector:       GPUCollectorConfig{},
 						ChassisCollector:   ChassisCollectorConfig{},
+						JSONCollector:      JSONCollectorConfig{},
 						ManagerCollector:   ManagerCollectorConfig{},
 						SystemCollector:    SystemCollectorConfig{},
 						TelemetryCollector: TelemetryCollectorConfig{},
@@ -129,9 +132,9 @@ func TestModulesConfig_JSONCollector(t *testing.T) {
 				Modules: map[string]Module{
 					"delta_powershelf": {
 						Prober: "json_collector",
-						JSONCollector: {
+						JSONCollector: JSONCollectorConfig{
 							RedfishRoot: "/redfish/v1/Chassis/PowerShelf_0/Sensors",
-							JQuery: `      [.Oem.deltaenergysystems.AllSensors.Sensors[]] | map({
+							JQFilter: `[.Oem.deltaenergysystems.AllSensors.Sensors[]] | map({
         name: (if .DeviceName | test("^ps[0-9]+_") then .DeviceName | sub("^ps[0-9]+_"; "") else .DeviceName end),
         value: .Reading,
         labels: (
@@ -145,6 +148,11 @@ func TestModulesConfig_JSONCollector(t *testing.T) {
         unit: " + ._raw.ReadingUnits) |
         map(del(._raw)) | sort_by(.name)`,
 						},
+						GPUCollector:       GPUCollectorConfig{},
+						ChassisCollector:   ChassisCollectorConfig{},
+						ManagerCollector:   ManagerCollectorConfig{},
+						SystemCollector:    SystemCollectorConfig{},
+						TelemetryCollector: TelemetryCollectorConfig{},
 					},
 				},
 			},
