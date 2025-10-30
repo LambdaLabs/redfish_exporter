@@ -189,14 +189,14 @@ func TestCollectTotalGPUPower(t *testing.T) {
 
 	// Add total GPU power control
 	server.addRoute("/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0", map[string]interface{}{
-		"@odata.type": "#Control.v1_5_0.Control",
-		"@odata.id":   "/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0",
-		"Id":          "TotalGPU_Power_0",
-		"Name":        "Total GPU Power",
-		"ControlType": "Power",
+		"@odata.type":   "#Control.v1_5_0.Control",
+		"@odata.id":     "/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0",
+		"Id":            "TotalGPU_Power_0",
+		"Name":          "Total GPU Power",
+		"ControlType":   "Power",
 		"SetPointUnits": "W",
 		"Sensor": map[string]interface{}{
-			"Reading": 673.8720092773438,
+			"Reading":       673.8720092773438,
 			"DataSourceUri": "/redfish/v1/Chassis/HGX_Chassis_0/Sensors/TotalGPU_Power",
 		},
 		"Status": map[string]string{
@@ -295,11 +295,11 @@ func TestCollectTotalGPUPowerMultipleChassis(t *testing.T) {
 
 	// Add first GPU power control for HGX_Chassis_0
 	server.addRoute("/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0", map[string]interface{}{
-		"@odata.type": "#Control.v1_5_0.Control",
-		"@odata.id":   "/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0",
-		"Id":          "TotalGPU_Power_0",
-		"Name":        "Total GPU Power",
-		"ControlType": "Power",
+		"@odata.type":   "#Control.v1_5_0.Control",
+		"@odata.id":     "/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0",
+		"Id":            "TotalGPU_Power_0",
+		"Name":          "Total GPU Power",
+		"ControlType":   "Power",
 		"SetPointUnits": "W",
 		"Sensor": map[string]interface{}{
 			"Reading":       673.8720092773438,
@@ -313,11 +313,11 @@ func TestCollectTotalGPUPowerMultipleChassis(t *testing.T) {
 
 	// Add second GPU power control for HGX_Chassis_0
 	server.addRoute("/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_1", map[string]interface{}{
-		"@odata.type": "#Control.v1_5_0.Control",
-		"@odata.id":   "/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_1",
-		"Id":          "TotalGPU_Power_1",
-		"Name":        "Total GPU Power Group 2",
-		"ControlType": "Power",
+		"@odata.type":   "#Control.v1_5_0.Control",
+		"@odata.id":     "/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_1",
+		"Id":            "TotalGPU_Power_1",
+		"Name":          "Total GPU Power Group 2",
+		"ControlType":   "Power",
 		"SetPointUnits": "W",
 		"Sensor": map[string]interface{}{
 			"Reading":       450.25,
@@ -415,10 +415,10 @@ func TestCollectTotalGPUPowerMultipleChassis(t *testing.T) {
 func TestCollectTotalGPUPowerErrorHandling(t *testing.T) {
 	t.Skip("chassis_gpu_total_power_watts is now collected via TelemetryCollector from HGX_PlatformEnvironmentMetrics_0")
 	testCases := []struct {
-		name              string
-		controlResponse   map[string]interface{}
-		expectMetric      bool
-		expectedValue     float64
+		name            string
+		controlResponse map[string]interface{}
+		expectMetric    bool
+		expectedValue   float64
 	}{
 		{
 			name: "control with zero reading should still emit metric",

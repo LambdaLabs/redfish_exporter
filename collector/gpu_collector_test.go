@@ -26,10 +26,10 @@ func setupTestServerWithGPU(t *testing.T) *testRedfishServer {
 	}
 	server.Server = httptest.NewServer(server.mux)
 	t.Cleanup(server.Close)
-	
+
 	// Add service root
 	server.addRouteFromFixture("/redfish/v1/", "service_root.json")
-	
+
 	// Add systems collection
 	server.addRoute("/redfish/v1/Systems", map[string]interface{}{
 		"@odata.type": "#ComputerSystemCollection.ComputerSystemCollection",
@@ -38,7 +38,7 @@ func setupTestServerWithGPU(t *testing.T) *testRedfishServer {
 		},
 		"Members@odata.count": 1,
 	})
-	
+
 	setupGPUSystem(server)
 	setupGPUMemory(server)
 	setupGPUProcessorsAndSensors(server)
@@ -49,13 +49,13 @@ func setupTestServerWithGPU(t *testing.T) *testRedfishServer {
 // setupGPUSystem adds the HGX system configuration
 func setupGPUSystem(server *testRedfishServer) {
 	server.addRoute("/redfish/v1/Systems/HGX_Baseboard_0", map[string]interface{}{
-		"@odata.type": "#ComputerSystem.v1_14_0.ComputerSystem",
-		"@odata.id":   "/redfish/v1/Systems/HGX_Baseboard_0",
-		"Id":          "HGX_Baseboard_0",
-		"Name":        "HGX System",
-		"SystemType":  "Physical",
+		"@odata.type":  "#ComputerSystem.v1_14_0.ComputerSystem",
+		"@odata.id":    "/redfish/v1/Systems/HGX_Baseboard_0",
+		"Id":           "HGX_Baseboard_0",
+		"Name":         "HGX System",
+		"SystemType":   "Physical",
 		"Manufacturer": "NVIDIA",
-		"Model":       "HGX",
+		"Model":        "HGX",
 		"Status": map[string]string{
 			"State":  "Enabled",
 			"Health": "OK",
@@ -81,22 +81,22 @@ func setupGPUMemory(server *testRedfishServer) {
 		},
 		"Members@odata.count": 3,
 	})
-	
+
 	// GPU_0 memory with fixtures
-	server.addRouteFromFixture("/redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_0_DRAM_0", 
+	server.addRouteFromFixture("/redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_0_DRAM_0",
 		"nvidia_gpu_memory.json")
 	server.addRouteFromFixture("/redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_0_DRAM_0/MemoryMetrics",
 		"nvidia_gpu_memory_metrics.json")
-	
+
 	// GPU_1 memory
 	server.addRoute("/redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_1_DRAM_0", map[string]interface{}{
-		"@odata.type": "#Memory.v1_17_0.Memory",
-		"@odata.id":   "/redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_1_DRAM_0",
-		"Id":          "GPU_1_DRAM_0",
-		"Name":        "GPU_1_DRAM",
-		"CapacityMiB": 98304,
+		"@odata.type":      "#Memory.v1_17_0.Memory",
+		"@odata.id":        "/redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_1_DRAM_0",
+		"Id":               "GPU_1_DRAM_0",
+		"Name":             "GPU_1_DRAM",
+		"CapacityMiB":      98304,
 		"MemoryDeviceType": "HBM2E",
-		"Manufacturer": "NVIDIA",
+		"Manufacturer":     "NVIDIA",
 		"Status": map[string]string{
 			"State":  "Enabled",
 			"Health": "OK",
@@ -108,14 +108,14 @@ func setupGPUMemory(server *testRedfishServer) {
 			},
 		},
 	})
-	
+
 	// Regular DIMM
 	server.addRoute("/redfish/v1/Systems/HGX_Baseboard_0/Memory/DIMM_0", map[string]interface{}{
-		"@odata.type": "#Memory.v1_17_0.Memory",
-		"@odata.id":   "/redfish/v1/Systems/HGX_Baseboard_0/Memory/DIMM_0",
-		"Id":          "DIMM_0",
-		"Name":        "DIMM_0",
-		"CapacityMiB": 32768,
+		"@odata.type":      "#Memory.v1_17_0.Memory",
+		"@odata.id":        "/redfish/v1/Systems/HGX_Baseboard_0/Memory/DIMM_0",
+		"Id":               "DIMM_0",
+		"Name":             "DIMM_0",
+		"CapacityMiB":      32768,
 		"MemoryDeviceType": "DDR4",
 		"Status": map[string]string{
 			"State":  "Enabled",
@@ -206,8 +206,8 @@ func setupGPUProcessorsAndSensors(server *testRedfishServer) {
 
 	// Add processors collection
 	server.addRoute(fmt.Sprintf("/redfish/v1/Systems/%s/Processors", systemID), map[string]interface{}{
-		"@odata.type":          "#ProcessorCollection.ProcessorCollection",
-		"Members":              members,
+		"@odata.type":         "#ProcessorCollection.ProcessorCollection",
+		"Members":             members,
 		"Members@odata.count": len(members),
 	})
 
@@ -237,23 +237,23 @@ func collectAndCategorizeMetrics(t *testing.T, collector *GPUCollector) (map[str
 		collector.Collect(ch)
 		close(ch)
 	}()
-	
+
 	gpuMemoryMetrics := make(map[string]float64)
 	gpuProcessorMetrics := make(map[string]float64)
 	nvlinkMetrics := make(map[string]float64)
 	metricsFound := 0
-	
+
 	for metric := range ch {
 		dto := &dto.Metric{}
 		if err := metric.Write(dto); err != nil {
 			t.Errorf("Failed to write metric: %v", err)
 			continue
 		}
-		
+
 		metricsFound++
 		categorizeMetric(metric, dto, gpuMemoryMetrics, gpuProcessorMetrics, nvlinkMetrics)
 	}
-	
+
 	return gpuMemoryMetrics, gpuProcessorMetrics, nvlinkMetrics, metricsFound
 }
 
@@ -261,7 +261,7 @@ func collectAndCategorizeMetrics(t *testing.T, collector *GPUCollector) (map[str
 func categorizeMetric(metric prometheus.Metric, dto *dto.Metric, gpuMemory, gpuProcessor, nvlink map[string]float64) {
 	desc := metric.Desc()
 	descString := desc.String()
-	
+
 	var memoryID, processorID, portID string
 	for _, label := range dto.Label {
 		switch label.GetName() {
@@ -273,12 +273,12 @@ func categorizeMetric(metric prometheus.Metric, dto *dto.Metric, gpuMemory, gpuP
 			portID = label.GetValue()
 		}
 	}
-	
+
 	// Categorize GPU memory metrics
 	if strings.Contains(memoryID, "GPU") {
 		categorizeMemoryMetric(descString, memoryID, dto, gpuMemory)
 	}
-	
+
 	// Categorize GPU processor metrics
 	if processorID == "GPU_0" {
 		categorizeProcessorMetric(descString, dto, gpuProcessor)
@@ -410,7 +410,6 @@ func verifyGPUMemoryMetrics(t *testing.T, metrics map[string]float64) {
 		})
 	}
 }
-
 
 // verifyGPUMemoryPowerMetrics verifies GPU memory power metrics
 func verifyGPUMemoryPowerMetrics(t *testing.T, metrics map[string]float64) {
@@ -788,13 +787,13 @@ func setupTestServerWithoutGPU(t *testing.T) *testRedfishServer {
 // setupNonGPUSystem adds a regular system without GPU components
 func setupNonGPUSystem(server *testRedfishServer) {
 	server.addRoute("/redfish/v1/Systems/System1", map[string]interface{}{
-		"@odata.type": "#ComputerSystem.v1_14_0.ComputerSystem",
-		"@odata.id":   "/redfish/v1/Systems/System1",
-		"Id":          "System1",
-		"Name":        "Regular System",
-		"SystemType":  "Physical",
+		"@odata.type":  "#ComputerSystem.v1_14_0.ComputerSystem",
+		"@odata.id":    "/redfish/v1/Systems/System1",
+		"Id":           "System1",
+		"Name":         "Regular System",
+		"SystemType":   "Physical",
 		"Manufacturer": "Dell",
-		"Model":       "PowerEdge",
+		"Model":        "PowerEdge",
 		"Status": map[string]string{
 			"State":  "Enabled",
 			"Health": "OK",
@@ -820,11 +819,11 @@ func setupNonGPUMemory(server *testRedfishServer) {
 	})
 
 	server.addRoute("/redfish/v1/Systems/System1/Memory/DIMM_0", map[string]interface{}{
-		"@odata.type": "#Memory.v1_17_0.Memory",
-		"@odata.id":   "/redfish/v1/Systems/System1/Memory/DIMM_0",
-		"Id":          "DIMM_0",
-		"Name":        "DIMM_0",
-		"CapacityMiB": 32768,
+		"@odata.type":      "#Memory.v1_17_0.Memory",
+		"@odata.id":        "/redfish/v1/Systems/System1/Memory/DIMM_0",
+		"Id":               "DIMM_0",
+		"Name":             "DIMM_0",
+		"CapacityMiB":      32768,
 		"MemoryDeviceType": "DDR4",
 		"Status": map[string]string{
 			"State":  "Enabled",
@@ -845,13 +844,13 @@ func setupNonGPUProcessors(server *testRedfishServer) {
 	})
 
 	server.addRoute("/redfish/v1/Systems/System1/Processors/CPU_0", map[string]interface{}{
-		"@odata.type": "#Processor.v1_14_0.Processor",
-		"@odata.id":   "/redfish/v1/Systems/System1/Processors/CPU_0",
-		"Id":          "CPU_0",
-		"Name":        "CPU_0",
+		"@odata.type":   "#Processor.v1_14_0.Processor",
+		"@odata.id":     "/redfish/v1/Systems/System1/Processors/CPU_0",
+		"Id":            "CPU_0",
+		"Name":          "CPU_0",
 		"ProcessorType": "CPU",
-		"Manufacturer": "Intel",
-		"Model":       "Xeon",
+		"Manufacturer":  "Intel",
+		"Model":         "Xeon",
 		"Status": map[string]string{
 			"State":  "Enabled",
 			"Health": "OK",
@@ -1022,7 +1021,7 @@ func TestCollectGPUProcessorMetrics(t *testing.T) {
 			for metric := range ch {
 				desc := metric.Desc()
 				descString := desc.String()
-				
+
 				dto := &dto.Metric{}
 				if err := metric.Write(dto); err != nil {
 					t.Errorf("failed to write metric: %v", err)
@@ -1410,11 +1409,11 @@ func TestGPUSerialNumberAndUUIDMetrics(t *testing.T) {
 // TestGPUMetricsWithMissingSerialOrUUID tests handling of GPUs with missing serial number or UUID
 func TestGPUMetricsWithMissingSerialOrUUID(t *testing.T) {
 	tests := map[string]struct {
-		serialNumber  string
-		uuid          string
-		expectMetric  bool
-		expectSerial  string
-		expectUUID    string
+		serialNumber string
+		uuid         string
+		expectMetric bool
+		expectSerial string
+		expectUUID   string
 	}{
 		"both present": {
 			serialNumber: "1234567890",
