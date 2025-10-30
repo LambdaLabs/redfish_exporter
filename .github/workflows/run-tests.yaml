@@ -1,0 +1,17 @@
+name: run-tests
+
+on:
+  pull_request:
+    branches:
+    - main
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - uses: actions/setup-go@v6
+      with:
+        go-version: 'oldstable'
+    - name: Run unit tests
+      run: make unit-test
