@@ -150,7 +150,12 @@ func buildCollectorsFor(modules []string, moduleConfig map[string]config.Module,
 	c := []prometheus.Collector{}
 	for _, module := range modules {
 		if modConfig, found := moduleConfig[module]; found {
-			c = append(c, collector.NewCollectorFromModule(&modConfig, rfClient, logger))
+			collector, err := collector.NewCollectorFromModule(&modConfig, rfClient, logger)
+			if err != nil {
+				logger.Error("unable to create collector", slog.Any("error", err))
+				continue
+			}
+			c = append(c, collector)
 		}
 	}
 	return c

@@ -44,6 +44,7 @@ modules:
 						Prober:             "gpu_collector",
 						GPUCollector:       GPUCollectorConfig{},
 						ChassisCollector:   ChassisCollectorConfig{},
+						JSONCollector:      JSONCollectorConfig{},
 						ManagerCollector:   ManagerCollectorConfig{},
 						SystemCollector:    SystemCollectorConfig{},
 						TelemetryCollector: TelemetryCollectorConfig{},
@@ -70,6 +71,7 @@ modules:
 						Prober:             "gpu_collector",
 						GPUCollector:       GPUCollectorConfig{},
 						ChassisCollector:   ChassisCollectorConfig{},
+						JSONCollector:      JSONCollectorConfig{},
 						ManagerCollector:   ManagerCollectorConfig{},
 						SystemCollector:    SystemCollectorConfig{},
 						TelemetryCollector: TelemetryCollectorConfig{},
@@ -78,6 +80,7 @@ modules:
 						Prober:             "chassis_collector",
 						GPUCollector:       GPUCollectorConfig{},
 						ChassisCollector:   ChassisCollectorConfig{},
+						JSONCollector:      JSONCollectorConfig{},
 						ManagerCollector:   ManagerCollectorConfig{},
 						SystemCollector:    SystemCollectorConfig{},
 						TelemetryCollector: TelemetryCollectorConfig{},
@@ -108,6 +111,68 @@ modules:
 		t.Run(tName, func(t *testing.T) {
 			byteReader := bytes.NewReader([]byte(test.inputYAML))
 			gotConfig, err := readConfigFrom(byteReader)
+			if test.wantErrString != "" {
+				gta.ErrorContains(t, err, test.wantErrString)
+			}
+			gta.Assert(t, cmp.DeepEqual(test.wantConfig, gotConfig))
+		})
+	}
+}
+
+func TestModulesConfig_JSONCollector(t *testing.T) {
+	tT := map[string]struct {
+		inputFile     string
+		wantErrString string
+		wantConfig    *Config
+	}{
+		"extraction from Delta Electronics OEM Sensors endpoint": {
+			inputFile:     "testdata/config.j2m.yaml",
+			wantErrString: "",
+			wantConfig: &Config{
+				Modules: map[string]Module{
+					"rf_version": {
+						Prober: "json_collector",
+						JSONCollector: JSONCollectorConfig{
+							RedfishRoot: `/redfish/v1`,
+							JQFilter: `[{
+  "name": "redfish_version",
+  "help": "Redfish version reported by this device",
+  "labels": {
+    "redfish_version": .RedfishVersion
+  },
+  "value": 1.0
+}]`,
+						},
+					},
+					"delta_powershelf": {
+						Prober: "json_collector",
+						JSONCollector: JSONCollectorConfig{
+							RedfishRoot: "/redfish/v1/Chassis/PowerShelf_0/Sensors?$expand=.($levels=1)",
+							JQFilter: `[.Oem.deltaenergysystems.AllSensors.Sensors[]] |
+map({
+  name: (if .DeviceName | test("^ps[0-9]+_") then .DeviceName | sub("^ps[0-9]+_"; "") else .DeviceName end),
+  value: .Reading,
+  labels: (
+    if .DeviceName | test("^ps[0-9]+_") then {"power_supply_id": (.DeviceName | split("_")[0])}
+    else {}
+    end),
+    _raw: .
+}) |
+map(.help = "Value yielded from the Redfish API /Chassis/PowerShelf_0, expanded 1 level") | map(del(._raw)) | sort_by(.name)`,
+						},
+						GPUCollector:       GPUCollectorConfig{},
+						ChassisCollector:   ChassisCollectorConfig{},
+						ManagerCollector:   ManagerCollectorConfig{},
+						SystemCollector:    SystemCollectorConfig{},
+						TelemetryCollector: TelemetryCollectorConfig{},
+					},
+				},
+			},
+		},
+	}
+	for tName, test := range tT {
+		t.Run(tName, func(t *testing.T) {
+			gotConfig, err := NewConfigFromFile(test.inputFile)
 			if test.wantErrString != "" {
 				gta.ErrorContains(t, err, test.wantErrString)
 			}
