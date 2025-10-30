@@ -233,10 +233,10 @@ type HostConfig struct {
 // Read exporter config from an input file path.
 func NewConfigFromFile(configFilePath string) (*Config, error) {
 	file, err := os.Open(configFilePath)
-	defer file.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer file.Close() //nolint:errcheck
 	return readConfigFrom(file)
 }
 
