@@ -38,7 +38,8 @@ func TestTelemetryCollectorIntegration(t *testing.T) {
 
 	// Create collector
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector := NewTelemetryCollector(client, logger)
+	collector, err := NewTelemetryCollector(client, logger, nil)
+	require.NoError(t, err)
 
 	// Collect metrics
 	metricsChan := make(chan prometheus.Metric, 100)
@@ -99,7 +100,8 @@ func TestTelemetryCollectorIntegration(t *testing.T) {
 func TestTelemetryCollectorDescribe(t *testing.T) {
 	// Create a mock client (won't be used for Describe)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector := NewTelemetryCollector(nil, logger)
+	collector, err := NewTelemetryCollector(nil, logger, nil)
+	require.NoError(t, err)
 
 	// Describe should work without a client
 	descChan := make(chan *prometheus.Desc, 100)
@@ -236,7 +238,8 @@ func BenchmarkTelemetryCollector(b *testing.B) {
 	defer client.Logout()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector := NewTelemetryCollector(client, logger)
+	collector, err := NewTelemetryCollector(client, logger, nil)
+	require.NoError(b, err)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -254,7 +257,8 @@ func BenchmarkTelemetryCollector(b *testing.B) {
 // TestTelemetryMetricCount validates all metrics are properly exposed
 func TestTelemetryMetricCount(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector := NewTelemetryCollector(nil, logger)
+	collector, err := NewTelemetryCollector(nil, logger, nil)
+	require.NoError(t, err)
 
 	// Expected metric categories
 	expectedCategories := map[string]int{
@@ -297,7 +301,8 @@ func TestTelemetryCollectorGracefulNoService(t *testing.T) {
 	// This would require a mock client that returns an error
 	// For now, just verify the collector can be created without panic
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector := NewTelemetryCollector(nil, logger)
+	collector, err := NewTelemetryCollector(nil, logger, nil)
+	require.NoError(t, err)
 
 	// Verify it has the right number of metrics defined
 	if len(collector.metrics) != len(telemetryMetrics) {
