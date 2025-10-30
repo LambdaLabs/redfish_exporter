@@ -131,7 +131,7 @@ func createGPUMetricMap() map[string]Metric {
 }
 
 // NewGPUCollector creates a new GPU collector
-func NewGPUCollector(redfishClient *gofish.APIClient, logger *slog.Logger, config *config.GPUCollectorConfig) *GPUCollector {
+func NewGPUCollector(redfishClient *gofish.APIClient, logger *slog.Logger, config *config.GPUCollectorConfig) (*GPUCollector, error) {
 	return &GPUCollector{
 		redfishClient: redfishClient,
 		metrics:       gpuMetrics,
@@ -146,7 +146,7 @@ func NewGPUCollector(redfishClient *gofish.APIClient, logger *slog.Logger, confi
 			[]string{"collector"},
 		),
 		oemClient: NewNvidiaOEMClient(redfishClient.GetService().GetClient(), logger),
-	}
+	}, nil
 }
 
 // Describe implements prometheus.Collector

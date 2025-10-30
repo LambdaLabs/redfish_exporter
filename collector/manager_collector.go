@@ -42,7 +42,7 @@ func createManagerMetricMap() map[string]Metric {
 }
 
 // NewManagerCollector returns a collector that collecting memory statistics
-func NewManagerCollector(redfishClient *gofish.APIClient, logger *slog.Logger, config *config.ManagerCollectorConfig) *ManagerCollector {
+func NewManagerCollector(redfishClient *gofish.APIClient, logger *slog.Logger, config *config.ManagerCollectorConfig) (*ManagerCollector, error) {
 	return &ManagerCollector{
 		redfishClient: redfishClient,
 		config:        config,
@@ -56,7 +56,7 @@ func NewManagerCollector(redfishClient *gofish.APIClient, logger *slog.Logger, c
 			},
 			[]string{"collector"},
 		),
-	}
+	}, nil
 }
 
 // Describe implemented prometheus.Collector
