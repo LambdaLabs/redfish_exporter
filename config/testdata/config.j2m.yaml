@@ -1,4 +1,17 @@
 modules:
+  rf_version:
+    prober: json_collector
+    json_collector:
+      redfishRoot: /redfish/v1
+      jq: |-
+        [{
+          "name": "redfish_version",
+          "help": "Redfish version reported by this device",
+          "labels": {
+            "redfish_version": .RedfishVersion
+          },
+          "value": 1.0
+        }]
   delta_powershelf:
     prober: json_collector
     json_collector:

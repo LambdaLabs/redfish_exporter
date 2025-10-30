@@ -130,6 +130,20 @@ func TestModulesConfig_JSONCollector(t *testing.T) {
 			wantErrString: "",
 			wantConfig: &Config{
 				Modules: map[string]Module{
+					"rf_version": {
+						Prober: "json_collector",
+						JSONCollector: JSONCollectorConfig{
+							RedfishRoot: "/redfish/v1",
+							JQFilter: `[{
+  "name": "redfish_version",
+  "help": "Redfish version reported by this device",
+  "labels": {
+    "redfish_version": .RedfishVersion
+  },
+  "value": 1.0
+}]`,
+						},
+					},
 					"delta_powershelf": {
 						Prober: "json_collector",
 						JSONCollector: JSONCollectorConfig{
