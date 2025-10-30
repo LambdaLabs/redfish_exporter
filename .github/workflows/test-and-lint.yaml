@@ -1,4 +1,4 @@
-name: run-tests
+name: lint-and-test
 
 on:
   pull_request:
@@ -6,12 +6,17 @@ on:
     - main
 
 jobs:
-  unit-tests:
+  lint-test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v5
     - uses: actions/setup-go@v6
       with:
         go-version: 'oldstable'
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: latest
+        args: ./...
     - name: Run unit tests
       run: make unit-test
