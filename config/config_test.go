@@ -134,19 +134,17 @@ func TestModulesConfig_JSONCollector(t *testing.T) {
 						Prober: "json_collector",
 						JSONCollector: JSONCollectorConfig{
 							RedfishRoot: "/redfish/v1/Chassis/PowerShelf_0/Sensors",
-							JQFilter: `[.Oem.deltaenergysystems.AllSensors.Sensors[]] | map({
-        name: (if .DeviceName | test("^ps[0-9]+_") then .DeviceName | sub("^ps[0-9]+_"; "") else .DeviceName end),
-        value: .Reading,
-        labels: (
-          if .DeviceName | test("^ps[0-9]+_") then {"power_supply_id": (.DeviceName | split("_")[0])}
-          else {}
-          end),
-          _raw: .
-      }) |
-      map(
-        .help = "Value yielded from the Redfish API endpoint: " + ._raw.DataSourceUri + ",type: " + ._raw.ReadingType + ",
-        unit: " + ._raw.ReadingUnits) |
-        map(del(._raw)) | sort_by(.name)`,
+							JQFilter: `[.Oem.deltaenergysystems.AllSensors.Sensors[]] |
+map({
+  name: (if .DeviceName | test("^ps[0-9]+_") then .DeviceName | sub("^ps[0-9]+_"; "") else .DeviceName end),
+  value: .Reading,
+  labels: (
+    if .DeviceName | test("^ps[0-9]+_") then {"power_supply_id": (.DeviceName | split("_")[0])}
+    else {}
+    end),
+    _raw: .
+}) |
+map(.help = "Value yielded from the Redfish API /Chassis/PowerShelf_0, expanded 1 level") | map(del(._raw)) | sort_by(.name)`,
 						},
 						GPUCollector:       GPUCollectorConfig{},
 						ChassisCollector:   ChassisCollectorConfig{},

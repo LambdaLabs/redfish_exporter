@@ -35,13 +35,17 @@ var (
 	// In a future release, this will be removed and users will be expected to
 	// define one or more modules in their config, and reference those as HTTP query params.
 	DefaultModuleConfig = map[string]Module{
+		"chassis_collector": {
+			Prober:           "chassis_collector",
+			ChassisCollector: DefaultChassisCollector,
+		},
 		"gpu_collector": {
 			Prober:       "gpu_collector",
 			GPUCollector: DefaultGPUCollector,
 		},
-		"chassis_collector": {
-			Prober:           "chassis_collector",
-			ChassisCollector: DefaultChassisCollector,
+		"json_collector": {
+			Prober:        "json_collector",
+			JSONCollector: DefaultJSONCollector,
 		},
 		"manager_collector": {
 			Prober:           "manager_collector",
@@ -54,10 +58,6 @@ var (
 		"telemetry_collector": {
 			Prober:             "telemetry_collector",
 			TelemetryCollector: DefaultTelemetryCollector,
-		},
-		"json_collector": {
-			Prober:        "json_collector",
-			JSONCollector: DefaultJSONCollector,
 		},
 	}
 )
@@ -93,7 +93,8 @@ func (g *GPUCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
 }
 
 type JSONCollectorConfig struct {
-	RedfishRoot, JQFilter string
+	RedfishRoot string `yaml:"redfishRoot"`
+	JQFilter    string `yaml:"jq"`
 }
 
 func (j *JSONCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
