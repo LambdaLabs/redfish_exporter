@@ -133,7 +133,7 @@ func TestModulesConfig_JSONCollector(t *testing.T) {
 					"rf_version": {
 						Prober: "json_collector",
 						JSONCollector: JSONCollectorConfig{
-							RedfishRoot: "/redfish/v1",
+							RedfishRoot: `/redfish/v1`,
 							JQFilter: `[{
   "name": "redfish_version",
   "help": "Redfish version reported by this device",
@@ -147,7 +147,7 @@ func TestModulesConfig_JSONCollector(t *testing.T) {
 					"delta_powershelf": {
 						Prober: "json_collector",
 						JSONCollector: JSONCollectorConfig{
-							RedfishRoot: "/redfish/v1/Chassis/PowerShelf_0/Sensors",
+							RedfishRoot: "/redfish/v1/Chassis/PowerShelf_0/Sensors?$expand=.($levels=1)",
 							JQFilter: `[.Oem.deltaenergysystems.AllSensors.Sensors[]] |
 map({
   name: (if .DeviceName | test("^ps[0-9]+_") then .DeviceName | sub("^ps[0-9]+_"; "") else .DeviceName end),
