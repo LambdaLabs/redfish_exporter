@@ -36,6 +36,23 @@ var (
 	reloadCh chan chan error
 )
 
+// 'meta' metrics, which the collector itself should emit
+var (
+	// collectorLastStatus tracks the last configuration staus of a collector
+	collectorLastStatus = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "redfish_exporter_config_collector_last_status",
+		Help: "The last known configuration state of a collector. 0=unconfigured/unhealthy, 1=configured/healthy",
+	},
+		[]string{"collector_name"},
+	)
+	// collectorModuleUnknown tracks count of requests which asked for &module=foo, but where module foo is not
+	// in the exporter configuration file
+	collectorModuleUnknown = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "redfish_exporter_unknown_modules_requested_total",
+		Help: "Count of requests specifying a module name not known to this exporter",
+	})
+)
+
 func reloadHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" || r.Method == "PUT" {
@@ -56,6 +73,17 @@ func reloadHandler() http.HandlerFunc {
 			http.Error(w, "Only PUT and POST methods are allowed", http.StatusBadRequest)
 		}
 	}
+}
+
+// registerMetaMetrics registers 'meta' metrics for the redfish_exporter.
+// 'meta' metrics include details like "which collectors errored during creation?"
+func registerMetaMetrics() {
+	custom := []prometheus.Collector{
+		collectorLastStatus,
+		collectorModuleUnknown,
+	}
+
+	prometheus.DefaultRegisterer.MustRegister(custom...)
 }
 
 // metricsHandler provides the client interface for the redfish_exporter.
@@ -138,6 +166,7 @@ func metricsHandler(logger *slog.Logger) http.HandlerFunc {
 // in this function. Future relases will remove this behavior and require user input.
 func buildCollectorsFor(modules []string, moduleConfig map[string]config.Module, rfClient *gofish.APIClient, logger *slog.Logger) []prometheus.Collector {
 	if modules[0] == "rf_exporter_default" {
+		logger.Warn("Using default collector bundle. In a future release, the exporter will require configuration of one or more modules.")
 		return buildCollectorsFor([]string{
 			"gpu_collector",
 			"chassis_collector",
@@ -152,9 +181,13 @@ func buildCollectorsFor(modules []string, moduleConfig map[string]config.Module,
 			collector, err := collector.NewCollectorFromModule(&modConfig, rfClient, logger)
 			if err != nil {
 				logger.Error("unable to create collector", slog.Any("error", err))
+				collectorLastStatus.WithLabelValues(module).Set(0)
 				continue
 			}
+			collectorLastStatus.WithLabelValues(module).Set(1)
 			c = append(c, collector)
+		} else {
+			collectorModuleUnknown.Inc()
 		}
 	}
 	return c
@@ -179,11 +212,15 @@ func parseLogLevel(level string) slog.Level {
 	return ret
 }
 
+func init() {
+	registerMetaMetrics()
+}
+
 func main() {
 	slog.Info("Starting redfish_exporter")
 	flag.Parse()
 
-	// load config  first time
+	// load config first time
 	if err := safeConfig.ReloadConfig(*configFile); err != nil {
 		slog.Error("Error parsing config file", slog.Any("error", err))
 		os.Exit(1)
