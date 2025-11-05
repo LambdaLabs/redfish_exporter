@@ -122,7 +122,6 @@ func metricsHandler(logger *slog.Logger) http.HandlerFunc {
 		aggregateCollector.WithCollectors(collectors)
 		registry.MustRegister(aggregateCollector)
 		gatherers := prometheus.Gatherers{
-			prometheus.DefaultGatherer,
 			registry,
 		}
 		// Delegate http serving to Prometheus client library, which will call collector.Collect.
