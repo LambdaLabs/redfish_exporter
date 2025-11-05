@@ -35,7 +35,10 @@ Run `redfish_exporter -h` for more options.
 If using an image, an invocation like the following should also work:
 
 ``` shell
+# For Podman users
 podman run -v $(pwd)/redfish_exporter.yaml:/config.yml -p 9610:9610  some-image-reference:<some-image-tag> -config.file="/config.yml"
+# For Docker users
+docker run -v $(pwd)/redfish_exporter.yaml:/config.yml -p 9610:9610  some-image-reference:<some-image-tag> -config.file="/config.yml"
 ```
 
 ## Scraping

@@ -4,6 +4,7 @@ Generic types include:
 
 - `<string>` regular string values
 - `<float64>` regular float64 value as expected in Golang
+- `<timeout>` a string representation of a Golang time.Duration, e.g. `30s`
 
 ```yaml
 hosts:
@@ -229,6 +230,8 @@ In order to transform data, the prober needs to execute a JQ script which yields
 This output is iterated over in the code, and gauge values are emitted as a result.
 
 ``` yaml
+# Configurable timeout context, JQ parsing _must_ complete within this timeout.
+context_timeout: <timeout> | default = 30s
 # Redfish API path to probe
 redfishPath: <string>
 # JQ script to execute against the redfishPath. Note that the resulting format must match what is documented above.
