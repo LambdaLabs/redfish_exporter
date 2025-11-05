@@ -145,11 +145,11 @@ func metricsFromBody(ctx context.Context, query *gojq.Query, jsonBody []byte) ([
 			return []JSONYieldedMetric{}, err
 		}
 		if container, ok := v.([]any); ok {
-			for _, items := range container {
+			for idx, items := range container {
 				if item, ok := items.(map[string]any); ok {
 					yieldedMetric, err := convertToMetric(item)
 					if err != nil {
-						parseErrors = append(parseErrors, err)
+						parseErrors = append(parseErrors, fmt.Errorf("item %d from response failed to parse: %w", idx, err))
 						continue
 					}
 					yielded = append(yielded, yieldedMetric)

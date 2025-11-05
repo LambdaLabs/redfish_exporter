@@ -84,7 +84,7 @@ func Test_metricsFromBody(t *testing.T) {
       map(
         .help = "Value yielded from the Redfish API endpoint: " + ._raw.DataSourceUri + ",type: " + ._raw.ReadingType + ",unit: " + ._raw.ReadingUnits) |
         map(del(._raw)) | sort_by(.name)`,
-			wantErrString: "item missing name, provided keys: [help labels name1 valuefoo]",
+			wantErrString: "item 0 from response failed to parse: item missing name, provided keys: [help labels name1 valuefoo]",
 			wantMetrics:   nil,
 		},
 		"context timeout is an error": {
