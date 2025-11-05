@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"maps"
 	"slices"
+	"sync"
 
 	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/itchyny/gojq"
@@ -16,6 +17,8 @@ import (
 	"github.com/stmcginnis/gofish"
 )
 
+// DescWithLabels wraps prometheus.Desc with a sorted slice of label names, allowing
+// emitted metric labels to also be sorted for consistency.
 type DescWithLabels struct {
 	SortedLabels []string
 	Desc         *prometheus.Desc
@@ -32,37 +35,31 @@ type JSONYieldedMetric struct {
 
 // JSONCollector is a collector which probes a particular Redfish path, applies a given JQ filter, and returns metrics accordingly.
 type JSONCollector struct {
-	redfishClient  *gofish.APIClient
-	config         *config.JSONCollectorConfig
-	jqQuery        *gojq.Query
-	logger         *slog.Logger
-	cachedResponse []byte
-	metricsDescs   map[string]DescWithLabels
+	redfishClient     *gofish.APIClient
+	config            *config.JSONCollectorConfig
+	jqQuery           *gojq.Query
+	logger            *slog.Logger
+	once              *sync.Once
+	cacheCollectError error
+	cache             []byte
+	metricsDescs      map[string]DescWithLabels
 }
 
 // NewJSONCollector yields a JSON collector.
-// During creation, the collector will probe the configured endpoint, caching the response
-// for followup processing.
 func NewJSONCollector(redfishClient *gofish.APIClient, logger *slog.Logger, config *config.JSONCollectorConfig) (*JSONCollector, error) {
 	query, err := gojq.Parse(config.JQFilter)
 	if err != nil {
 		return nil, fmt.Errorf("jq parse error in collector creation: %w", err)
 	}
-	rawClient, err := redfishClient.Get(config.RedfishRoot)
-	if err != nil {
-		return nil, fmt.Errorf("json collector could not perform lookup against %s: %w", config.RedfishRoot, err)
-	}
-	body, err := io.ReadAll(rawClient.Body)
-	if err != nil {
-		return nil, fmt.Errorf("unable to cache json response: %w", err)
-	}
 
 	return &JSONCollector{
-		redfishClient:  redfishClient,
-		config:         config,
-		jqQuery:        query,
-		logger:         logger,
-		cachedResponse: body,
+		redfishClient:     redfishClient,
+		config:            config,
+		jqQuery:           query,
+		logger:            logger,
+		once:              &sync.Once{},
+		cacheCollectError: nil,
+		cache:             []byte{}, //newCache(),
 		metricsDescs: map[string]DescWithLabels{
 			"redfish_collector_json_parse_success": {
 				SortedLabels: []string{},
@@ -73,14 +70,46 @@ func NewJSONCollector(redfishClient *gofish.APIClient, logger *slog.Logger, conf
 	}, nil
 }
 
-// Describe implements prometheus.Collector
+// redfishResponse queries the Redfish API configured for a JSONCollector.
+// Using sync.Once, data will be saved to the JSONCollector cache for consistency
+// in reuse by j.Describe and j.Collect
+func (j *JSONCollector) redfishResponse() ([]byte, error) {
+	j.once.Do(func() {
+		rawClient, err := j.redfishClient.Get(j.config.RedfishRoot)
+		if err != nil {
+			j.cacheCollectError = fmt.Errorf("json collector could not perform initial lookup against %s: %w", j.config.RedfishRoot, err)
+		}
+		body, err := io.ReadAll(rawClient.Body)
+		if err != nil {
+			j.cacheCollectError = fmt.Errorf("json collector could not cache initial lookup against %s: %w", j.config.RedfishRoot, err)
+		}
+		j.cache = body
+	})
+
+	return j.cache, j.cacheCollectError
+}
+
+// Describe implements prometheus.Collector.
+// Describe is called during Collector registration, and due to the dynamic
+// nature of this collector, it is impossible to know all labels or timeseries descriptions
+// at compile time.
+// As a result, Describe will check for the existence of cached Redfish API data.
+// If no cache is populated, Describe will collect and set the JSONCollector's cached Redfish API data,
+// so that followup calls (e.g. to Collect) operate on a consistent set of data.
 func (j *JSONCollector) Describe(ch chan<- *prometheus.Desc) {
 	ctx, cancel := context.WithTimeout(context.Background(), j.config.Timeout)
 	defer cancel()
-
-	metrics, err := metricsFromBody(ctx, j.jqQuery, j.cachedResponse)
+	body, err := j.redfishResponse()
 	if err != nil {
-		j.logger.Error("failed to convert collected data to a metrics description", slog.Any("error", err))
+		j.logger.Warn("skipping Describe() as Redfish data was unavailable")
+		return
+	}
+
+	metrics, err := metricsFromBody(ctx, j.jqQuery, body)
+	if err != nil {
+		j.logger.Error("failed to convert collected data to a metrics description",
+			slog.Any("error", err),
+			slog.Any("response_body", string(body)))
 		return
 	}
 	for _, metric := range metrics {
@@ -95,14 +124,26 @@ func (j *JSONCollector) Describe(ch chan<- *prometheus.Desc) {
 	}
 }
 
-// Collect implements prometheus.Collector
+// Collect implements prometheus.Collector.
+// Collect should generally be called after j.Describe, but in the chance
+// that this changes in the future, Collect will first check for cached Redfish response
+// data.
+// If no cache is populated, Collect will fetch and cache the Redfish API data before
+// processing and emitting timeseries.
 func (j *JSONCollector) Collect(ch chan<- prometheus.Metric) {
 	ctx, cancel := context.WithTimeout(context.Background(), j.config.Timeout)
 	defer cancel()
-
-	metrics, err := metricsFromBody(ctx, j.jqQuery, j.cachedResponse)
+	body, err := j.redfishResponse()
 	if err != nil {
-		j.logger.Error("failed to convert collected data to metrics", slog.Any("error", err))
+		j.logger.Warn("skipping Collect() as Redfish data was unavailable")
+		return
+	}
+
+	metrics, err := metricsFromBody(ctx, j.jqQuery, body)
+	if err != nil {
+		j.logger.Error("failed to convert collected data to metrics",
+			slog.Any("error", err),
+			slog.Any("response_body", string(body)))
 		ch <- prometheus.MustNewConstMetric(
 			j.metricsDescs["redfish_collector_json_parse_success"].Desc,
 			prometheus.GaugeValue, 0)
