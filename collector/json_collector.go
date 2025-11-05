@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -68,7 +69,10 @@ func NewJSONCollector(redfishClient *gofish.APIClient, logger *slog.Logger, conf
 
 // Describe implements prometheus.Collector
 func (j *JSONCollector) Describe(ch chan<- *prometheus.Desc) {
-	metrics, err := metricsFromBody(j.jqQuery, j.cachedResponse)
+	ctx, cancel := context.WithTimeout(context.Background(), j.config.Timeout)
+	defer cancel()
+
+	metrics, err := metricsFromBody(ctx, j.jqQuery, j.cachedResponse)
 	if err != nil {
 		j.logger.Error("failed to convert collected data to a metrics description", slog.Any("error", err))
 		return
@@ -87,7 +91,10 @@ func (j *JSONCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect implements prometheus.Collector
 func (j *JSONCollector) Collect(ch chan<- prometheus.Metric) {
-	metrics, err := metricsFromBody(j.jqQuery, j.cachedResponse)
+	ctx, cancel := context.WithTimeout(context.Background(), j.config.Timeout)
+	defer cancel()
+
+	metrics, err := metricsFromBody(ctx, j.jqQuery, j.cachedResponse)
 	if err != nil {
 		j.logger.Error("failed to convert collected data to metrics", slog.Any("error", err))
 		return
@@ -116,7 +123,7 @@ func (j *JSONCollector) Collect(ch chan<- prometheus.Metric) {
 // this expectation.
 // An error during JQ parsing results skips the item, and errors encountered in this way
 // are joined together and returned as a bundle.
-func metricsFromBody(query *gojq.Query, jsonBody []byte) ([]JSONYieldedMetric, error) {
+func metricsFromBody(ctx context.Context, query *gojq.Query, jsonBody []byte) ([]JSONYieldedMetric, error) {
 	var yielded []JSONYieldedMetric
 	var parseErrors []error
 	var intermediary map[string]any
@@ -124,7 +131,7 @@ func metricsFromBody(query *gojq.Query, jsonBody []byte) ([]JSONYieldedMetric, e
 	if err := json.Unmarshal(jsonBody, &intermediary); err != nil {
 		return yielded, err
 	}
-	iter := query.Run(intermediary)
+	iter := query.RunWithContext(ctx, intermediary)
 
 	for {
 		v, ok := iter.Next()

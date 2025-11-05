@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	gta "gotest.tools/v3/assert"
@@ -41,10 +42,12 @@ modules:
 			wantConfig: &Config{
 				Modules: map[string]Module{
 					"foo": {
-						Prober:             "gpu_collector",
-						GPUCollector:       GPUCollectorConfig{},
-						ChassisCollector:   ChassisCollectorConfig{},
-						JSONCollector:      JSONCollectorConfig{},
+						Prober:           "gpu_collector",
+						GPUCollector:     GPUCollectorConfig{},
+						ChassisCollector: ChassisCollectorConfig{},
+						JSONCollector: JSONCollectorConfig{
+							Deadline: 30 * time.Second,
+						},
 						ManagerCollector:   ManagerCollectorConfig{},
 						SystemCollector:    SystemCollectorConfig{},
 						TelemetryCollector: TelemetryCollectorConfig{},
@@ -68,19 +71,23 @@ modules:
 				Loglevel: "info",
 				Modules: map[string]Module{
 					"foo": {
-						Prober:             "gpu_collector",
-						GPUCollector:       GPUCollectorConfig{},
-						ChassisCollector:   ChassisCollectorConfig{},
-						JSONCollector:      JSONCollectorConfig{},
+						Prober:           "gpu_collector",
+						GPUCollector:     GPUCollectorConfig{},
+						ChassisCollector: ChassisCollectorConfig{},
+						JSONCollector: JSONCollectorConfig{
+							Deadline: 30 * time.Second,
+						},
 						ManagerCollector:   ManagerCollectorConfig{},
 						SystemCollector:    SystemCollectorConfig{},
 						TelemetryCollector: TelemetryCollectorConfig{},
 					},
 					"boo": {
-						Prober:             "chassis_collector",
-						GPUCollector:       GPUCollectorConfig{},
-						ChassisCollector:   ChassisCollectorConfig{},
-						JSONCollector:      JSONCollectorConfig{},
+						Prober:           "chassis_collector",
+						GPUCollector:     GPUCollectorConfig{},
+						ChassisCollector: ChassisCollectorConfig{},
+						JSONCollector: JSONCollectorConfig{
+							Deadline: 30 * time.Second,
+						},
 						ManagerCollector:   ManagerCollectorConfig{},
 						SystemCollector:    SystemCollectorConfig{},
 						TelemetryCollector: TelemetryCollectorConfig{},
@@ -102,7 +109,11 @@ modules:
 			wantErrString: "module foo is not valid: module requires a prober to be configured",
 			wantConfig: &Config{
 				Modules: map[string]Module{
-					"foo": {},
+					"foo": {
+						JSONCollector: JSONCollectorConfig{
+							Deadline: 30 * time.Second,
+						},
+					},
 				},
 			},
 		},
@@ -133,6 +144,7 @@ func TestModulesConfig_JSONCollector(t *testing.T) {
 					"rf_version": {
 						Prober: "json_collector",
 						JSONCollector: JSONCollectorConfig{
+							Deadline:    30 * time.Second,
 							RedfishRoot: `/redfish/v1`,
 							JQFilter: `[{
   "name": "redfish_version",
@@ -147,6 +159,7 @@ func TestModulesConfig_JSONCollector(t *testing.T) {
 					"delta_powershelf": {
 						Prober: "json_collector",
 						JSONCollector: JSONCollectorConfig{
+							Deadline:    30 * time.Second,
 							RedfishRoot: "/redfish/v1/Chassis/PowerShelf_0/Sensors?$expand=.($levels=1)",
 							JQFilter: `[.Oem.deltaenergysystems.AllSensors.Sensors[]] |
 map({
@@ -165,6 +178,22 @@ map(.help = "Value yielded from the Redfish API /Chassis/PowerShelf_0, expanded 
 						ManagerCollector:   ManagerCollectorConfig{},
 						SystemCollector:    SystemCollectorConfig{},
 						TelemetryCollector: TelemetryCollectorConfig{},
+					},
+				},
+			},
+		},
+		"config with a non-standard deadline": {
+			inputFile:     "testdata/json_collector_with_timeout.yaml",
+			wantErrString: "",
+			wantConfig: &Config{
+				Modules: map[string]Module{
+					"31s_timeout_collector": {
+						Prober: "json_collector",
+						JSONCollector: JSONCollectorConfig{
+							Deadline:    31 * time.Second,
+							RedfishRoot: "/redfish/v1/nop",
+							JQFilter:    `nil`,
+						},
 					},
 				},
 			},

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 
 	yaml "gopkg.in/yaml.v3"
 )
@@ -15,7 +16,9 @@ var (
 	// DefaultGPUCollector is a default unless the user provides particular values.
 	DefaultGPUCollector = GPUCollectorConfig{}
 	//DefaultJSONCollector is a default unless the user provides particular values.
-	DefaultJSONCollector = JSONCollectorConfig{}
+	DefaultJSONCollector = JSONCollectorConfig{
+		Timeout: 30 * time.Second,
+	}
 	// DefaultManagerCollector is a default unless the user provides particular values.
 	DefaultManagerCollector = ManagerCollectorConfig{}
 	// DefaultSystemCollector is a default unless the user provides particular values.
@@ -93,8 +96,9 @@ func (g *GPUCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
 }
 
 type JSONCollectorConfig struct {
-	RedfishRoot string `yaml:"redfishRoot"`
-	JQFilter    string `yaml:"jq"`
+	Timeout     time.Duration `yaml:"context_timeout"`
+	RedfishRoot string        `yaml:"redfishRoot"`
+	JQFilter    string        `yaml:"jq"`
 }
 
 func (j *JSONCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {

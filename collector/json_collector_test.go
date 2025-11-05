@@ -1,7 +1,9 @@
 package collector
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/itchyny/gojq"
 	gta "gotest.tools/v3/assert"
@@ -10,12 +12,14 @@ import (
 
 func Test_metricsFromBody(t *testing.T) {
 	tT := map[string]struct {
+		timeout       time.Duration
 		rawBody       []byte
 		jqFilter      string
 		wantErrString string
 		wantMetrics   []JSONYieldedMetric
 	}{
 		"happy path for deltaenergysystems Oem": {
+			timeout: 5 * time.Second,
 			rawBody: []byte(`{
 "Oem": {
   "deltaenergysystems": {
@@ -53,6 +57,7 @@ func Test_metricsFromBody(t *testing.T) {
 			},
 		},
 		"errors are bubbled up": {
+			timeout: 5 * time.Second,
 			rawBody: []byte(`{
 "Oem": {
   "deltaenergysystems": {
@@ -82,6 +87,13 @@ func Test_metricsFromBody(t *testing.T) {
 			wantErrString: "item missing name, provided keys: [help labels name1 valuefoo]",
 			wantMetrics:   nil,
 		},
+		"context timeout is an error": {
+			timeout:       0,
+			rawBody:       []byte(`{}`),
+			jqFilter:      `.`,
+			wantErrString: "context deadline exceeded",
+			wantMetrics:   []JSONYieldedMetric{},
+		},
 	}
 	for tName, test := range tT {
 		t.Run(tName, func(t *testing.T) {
@@ -89,8 +101,10 @@ func Test_metricsFromBody(t *testing.T) {
 			if err != nil {
 				gta.Assert(t, cmp.ErrorContains(err, test.wantErrString))
 			}
+			ctx, cancel := context.WithTimeout(t.Context(), test.timeout)
+			defer cancel()
 
-			got, err := metricsFromBody(query, test.rawBody)
+			got, err := metricsFromBody(ctx, query, test.rawBody)
 			if err != nil {
 				gta.Assert(t, cmp.ErrorContains(err, test.wantErrString))
 			}
