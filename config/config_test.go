@@ -46,7 +46,7 @@ modules:
 						GPUCollector:     GPUCollectorConfig{},
 						ChassisCollector: ChassisCollectorConfig{},
 						JSONCollector: JSONCollectorConfig{
-							Deadline: 30 * time.Second,
+							Timeout: 30 * time.Second,
 						},
 						ManagerCollector:   ManagerCollectorConfig{},
 						SystemCollector:    SystemCollectorConfig{},
@@ -75,7 +75,7 @@ modules:
 						GPUCollector:     GPUCollectorConfig{},
 						ChassisCollector: ChassisCollectorConfig{},
 						JSONCollector: JSONCollectorConfig{
-							Deadline: 30 * time.Second,
+							Timeout: 30 * time.Second,
 						},
 						ManagerCollector:   ManagerCollectorConfig{},
 						SystemCollector:    SystemCollectorConfig{},
@@ -86,7 +86,7 @@ modules:
 						GPUCollector:     GPUCollectorConfig{},
 						ChassisCollector: ChassisCollectorConfig{},
 						JSONCollector: JSONCollectorConfig{
-							Deadline: 30 * time.Second,
+							Timeout: 30 * time.Second,
 						},
 						ManagerCollector:   ManagerCollectorConfig{},
 						SystemCollector:    SystemCollectorConfig{},
@@ -111,7 +111,7 @@ modules:
 				Modules: map[string]Module{
 					"foo": {
 						JSONCollector: JSONCollectorConfig{
-							Deadline: 30 * time.Second,
+							Timeout: 30 * time.Second,
 						},
 					},
 				},
@@ -144,7 +144,7 @@ func TestModulesConfig_JSONCollector(t *testing.T) {
 					"rf_version": {
 						Prober: "json_collector",
 						JSONCollector: JSONCollectorConfig{
-							Deadline:    30 * time.Second,
+							Timeout:     30 * time.Second,
 							RedfishRoot: `/redfish/v1`,
 							JQFilter: `[{
   "name": "redfish_version",
@@ -159,7 +159,7 @@ func TestModulesConfig_JSONCollector(t *testing.T) {
 					"delta_powershelf": {
 						Prober: "json_collector",
 						JSONCollector: JSONCollectorConfig{
-							Deadline:    30 * time.Second,
+							Timeout:     30 * time.Second,
 							RedfishRoot: "/redfish/v1/Chassis/PowerShelf_0/Sensors?$expand=.($levels=1)",
 							JQFilter: `[.Oem.deltaenergysystems.AllSensors.Sensors[]] |
 map({
@@ -190,7 +190,7 @@ map(.help = "Value yielded from the Redfish API /Chassis/PowerShelf_0, expanded 
 					"31s_timeout_collector": {
 						Prober: "json_collector",
 						JSONCollector: JSONCollectorConfig{
-							Deadline:    31 * time.Second,
+							Timeout:     31 * time.Second,
 							RedfishRoot: "/redfish/v1/nop",
 							JQFilter:    `nil`,
 						},
