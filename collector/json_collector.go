@@ -63,7 +63,13 @@ func NewJSONCollector(redfishClient *gofish.APIClient, logger *slog.Logger, conf
 		jqQuery:        query,
 		logger:         logger,
 		cachedResponse: body,
-		metricsDescs:   map[string]DescWithLabels{},
+		metricsDescs: map[string]DescWithLabels{
+			"redfish_collector_json_parse_success": {
+				SortedLabels: []string{},
+				Desc: prometheus.NewDesc("redfish_collector_json_parse_failure_last",
+					"Indicates if JSON parsing of the redfish endpoint was successful (0=no,1=yes)", nil, nil),
+			},
+		},
 	}, nil
 }
 
@@ -97,6 +103,9 @@ func (j *JSONCollector) Collect(ch chan<- prometheus.Metric) {
 	metrics, err := metricsFromBody(ctx, j.jqQuery, j.cachedResponse)
 	if err != nil {
 		j.logger.Error("failed to convert collected data to metrics", slog.Any("error", err))
+		ch <- prometheus.MustNewConstMetric(
+			j.metricsDescs["redfish_collector_json_parse_success"].Desc,
+			prometheus.GaugeValue, 0)
 		return
 	}
 	for _, metric := range metrics {
@@ -115,6 +124,9 @@ func (j *JSONCollector) Collect(ch chan<- prometheus.Metric) {
 			labels...,
 		)
 	}
+	ch <- prometheus.MustNewConstMetric(
+		j.metricsDescs["redfish_collector_json_parse_success"].Desc,
+		prometheus.GaugeValue, 1)
 }
 
 // metricsFromBody applies the given gojq.Query to a Redfish response body.
