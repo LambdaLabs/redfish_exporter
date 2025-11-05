@@ -239,7 +239,7 @@ type TelemetryCollector struct {
 }
 
 // NewTelemetryCollector creates a new TelemetryService collector
-func NewTelemetryCollector(redfishClient *gofish.APIClient, logger *slog.Logger, config *config.TelemetryCollectorConfig) (*TelemetryCollector, error) {
+func NewTelemetryCollector(moduleName string, redfishClient *gofish.APIClient, logger *slog.Logger, config *config.TelemetryCollectorConfig) (*TelemetryCollector, error) {
 	return &TelemetryCollector{
 		redfishClient: redfishClient,
 		config:        config,

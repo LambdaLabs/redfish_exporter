@@ -131,7 +131,7 @@ func createGPUMetricMap() map[string]Metric {
 }
 
 // NewGPUCollector creates a new GPU collector
-func NewGPUCollector(redfishClient *gofish.APIClient, logger *slog.Logger, config *config.GPUCollectorConfig) (*GPUCollector, error) {
+func NewGPUCollector(collectorName string, redfishClient *gofish.APIClient, logger *slog.Logger, config *config.GPUCollectorConfig) (*GPUCollector, error) {
 	return &GPUCollector{
 		redfishClient: redfishClient,
 		metrics:       gpuMetrics,

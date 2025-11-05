@@ -42,7 +42,7 @@ func createManagerMetricMap() map[string]Metric {
 }
 
 // NewManagerCollector returns a collector that collecting memory statistics
-func NewManagerCollector(redfishClient *gofish.APIClient, logger *slog.Logger, config *config.ManagerCollectorConfig) (*ManagerCollector, error) {
+func NewManagerCollector(moduleName string, redfishClient *gofish.APIClient, logger *slog.Logger, config *config.ManagerCollectorConfig) (*ManagerCollector, error) {
 	return &ManagerCollector{
 		redfishClient: redfishClient,
 		config:        config,

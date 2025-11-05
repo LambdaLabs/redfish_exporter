@@ -96,7 +96,7 @@ func createChassisMetricMap() map[string]Metric {
 }
 
 // NewChassisCollector returns a collector that collecting chassis statistics
-func NewChassisCollector(redfishClient *gofish.APIClient, logger *slog.Logger, config *config.ChassisCollectorConfig) (*ChassisCollector, error) {
+func NewChassisCollector(collectorName string, redfishClient *gofish.APIClient, logger *slog.Logger, config *config.ChassisCollectorConfig) (*ChassisCollector, error) {
 	// get service from redfish client
 
 	return &ChassisCollector{

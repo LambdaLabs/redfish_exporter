@@ -35,6 +35,7 @@ type JSONYieldedMetric struct {
 
 // JSONCollector is a collector which probes a particular Redfish path, applies a given JQ filter, and returns metrics accordingly.
 type JSONCollector struct {
+	moduleName        string
 	redfishClient     *gofish.APIClient
 	config            *config.JSONCollectorConfig
 	jqQuery           *gojq.Query
@@ -46,13 +47,14 @@ type JSONCollector struct {
 }
 
 // NewJSONCollector yields a JSON collector.
-func NewJSONCollector(redfishClient *gofish.APIClient, logger *slog.Logger, config *config.JSONCollectorConfig) (*JSONCollector, error) {
+func NewJSONCollector(modName string, redfishClient *gofish.APIClient, logger *slog.Logger, config *config.JSONCollectorConfig) (*JSONCollector, error) {
 	query, err := gojq.Parse(config.JQFilter)
 	if err != nil {
 		return nil, fmt.Errorf("jq parse error in collector creation: %w", err)
 	}
 
 	return &JSONCollector{
+		moduleName:        modName,
 		redfishClient:     redfishClient,
 		config:            config,
 		jqQuery:           query,
@@ -64,7 +66,7 @@ func NewJSONCollector(redfishClient *gofish.APIClient, logger *slog.Logger, conf
 			"redfish_collector_json_parse_success": {
 				SortedLabels: []string{},
 				Desc: prometheus.NewDesc("redfish_collector_json_parse_failure_last",
-					"Indicates if JSON parsing of the redfish endpoint was successful (0=no,1=yes)", nil, nil),
+					"Indicates if JSON parsing of the redfish endpoint was successful (0=no,1=yes)", []string{"module_name"}, nil),
 			},
 		},
 	}, nil
@@ -146,7 +148,7 @@ func (j *JSONCollector) Collect(ch chan<- prometheus.Metric) {
 			slog.Any("response_body", string(body)))
 		ch <- prometheus.MustNewConstMetric(
 			j.metricsDescs["redfish_collector_json_parse_success"].Desc,
-			prometheus.GaugeValue, 0)
+			prometheus.GaugeValue, 0, j.moduleName)
 		return
 	}
 	for _, metric := range metrics {
@@ -167,7 +169,7 @@ func (j *JSONCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 	ch <- prometheus.MustNewConstMetric(
 		j.metricsDescs["redfish_collector_json_parse_success"].Desc,
-		prometheus.GaugeValue, 1)
+		prometheus.GaugeValue, 1, j.moduleName)
 }
 
 // metricsFromBody applies the given gojq.Query to a Redfish response body.

@@ -38,7 +38,7 @@ func TestTelemetryCollectorIntegration(t *testing.T) {
 
 	// Create collector
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewTelemetryCollector(client, logger, nil)
+	collector, err := NewTelemetryCollector(t.Name(), client, logger, nil)
 	require.NoError(t, err)
 
 	// Collect metrics
@@ -100,7 +100,7 @@ func TestTelemetryCollectorIntegration(t *testing.T) {
 func TestTelemetryCollectorDescribe(t *testing.T) {
 	// Create a mock client (won't be used for Describe)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewTelemetryCollector(nil, logger, nil)
+	collector, err := NewTelemetryCollector(t.Name(), nil, logger, nil)
 	require.NoError(t, err)
 
 	// Describe should work without a client
@@ -238,7 +238,7 @@ func BenchmarkTelemetryCollector(b *testing.B) {
 	defer client.Logout()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewTelemetryCollector(client, logger, nil)
+	collector, err := NewTelemetryCollector(b.Name(), client, logger, nil)
 	require.NoError(b, err)
 
 	b.ResetTimer()
@@ -257,7 +257,7 @@ func BenchmarkTelemetryCollector(b *testing.B) {
 // TestTelemetryMetricCount validates all metrics are properly exposed
 func TestTelemetryMetricCount(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewTelemetryCollector(nil, logger, nil)
+	collector, err := NewTelemetryCollector(t.Name(), nil, logger, nil)
 	require.NoError(t, err)
 
 	// Expected metric categories
@@ -301,7 +301,7 @@ func TestTelemetryCollectorGracefulNoService(t *testing.T) {
 	// This would require a mock client that returns an error
 	// For now, just verify the collector can be created without panic
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewTelemetryCollector(nil, logger, nil)
+	collector, err := NewTelemetryCollector(t.Name(), nil, logger, nil)
 	require.NoError(t, err)
 
 	// Verify it has the right number of metrics defined

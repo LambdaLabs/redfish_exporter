@@ -178,7 +178,7 @@ func buildCollectorsFor(modules []string, moduleConfig map[string]config.Module,
 	c := []prometheus.Collector{}
 	for _, module := range modules {
 		if modConfig, found := moduleConfig[module]; found {
-			collector, err := collector.NewCollectorFromModule(&modConfig, rfClient, logger)
+			collector, err := collector.NewCollectorFromModule(module, &modConfig, rfClient, logger)
 			if err != nil {
 				logger.Error("unable to create collector", slog.Any("error", err))
 				collectorLastStatus.WithLabelValues(module).Set(0)
@@ -212,10 +212,6 @@ func parseLogLevel(level string) slog.Level {
 	return ret
 }
 
-func init() {
-	registerMetaMetrics()
-}
-
 func main() {
 	slog.Info("Starting redfish_exporter")
 	flag.Parse()
@@ -226,6 +222,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	registerMetaMetrics()
 	// Setup dinal logger from config
 	opts := &slog.HandlerOptions{
 		Level: parseLogLevel(safeConfig.Config.Loglevel),

@@ -111,7 +111,7 @@ func createSystemMetricMap() map[string]Metric {
 }
 
 // NewSystemCollector returns a collector that collecting memory statistics
-func NewSystemCollector(redfishClient *gofish.APIClient, logger *slog.Logger, config *config.SystemCollectorConfig) (*SystemCollector, error) {
+func NewSystemCollector(moduleName string, redfishClient *gofish.APIClient, logger *slog.Logger, config *config.SystemCollectorConfig) (*SystemCollector, error) {
 	return &SystemCollector{
 		redfishClient: redfishClient,
 		config:        config,
