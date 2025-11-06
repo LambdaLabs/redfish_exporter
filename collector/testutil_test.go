@@ -123,8 +123,9 @@ func collectSystemMetrics(t *testing.T, client *gofish.APIClient) map[string]flo
 
 	// Create a test logger that discards output
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	collector, err := NewSystemCollector(t.Name(), client, logger, nil)
+	require.NoError(t, err)
 
-	collector := NewSystemCollector(client, logger)
 	ch := make(chan prometheus.Metric, 100)
 	collector.Collect(ch)
 	close(ch)

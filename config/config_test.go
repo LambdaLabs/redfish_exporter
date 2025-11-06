@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	gta "gotest.tools/v3/assert"
@@ -41,9 +42,12 @@ modules:
 			wantConfig: &Config{
 				Modules: map[string]Module{
 					"foo": {
-						Prober:             "gpu_collector",
-						GPUCollector:       GPUCollectorConfig{},
-						ChassisCollector:   ChassisCollectorConfig{},
+						Prober:           "gpu_collector",
+						GPUCollector:     GPUCollectorConfig{},
+						ChassisCollector: ChassisCollectorConfig{},
+						JSONCollector: JSONCollectorConfig{
+							Timeout: 30 * time.Second,
+						},
 						ManagerCollector:   ManagerCollectorConfig{},
 						SystemCollector:    SystemCollectorConfig{},
 						TelemetryCollector: TelemetryCollectorConfig{},
@@ -67,17 +71,23 @@ modules:
 				Loglevel: "info",
 				Modules: map[string]Module{
 					"foo": {
-						Prober:             "gpu_collector",
-						GPUCollector:       GPUCollectorConfig{},
-						ChassisCollector:   ChassisCollectorConfig{},
+						Prober:           "gpu_collector",
+						GPUCollector:     GPUCollectorConfig{},
+						ChassisCollector: ChassisCollectorConfig{},
+						JSONCollector: JSONCollectorConfig{
+							Timeout: 30 * time.Second,
+						},
 						ManagerCollector:   ManagerCollectorConfig{},
 						SystemCollector:    SystemCollectorConfig{},
 						TelemetryCollector: TelemetryCollectorConfig{},
 					},
 					"boo": {
-						Prober:             "chassis_collector",
-						GPUCollector:       GPUCollectorConfig{},
-						ChassisCollector:   ChassisCollectorConfig{},
+						Prober:           "chassis_collector",
+						GPUCollector:     GPUCollectorConfig{},
+						ChassisCollector: ChassisCollectorConfig{},
+						JSONCollector: JSONCollectorConfig{
+							Timeout: 30 * time.Second,
+						},
 						ManagerCollector:   ManagerCollectorConfig{},
 						SystemCollector:    SystemCollectorConfig{},
 						TelemetryCollector: TelemetryCollectorConfig{},
@@ -99,7 +109,11 @@ modules:
 			wantErrString: "module foo is not valid: module requires a prober to be configured",
 			wantConfig: &Config{
 				Modules: map[string]Module{
-					"foo": {},
+					"foo": {
+						JSONCollector: JSONCollectorConfig{
+							Timeout: 30 * time.Second,
+						},
+					},
 				},
 			},
 		},
@@ -108,6 +122,86 @@ modules:
 		t.Run(tName, func(t *testing.T) {
 			byteReader := bytes.NewReader([]byte(test.inputYAML))
 			gotConfig, err := readConfigFrom(byteReader)
+			if test.wantErrString != "" {
+				gta.ErrorContains(t, err, test.wantErrString)
+			}
+			gta.Assert(t, cmp.DeepEqual(test.wantConfig, gotConfig))
+		})
+	}
+}
+
+func TestModulesConfig_JSONCollector(t *testing.T) {
+	tT := map[string]struct {
+		inputFile     string
+		wantErrString string
+		wantConfig    *Config
+	}{
+		"extraction from Delta Electronics OEM Sensors endpoint": {
+			inputFile:     "testdata/config.j2m.yaml",
+			wantErrString: "",
+			wantConfig: &Config{
+				Modules: map[string]Module{
+					"rf_version": {
+						Prober: "json_collector",
+						JSONCollector: JSONCollectorConfig{
+							Timeout:     30 * time.Second,
+							RedfishRoot: `/redfish/v1`,
+							JQFilter: `[{
+  "name": "redfish_version",
+  "help": "Redfish version reported by this device",
+  "labels": {
+    "redfish_version": .RedfishVersion
+  },
+  "value": 1.0
+}]`,
+						},
+					},
+					"delta_powershelf": {
+						Prober: "json_collector",
+						JSONCollector: JSONCollectorConfig{
+							Timeout:     30 * time.Second,
+							RedfishRoot: "/redfish/v1/Chassis/PowerShelf_0/Sensors?$expand=.($levels=1)",
+							JQFilter: `[.Oem.deltaenergysystems.AllSensors.Sensors[]] |
+map({
+  name: (if .DeviceName | test("^ps[0-9]+_") then .DeviceName | sub("^ps[0-9]+_"; "") else .DeviceName end),
+  value: .Reading,
+  labels: (
+    if .DeviceName | test("^ps[0-9]+_") then {"power_supply_id": (.DeviceName | split("_")[0])}
+    else {}
+    end),
+    _raw: .
+}) |
+map(.help = "Value yielded from the Redfish API /Chassis/PowerShelf_0, expanded 1 level") | map(del(._raw)) | sort_by(.name)`,
+						},
+						GPUCollector:       GPUCollectorConfig{},
+						ChassisCollector:   ChassisCollectorConfig{},
+						ManagerCollector:   ManagerCollectorConfig{},
+						SystemCollector:    SystemCollectorConfig{},
+						TelemetryCollector: TelemetryCollectorConfig{},
+					},
+				},
+			},
+		},
+		"config with a non-standard deadline": {
+			inputFile:     "testdata/json_collector_with_timeout.yaml",
+			wantErrString: "",
+			wantConfig: &Config{
+				Modules: map[string]Module{
+					"31s_timeout_collector": {
+						Prober: "json_collector",
+						JSONCollector: JSONCollectorConfig{
+							Timeout:     31 * time.Second,
+							RedfishRoot: "/redfish/v1/nop",
+							JQFilter:    `nil`,
+						},
+					},
+				},
+			},
+		},
+	}
+	for tName, test := range tT {
+		t.Run(tName, func(t *testing.T) {
+			gotConfig, err := NewConfigFromFile(test.inputFile)
 			if test.wantErrString != "" {
 				gta.ErrorContains(t, err, test.wantErrString)
 			}

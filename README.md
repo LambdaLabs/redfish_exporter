@@ -1,42 +1,23 @@
 # redfish_exporter
 
-[![test-and-lint](https://github.com/FlxPeters/redfish_exporter/actions/workflows/test-and-lint.yml/badge.svg)](https://github.com/FlxPeters/redfish_exporter/actions/workflows/test-and-lint.yml)
-[![goreleaser](https://github.com/FlxPeters/redfish_exporter/actions/workflows/build-goreleaser.yml/badge.svg)](https://github.com/FlxPeters/redfish_exporter/actions/workflows/build-goreleaser.yml)
-
-
-A Prometheus exporter to get metrics from Redfish based hardware servers.
+A Prometheus multi-target exporter to fetch metrics from Redfish-capable hardware.
+Forked from https://github.com/FlxPeters/redfish_exporter, see [Why a fork](#why-a-fork) for rationale.
 
 ## Configuration
 
-An example configure given as an example:
+Configuration of the redfish_exporter is done via YAML file.
 
-```yaml
-hosts:
-  10.36.48.24:
-    username: admin
-    password: pass
-  default:
-    username: admin
-    password: pass
-groups:
-  group1:
-    username: group1_user
-    password: group1_pass
-```
-Note that the ```default``` entry is useful as it avoids an error
-condition that is discussed in [this issue][1].
+See [CONFIGURATION.md](./docs/CONFIGURATION.md) for details.
 
 ## Building
 
-To build the redfish_exporter executable run the command:
+To build the redfish_exporter executable:
 
 ```sh
-go build
-# or
 make build
 ```
 
-There is also a Docker image available. The production build is handled by [gorelaser](https://goreleaser.com/) in order to build for multiple platforms.
+At the current time, this fork does not publish its own container images. We hope to in the near future.
 
 ## Running
 
@@ -45,28 +26,37 @@ There is also a Docker image available. The production build is handled by [gore
 The exporter can run directly on Linux as a binary:
 
 ```sh
-redfish_exporter --config.file=redfish_exporter.yml
+redfish_exporter -config.file=redfish_exporter.yaml
 ```
 Run `redfish_exporter -h` for more options.
 
-### Running in container
+### Running in a container
 
-We also provide a ready to use container image via Github's Container registry. Run the following command in order to start the exporter via Docekr or Podman:
+If using an image, an invocation like the following should also work:
 
-```sh
-docker run -v ./config.demo.yaml:/redfish_exporter.yml:ro,z -p 9610:9610 ghcr.io/flxpeters/redfish_exporter:latest
+``` shell
+# For Podman users
+podman run -v $(pwd)/redfish_exporter.yaml:/config.yml -p 9610:9610  some-image-reference:<some-image-tag> -config.file="/config.yml"
+# For Docker users
+docker run -v $(pwd)/redfish_exporter.yaml:/config.yml -p 9610:9610  some-image-reference:<some-image-tag> -config.file="/config.yml"
 ```
-
-Remember to replace your config  `/redfish_exporter.yml` in the container with your own one.
 
 ## Scraping
 
-We can get metrics for a device via the `redfish` endpoint and a `target` parameter:
+Clients - like Prometheus, your browser, or cURL - collect Redfish metrics from a system via the `/redfish` endpoint and at minimum, a `target` parameter:
 
 ```sh
-curl http://<redfish_exporter host>:9610/redfish?target=10.10.10.10
+curl -s http://<redfish_exporter host>:9610/redfish?target=<ip>
 ```
-or by pointing your favourite browser at this URL.
+
+If using [modules](#configuration), clients would specify one or more `module` parameters:
+
+``` shell
+# Single module
+curl -s "http://localhost:9610/redfish?target=<ip>&module=telemetry"
+# Multiple modules, where 'rf_version' is possibly a custom JSON collector
+curl -s "http://localhost:9610/redfish?target=<ip>&module=telemetry&module=rf_version"
+```
 
 ## Reloading Configuration
 
@@ -82,32 +72,39 @@ Alternatively, a configuration reload can be triggered by sending `SIGHUP` to th
 
 ## Prometheus Configuration
 
-You can then setup Prometheus to scrape the target using something like this in your Prometheus configuration files:
+Prometheus scrapes targets using something like the following scrape job configuration:
 
 ```yaml
   - job_name: 'redfish-exporter'
 
     # metrics_path defaults to '/metrics'
     metrics_path: /redfish
-
+    
+    # params below will apply to all targets in the scrape job. Useful in homogeneous hardware deployments (like job-by-hardware-type)
+    params:
+    # (optional) when using modules
+      module: [telemetry, gpu]
+      # (optional) when using group config
+      group: [foo]
     # scheme defaults to 'http'.
-
+    scheme: http
+    
     static_configs:
     - targets:
-       - 10.10.10.10 ## here is the list of the redfish targets which will be monitored
+       - <ip> # List of IPs to collect Redfish metrics from
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
       - source_labels: [__param_target]
         target_label: instance
       - target_label: __address__
-        replacement: localhost:9610  ### the address of the redfish-exporter address
-      # (optional) when using group config add this to have group=my_group_name
+        replacement: localhost:9610  # The address of the redfish-exporter
+      # NOTE: If certain params (like module or group) may be variable per host in the job, often depending on service discovery, do not use 'params' above but instead add relabels like so:
       - target_label: __param_group
-        replacement: my_group_name
+        replacement: "foo" # likely a regex and using service discovery data
+      - target_label: __param_module
+        replacement: "foobar"
 ```
-
-Note that port 9610 has been [reserved][4] for the redfish_exporter.
 
 ## Testing and Development
 
@@ -115,7 +112,7 @@ Note that port 9610 has been [reserved][4] for the redfish_exporter.
 
 We provide a mock Redfish server for testing the exporter without requiring actual hardware:
 
-```sh
+```shell
 # Test with specific captured data
 make mock-test TESTDATA=my_system/capture.txt
 ```
@@ -126,7 +123,7 @@ This starts both a mock Redfish server (with HTTP and HTTPS support) and the exp
 
 To capture data from real hardware for testing:
 
-```sh
+```shell
 # Capture Redfish responses from a BMC
 make capture HOST=10.0.0.100 USER=admin PASS=password OUTPUT=my_system
 
@@ -138,7 +135,7 @@ See `tools/mock-server/README.md` and `tools/capture/README.md` for detailed doc
 
 ## Supported Devices (tested)
 
-Prior to the fork (should also work now):
+Prior to the fork (should also still work post-fork):
 
 - Enginetech EG520R-G20 (Supermicro Firmware Revision 1.76.39)
 - Enginetech EG920A-G20 (Huawei iBMC 6.22)
@@ -146,25 +143,24 @@ Prior to the fork (should also work now):
 - Lenovo ThinkSystem SR650 (BMC 2.50)
 - Dell PowerEdge R440, R640, R650, R6515, C6420
 - GIGABYTE G292-Z20, G292-Z40, G482-Z54
+- GIGABYTE R263-Z32 (AMI MegaRAC SP-X)
 
 Since the fork:
-
-- GIGABYTE R263-Z32 (AMI MegaRAC SP-X)
+- Nvidia B200
+- Nvidia GB200/GB300 NVL72
+- (really, most Nvidia server architectures/OEMs)
 
 ## Why a Fork?
 
 We decided to fork the existing exporter for several reasons:
 
-- Slog instead of Apexlog: Just a detail, but since we have the `slog` package in Go 1.21 available, it should be used.
-- Remove log severity metrics: This is not a good metric from my point of view.
-  It also slows down the scrape time by an non accaptable amount of time if there are many logs.
-- Updated dependencies: The upstream repository has several outdated libraries. We want to stay up to date.
-- Tests: The original code base had no tests. We aim to provide tests for, at least, all new code.
+- Specialized needs: In the GPU Cloud/AI/Superintelligence space, hardware platforms evolve so quickly and in specialized ways, requiring tailored behaviors.
+- Updated dependencies: The upstream repository had more than a few outdated dependencies. We want to stay (more) up to date.
+- Tests: We want to encourage testable behavior as much as possible, _especially_ when working with bleeding-edge hardware.
+- Deviation in behavior: We envision the redfish_exporter operating more similary to other Prometheus ecosystem exporters, like `blackbox_exporter`.
 
-## Acknowledgement
+## Acknowledgements
 
-* https://github.com/stmcginnis/gofish
-* https://github.com/jenningsloy318/redfish_exporter
-
-[1]: https://github.com/jenningsloy318/redfish_exporter/issues/7
-[4]: https://github.com/prometheus/prometheus/wiki/Default-port-allocations
+* https://github.com/stmcginnis/gofish, whose work made this exporter and its predecessors possible
+* https://github.com/jenningsloy318/redfish_exporter, where our fork was forked from
+* https://github.com/FlxPeters/redfish_exporter (which this particular project forks)

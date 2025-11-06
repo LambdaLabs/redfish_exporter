@@ -1,0 +1,41 @@
+modules:
+  # rf_version is an example configuration which emits a constant value (1.0) with a single label (redfish_version) mapping to
+  # the system-reported Redfish version.
+  rf_version:
+    prober: json_collector
+    json_collector:
+      redfishRoot: /redfish/v1
+      jq: |-
+        [{
+          "name": "redfish_version",
+          "help": "Redfish version reported by this device",
+          "labels": {
+            "redfish_version": .RedfishVersion
+          },
+          "value": 1.0
+        }]
+  # delta_powershelf is an example configuration which opaquely passes through data from the PowerShelf_0/Sensors API.
+  # Note that Redfish expansion is used to ensure all data is returned from the single call.
+  # Sensor data is reported as an Oem extension in our environment, so parse the full array
+  # and remap like so:
+  #   name: .DeviceName directly, unless the .DeviceName is prefixed with "ps[0-9]_" - if it is, cuts that prefix off (e.g. ps1_temp_input becomes temp_input)
+  #   value: value from the Redfish API (already float64)
+  #   labels: If the .DeviceName was prefixed with ps[0-9]_ from above, adds a "power_supply_id" label containing that prefix (e.g. ps1_temp_input becomes "power_supply_id": "ps1")
+  #   help: A static string
+  #   NOTE: A totally transient _raw field contains the original object, though is unused and deleted ultimately. It would be useful in case transforms had overwritten values earlier and the original data was still necessary for comparison or yielding e.g. a help string, etc.
+  delta_powershelf:
+    prober: json_collector
+    json_collector:
+      redfishRoot: /redfish/v1/Chassis/PowerShelf_0/Sensors?$expand=.($levels=1)
+      jq: |-
+        [.Oem.deltaenergysystems.AllSensors.Sensors[]] |
+        map({
+          name: (if .DeviceName | test("^ps[0-9]+_") then .DeviceName | sub("^ps[0-9]+_"; "") else .DeviceName end),
+          value: .Reading,
+          labels: (
+            if .DeviceName | test("^ps[0-9]+_") then {"power_supply_id": (.DeviceName | split("_")[0])}
+            else {}
+            end),
+            _raw: .
+        }) |
+        map(.help = "Value yielded from the Redfish API /Chassis/PowerShelf_0, expanded 1 level") | map(del(._raw)) | sort_by(.name)

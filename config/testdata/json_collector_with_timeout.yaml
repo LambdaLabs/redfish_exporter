@@ -1,0 +1,7 @@
+modules:
+  31s_timeout_collector:
+    prober: json_collector
+    json_collector:
+      context_timeout: 31s
+      redfishRoot: /redfish/v1/nop
+      jq: 'nil'

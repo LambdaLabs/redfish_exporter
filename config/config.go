@@ -5,15 +5,20 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 
 	yaml "gopkg.in/yaml.v3"
 )
 
 var (
-	// DefaultGPUCollector is a default unless the user provides particular values.
-	DefaultGPUCollector = GPUCollectorConfig{}
 	// DefaultChassisCollector is a default unless the user provides particular values.
 	DefaultChassisCollector = ChassisCollectorConfig{}
+	// DefaultGPUCollector is a default unless the user provides particular values.
+	DefaultGPUCollector = GPUCollectorConfig{}
+	//DefaultJSONCollector is a default unless the user provides particular values.
+	DefaultJSONCollector = JSONCollectorConfig{
+		Timeout: 30 * time.Second,
+	}
 	// DefaultManagerCollector is a default unless the user provides particular values.
 	DefaultManagerCollector = ManagerCollectorConfig{}
 	// DefaultSystemCollector is a default unless the user provides particular values.
@@ -24,6 +29,7 @@ var (
 	DefaultModule = Module{
 		ChassisCollector:   DefaultChassisCollector,
 		GPUCollector:       DefaultGPUCollector,
+		JSONCollector:      DefaultJSONCollector,
 		ManagerCollector:   DefaultManagerCollector,
 		SystemCollector:    DefaultSystemCollector,
 		TelemetryCollector: DefaultTelemetryCollector,
@@ -32,13 +38,17 @@ var (
 	// In a future release, this will be removed and users will be expected to
 	// define one or more modules in their config, and reference those as HTTP query params.
 	DefaultModuleConfig = map[string]Module{
+		"chassis_collector": {
+			Prober:           "chassis_collector",
+			ChassisCollector: DefaultChassisCollector,
+		},
 		"gpu_collector": {
 			Prober:       "gpu_collector",
 			GPUCollector: DefaultGPUCollector,
 		},
-		"chassis_collector": {
-			Prober:           "chassis_collector",
-			ChassisCollector: DefaultChassisCollector,
+		"json_collector": {
+			Prober:        "json_collector",
+			JSONCollector: DefaultJSONCollector,
 		},
 		"manager_collector": {
 			Prober:           "manager_collector",
@@ -79,6 +89,23 @@ func (g *GPUCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
 	type plain GPUCollectorConfig
 
 	if err := unmarshal((*plain)(g)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type JSONCollectorConfig struct {
+	Timeout     time.Duration `yaml:"context_timeout"`
+	RedfishRoot string        `yaml:"redfishRoot"`
+	JQFilter    string        `yaml:"jq"`
+}
+
+func (j *JSONCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
+	*j = DefaultJSONCollector
+	type plain JSONCollectorConfig
+
+	if err := unmarshal((*plain)(j)); err != nil {
 		return err
 	}
 
@@ -135,8 +162,9 @@ func (t *TelemetryCollectorConfig) UnmarshalYAML(unmarshal func(any) error) erro
 // Modules are expected to specify a 'prober', and then a particular collector.
 type Module struct {
 	Prober             string                   `yaml:"prober"`
-	GPUCollector       GPUCollectorConfig       `yaml:"gpu_collector"`
 	ChassisCollector   ChassisCollectorConfig   `yaml:"chassis_collector"`
+	GPUCollector       GPUCollectorConfig       `yaml:"gpu_collector"`
+	JSONCollector      JSONCollectorConfig      `yaml:"json_collector"`
 	ManagerCollector   ManagerCollectorConfig   `yaml:"manager_collector"`
 	SystemCollector    SystemCollectorConfig    `yaml:"system_collector"`
 	TelemetryCollector TelemetryCollectorConfig `yaml:"telemetry_collector"`
@@ -209,10 +237,10 @@ type HostConfig struct {
 // Read exporter config from an input file path.
 func NewConfigFromFile(configFilePath string) (*Config, error) {
 	file, err := os.Open(configFilePath)
-	defer file.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer file.Close() //nolint:errcheck
 	return readConfigFrom(file)
 }
 
