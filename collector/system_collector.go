@@ -33,7 +33,7 @@ var (
 // SystemCollector implements the prometheus.Collector.
 type SystemCollector struct {
 	redfishClient *gofish.APIClient
-	config        *config.SystemCollectorConfig
+	config        config.SystemCollectorConfig
 	metrics       map[string]Metric
 	logger        *slog.Logger
 	prometheus.Collector
@@ -111,7 +111,7 @@ func createSystemMetricMap() map[string]Metric {
 }
 
 // NewSystemCollector returns a collector that collecting memory statistics
-func NewSystemCollector(moduleName string, redfishClient *gofish.APIClient, logger *slog.Logger, config *config.SystemCollectorConfig) (*SystemCollector, error) {
+func NewSystemCollector(moduleName string, redfishClient *gofish.APIClient, logger *slog.Logger, config config.SystemCollectorConfig) (*SystemCollector, error) {
 	return &SystemCollector{
 		redfishClient: redfishClient,
 		config:        config,

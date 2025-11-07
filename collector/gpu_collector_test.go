@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stmcginnis/gofish/redfish"
@@ -486,7 +487,7 @@ func TestGPUCollectorWithNvidiaGPU(t *testing.T) {
 	defer client.Logout()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewGPUCollector(t.Name(), client, logger, nil)
+	collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
 	require.NoError(t, err)
 
 	gpuMemoryMetrics, gpuProcessorMetrics, _, metricsFound := collectAndCategorizeMetrics(t, collector)
@@ -516,7 +517,7 @@ func TestGPUContextUtilization(t *testing.T) {
 	defer client.Logout()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewGPUCollector(t.Name(), client, logger, nil)
+	collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
 	require.NoError(t, err)
 
 	// Collect metrics
@@ -568,7 +569,7 @@ func TestGPUContextUtilizationWithDifferentOEMLocations(t *testing.T) {
 	defer client.Logout()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewGPUCollector(t.Name(), client, logger, nil)
+	collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
 	require.NoError(t, err)
 
 	ch := make(chan prometheus.Metric, 100)
@@ -609,7 +610,7 @@ func TestGPUTemperatureSensorEdgeCases(t *testing.T) {
 		defer client.Logout()
 
 		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-		collector, err := NewGPUCollector(t.Name(), client, logger, nil)
+		collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
 		require.NoError(t, err)
 
 		ch := make(chan prometheus.Metric, 100)
@@ -694,7 +695,7 @@ func TestGPUTemperatureSensorEdgeCases(t *testing.T) {
 		defer client.Logout()
 
 		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-		collector, err := NewGPUCollector(t.Name(), client, logger, nil)
+		collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
 		require.NoError(t, err)
 
 		ch := make(chan prometheus.Metric, 200)
@@ -728,7 +729,7 @@ func TestGPUCollectorWithNoGPUs(t *testing.T) {
 	defer client.Logout()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewGPUCollector(t.Name(), client, logger, nil)
+	collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
 	require.NoError(t, err)
 
 	ch := make(chan prometheus.Metric, 100)
@@ -1006,7 +1007,7 @@ func TestCollectGPUProcessorMetrics(t *testing.T) {
 			// Create collector and collect metrics
 			client := connectToTestServer(t, server)
 
-			collector, err := NewGPUCollector(t.Name(), client, slog.Default(), nil)
+			collector, err := NewGPUCollector(t.Name(), client, slog.Default(), config.DefaultGPUCollector)
 			require.NoError(t, err)
 			ch := make(chan prometheus.Metric, 100)
 			go func() {
@@ -1296,7 +1297,7 @@ func TestGPUSerialNumberAndUUIDMetrics(t *testing.T) {
 			client := connectToTestServer(t, server)
 			defer client.Logout()
 
-			collector, err := NewGPUCollector(t.Name(), client, logger, nil)
+			collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
 			require.NoError(t, err)
 			ch := make(chan prometheus.Metric, 200)
 			go func() {
@@ -1495,7 +1496,7 @@ func TestGPUMetricsWithMissingSerialOrUUID(t *testing.T) {
 			client := connectToTestServer(t, server)
 			defer client.Logout()
 
-			collector, err := NewGPUCollector(t.Name(), client, logger, nil)
+			collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
 			require.NoError(t, err)
 			ch := make(chan prometheus.Metric, 100)
 			go func() {

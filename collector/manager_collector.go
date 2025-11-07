@@ -23,7 +23,7 @@ var (
 // ManagerCollector implements the prometheus.Collector.
 type ManagerCollector struct {
 	redfishClient         *gofish.APIClient
-	config                *config.ManagerCollectorConfig
+	config                config.ManagerCollectorConfig
 	metrics               map[string]Metric
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
@@ -42,7 +42,7 @@ func createManagerMetricMap() map[string]Metric {
 }
 
 // NewManagerCollector returns a collector that collecting memory statistics
-func NewManagerCollector(moduleName string, redfishClient *gofish.APIClient, logger *slog.Logger, config *config.ManagerCollectorConfig) (*ManagerCollector, error) {
+func NewManagerCollector(moduleName string, redfishClient *gofish.APIClient, logger *slog.Logger, config config.ManagerCollectorConfig) (*ManagerCollector, error) {
 	return &ManagerCollector{
 		redfishClient: redfishClient,
 		config:        config,

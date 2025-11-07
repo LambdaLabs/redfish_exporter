@@ -232,14 +232,14 @@ func createTelemetryMetricMap() map[string]Metric {
 // TelemetryCollector collects metrics from Redfish TelemetryService
 type TelemetryCollector struct {
 	redfishClient         *gofish.APIClient
-	config                *config.TelemetryCollectorConfig
+	config                config.TelemetryCollectorConfig
 	metrics               map[string]Metric
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
 }
 
 // NewTelemetryCollector creates a new TelemetryService collector
-func NewTelemetryCollector(moduleName string, redfishClient *gofish.APIClient, logger *slog.Logger, config *config.TelemetryCollectorConfig) (*TelemetryCollector, error) {
+func NewTelemetryCollector(moduleName string, redfishClient *gofish.APIClient, logger *slog.Logger, config config.TelemetryCollectorConfig) (*TelemetryCollector, error) {
 	return &TelemetryCollector{
 		redfishClient: redfishClient,
 		config:        config,

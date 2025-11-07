@@ -37,7 +37,7 @@ type JSONYieldedMetric struct {
 type JSONCollector struct {
 	moduleName        string
 	redfishClient     *gofish.APIClient
-	config            *config.JSONCollectorConfig
+	config            config.JSONCollectorConfig
 	jqQuery           *gojq.Query
 	logger            *slog.Logger
 	once              *sync.Once
@@ -47,7 +47,7 @@ type JSONCollector struct {
 }
 
 // NewJSONCollector yields a JSON collector.
-func NewJSONCollector(modName string, redfishClient *gofish.APIClient, logger *slog.Logger, config *config.JSONCollectorConfig) (*JSONCollector, error) {
+func NewJSONCollector(modName string, redfishClient *gofish.APIClient, logger *slog.Logger, config config.JSONCollectorConfig) (*JSONCollector, error) {
 	query, err := gojq.Parse(config.JQFilter)
 	if err != nil {
 		return nil, fmt.Errorf("jq parse error in collector creation: %w", err)

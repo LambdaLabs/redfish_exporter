@@ -207,3 +207,10 @@ func parsePhySecIntrusionSensor(method redfish.IntrusionSensor) (float64, bool) 
 
 	return float64(0), false
 }
+
+func float32PtrToFloat64(f *float32) float64 {
+	if f == nil {
+		return 0
+	}
+	return float64(*f)
+}

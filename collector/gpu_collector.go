@@ -61,7 +61,7 @@ func isGPUMemory(deviceType redfish.MemoryDeviceType) bool {
 // GPUCollector collects GPU-specific metrics including Nvidia OEM fields
 type GPUCollector struct {
 	redfishClient         *gofish.APIClient
-	config                *config.GPUCollectorConfig
+	config                config.GPUCollectorConfig
 	metrics               map[string]Metric
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
@@ -131,7 +131,7 @@ func createGPUMetricMap() map[string]Metric {
 }
 
 // NewGPUCollector creates a new GPU collector
-func NewGPUCollector(collectorName string, redfishClient *gofish.APIClient, logger *slog.Logger, config *config.GPUCollectorConfig) (*GPUCollector, error) {
+func NewGPUCollector(collectorName string, redfishClient *gofish.APIClient, logger *slog.Logger, config config.GPUCollectorConfig) (*GPUCollector, error) {
 	return &GPUCollector{
 		redfishClient: redfishClient,
 		metrics:       gpuMetrics,

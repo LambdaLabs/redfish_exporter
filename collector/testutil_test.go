@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stmcginnis/gofish"
@@ -123,7 +124,7 @@ func collectSystemMetrics(t *testing.T, client *gofish.APIClient) map[string]flo
 
 	// Create a test logger that discards output
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewSystemCollector(t.Name(), client, logger, nil)
+	collector, err := NewSystemCollector(t.Name(), client, logger, config.DefaultSystemCollector)
 	require.NoError(t, err)
 
 	ch := make(chan prometheus.Metric, 100)

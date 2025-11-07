@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stmcginnis/gofish"
@@ -75,7 +76,7 @@ func TestGetLeakDetectors(t *testing.T) {
 			require.NotEmpty(t, chassis, "Expected at least one chassis")
 
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-			collector, err := NewChassisCollector(t.Name(), client, logger, nil)
+			collector, err := NewChassisCollector(t.Name(), client, logger, config.DefaultChassisCollector)
 			require.NoError(t, err)
 			thermalSubsystem, err := chassis[0].ThermalSubsystem()
 			require.NoError(t, err)
@@ -107,7 +108,7 @@ func TestParseLeakDetector(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewChassisCollector(t.Name(), client, logger, nil)
+	collector, err := NewChassisCollector(t.Name(), client, logger, config.DefaultChassisCollector)
 	require.NoError(t, err)
 	thermalSubsystem, err := chassis[0].ThermalSubsystem()
 	require.NoError(t, err)
@@ -209,7 +210,7 @@ func TestCollectTotalGPUPower(t *testing.T) {
 	defer client.Logout()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewChassisCollector(t.Name(), client, logger, nil)
+	collector, err := NewChassisCollector(t.Name(), client, logger, config.DefaultChassisCollector)
 	require.NoError(t, err)
 
 	// Collect metrics
@@ -359,7 +360,7 @@ func TestCollectTotalGPUPowerMultipleChassis(t *testing.T) {
 	defer client.Logout()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewChassisCollector(t.Name(), client, logger, nil)
+	collector, err := NewChassisCollector(t.Name(), client, logger, config.DefaultChassisCollector)
 	require.NoError(t, err)
 
 	// Collect metrics
@@ -515,7 +516,7 @@ func TestCollectTotalGPUPowerErrorHandling(t *testing.T) {
 			defer client.Logout()
 
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-			collector, err := NewChassisCollector(t.Name(), client, logger, nil)
+			collector, err := NewChassisCollector(t.Name(), client, logger, config.DefaultChassisCollector)
 			require.NoError(t, err)
 
 			// Collect metrics
