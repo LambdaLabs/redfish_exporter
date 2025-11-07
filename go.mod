@@ -12,7 +12,7 @@ require (
 	github.com/prometheus/common v0.66.1
 	github.com/prometheus/exporter-toolkit v0.15.0
 	github.com/sosodev/duration v1.3.1
-	github.com/stmcginnis/gofish v0.20.0
+	github.com/stmcginnis/gofish v0.20.1-0.20251105161753-ad06182e453c
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
