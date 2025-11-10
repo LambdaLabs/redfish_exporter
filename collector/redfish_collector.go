@@ -214,3 +214,10 @@ func float32PtrToFloat64(f *float32) float64 {
 	}
 	return float64(*f)
 }
+
+func intPtrToFloat64(i *int) float64 {
+	if i == nil {
+		return 0
+	}
+	return float64(*i)
+}

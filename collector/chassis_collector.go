@@ -361,14 +361,14 @@ func parseChassisFan(ch chan<- prometheus.Metric, chassisID string, chassisFan r
 	chassisFanStaus := chassisFan.Status
 	chassisFanStausHealth := chassisFanStaus.Health
 	chassisFanStausState := chassisFanStaus.State
-	chassisFanRPM := float64(*chassisFan.Reading)
+	chassisFanRPM := intPtrToFloat64(chassisFan.Reading)
 	chassisFanUnit := chassisFan.ReadingUnits
-	chassisFanRPMLowerCriticalThreshold := float64(*chassisFan.LowerThresholdCritical)
-	chassisFanRPMUpperCriticalThreshold := float64(*chassisFan.UpperThresholdCritical)
-	chassisFanRPMLowerFatalThreshold := float64(*chassisFan.LowerThresholdFatal)
-	chassisFanRPMUpperFatalThreshold := float64(*chassisFan.UpperThresholdFatal)
-	chassisFanRPMMin := float64(*chassisFan.MinReadingRange)
-	chassisFanRPMMax := float64(*chassisFan.MaxReadingRange)
+	chassisFanRPMLowerCriticalThreshold := intPtrToFloat64(chassisFan.LowerThresholdCritical)
+	chassisFanRPMUpperCriticalThreshold := intPtrToFloat64(chassisFan.UpperThresholdCritical)
+	chassisFanRPMLowerFatalThreshold := intPtrToFloat64(chassisFan.LowerThresholdFatal)
+	chassisFanRPMUpperFatalThreshold := intPtrToFloat64(chassisFan.UpperThresholdFatal)
+	chassisFanRPMMin := intPtrToFloat64(chassisFan.MinReadingRange)
+	chassisFanRPMMax := intPtrToFloat64(chassisFan.MaxReadingRange)
 
 	chassisFanPercentage := chassisFanRPM
 	if chassisFanUnit != redfish.PercentReadingUnits {
