@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -68,9 +69,20 @@ func (m *ManagerCollector) Describe(ch chan<- *prometheus.Desc) {
 
 }
 
+func (m *ManagerCollector) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
+	m.collect(ctx, ch)
+}
+
 // Collect implemented prometheus.Collector
 func (m *ManagerCollector) Collect(ch chan<- prometheus.Metric) {
+	m.collect(context.TODO(), ch)
+}
 
+func (m *ManagerCollector) collect(ctx context.Context, ch chan<- prometheus.Metric) {
+	if ctx.Err() != nil {
+		m.logger.With("error", ctx.Err(), "collector", "manager").Debug("skipping collection")
+		return
+	}
 	logger := m.logger.With(slog.String("collector", "ManagerCollector"))
 	service := m.redfishClient.Service
 
@@ -79,6 +91,10 @@ func (m *ManagerCollector) Collect(ch chan<- prometheus.Metric) {
 		logger.Error("error getting managers from service", slog.String("operation", "service.Managers()"), slog.Any("error", err))
 	} else {
 		for _, manager := range managers {
+			if ctx.Err() != nil {
+				m.logger.With("error", ctx.Err(), "collector", "manager").Debug("skipping further collection")
+				return
+			}
 			managerLogger := logger.With(slog.String("manager", manager.ID))
 			managerLogger.Info("collector scrape started")
 

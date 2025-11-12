@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"math"
@@ -115,69 +116,37 @@ func NewChassisCollector(collectorName string, redfishClient *gofish.APIClient, 
 	}, nil
 }
 
-// Describe implemented prometheus.Collector
-func (c *ChassisCollector) Describe(ch chan<- *prometheus.Desc) {
-	for _, metric := range c.metrics {
-		ch <- metric.desc
-	}
-	c.collectorScrapeStatus.Describe(ch)
-
-}
-
-// getLeakDetectors works around an unfortunate fact that the LeakDetection schema is not yet standard, and some OEMs return
-// a single LeakDetection object from their ThermalSubsystem, instead of a gofish-expected collection.
-func (c *ChassisCollector) getLeakDetectors(thermalSubsystem *redfish.ThermalSubsystem, logger *slog.Logger) []*redfish.LeakDetector {
-	var allDetectors []*redfish.LeakDetector
-
-	// Standard gofish approach, for starters
-	leakDetectionCollection, err := thermalSubsystem.LeakDetection()
-	if err != nil {
-		logger.Debug("standard LeakDetection() call failed, will try fallback", slog.Any("error", err))
-		if leakDetectionCollection != nil {
-			detectors, err := leakDetectionCollection.LeakDetectors()
-			if err != nil {
-				logger.Error("failed obtaining LeakDetectors at all", slog.Any("error", err))
-				return nil
-			}
-			allDetectors = append(allDetectors, detectors...)
-		}
-		return allDetectors
-	}
-
-	// ...otherwise, try a fallback to handle buggy OEM implementations.
-	leakDetectionURL := thermalSubsystem.ODataID + "/LeakDetection"
-	leakDetection, err := redfish.GetLeakDetection(c.redfishClient.Service.GetClient(), leakDetectionURL)
-	if err != nil {
-		logger.Debug("fallback GetLeakDetection failed", slog.Any("error", err))
-		return allDetectors
-	}
-
-	if leakDetection != nil {
-		detectors, err := leakDetection.LeakDetectors()
-		if err != nil {
-			logger.Debug("error fetching leak detectors via fallback method", slog.Any("error", err))
-			return nil
-		}
-
-		if len(detectors) > 0 {
-			allDetectors = append(allDetectors, detectors...)
-		}
-	}
-	return allDetectors
+func (c *ChassisCollector) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
+	c.collect(ctx, ch)
 }
 
 // Collect implemented prometheus.Collector
 func (c *ChassisCollector) Collect(ch chan<- prometheus.Metric) {
+	c.collect(context.TODO(), ch)
+}
 
+func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Metric) {
+	if ctx.Err() != nil {
+		c.logger.With("error", ctx.Err(), "collector", "chassis").Debug("skipping collection")
+		return
+	}
 	logger := c.logger.With(slog.String("collector", "ChassisCollector"))
 	service := c.redfishClient.Service
 
+	if ctx.Err() != nil {
+		c.logger.With("error", ctx.Err(), "collector", "chassis").Debug("skipping collection")
+		return
+	}
 	// get a list of chassis from service
 	if chassises, err := service.Chassis(); err != nil {
 		logger.Error("error getting chassis from service", slog.String("operation", "service.Chassis()"), slog.Any("error", err))
 	} else {
 		// process the chassises
 		for _, chassis := range chassises {
+			if ctx.Err() != nil {
+				c.logger.With("error", ctx.Err()).Warn("skipping further collection")
+				continue
+			}
 			chassisLogger := logger.With(slog.String("Chassis", chassis.ID))
 			chassisLogger.Info("collector scrape started")
 			chassisID := chassis.ID
@@ -329,6 +298,57 @@ func (c *ChassisCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	c.collectorScrapeStatus.WithLabelValues("chassis").Set(float64(1))
+}
+
+// Describe implemented prometheus.Collector
+func (c *ChassisCollector) Describe(ch chan<- *prometheus.Desc) {
+	for _, metric := range c.metrics {
+		ch <- metric.desc
+	}
+	c.collectorScrapeStatus.Describe(ch)
+
+}
+
+// getLeakDetectors works around an unfortunate fact that the LeakDetection schema is not yet standard, and some OEMs return
+// a single LeakDetection object from their ThermalSubsystem, instead of a gofish-expected collection.
+func (c *ChassisCollector) getLeakDetectors(thermalSubsystem *redfish.ThermalSubsystem, logger *slog.Logger) []*redfish.LeakDetector {
+	var allDetectors []*redfish.LeakDetector
+
+	// Standard gofish approach, for starters
+	leakDetectionCollection, err := thermalSubsystem.LeakDetection()
+	if err != nil {
+		logger.Debug("standard LeakDetection() call failed, will try fallback", slog.Any("error", err))
+		if leakDetectionCollection != nil {
+			detectors, err := leakDetectionCollection.LeakDetectors()
+			if err != nil {
+				logger.Error("failed obtaining LeakDetectors at all", slog.Any("error", err))
+				return nil
+			}
+			allDetectors = append(allDetectors, detectors...)
+		}
+		return allDetectors
+	}
+
+	// ...otherwise, try a fallback to handle buggy OEM implementations.
+	leakDetectionURL := thermalSubsystem.ODataID + "/LeakDetection"
+	leakDetection, err := redfish.GetLeakDetection(c.redfishClient.Service.GetClient(), leakDetectionURL)
+	if err != nil {
+		logger.Debug("fallback GetLeakDetection failed", slog.Any("error", err))
+		return allDetectors
+	}
+
+	if leakDetection != nil {
+		detectors, err := leakDetection.LeakDetectors()
+		if err != nil {
+			logger.Debug("error fetching leak detectors via fallback method", slog.Any("error", err))
+			return nil
+		}
+
+		if len(detectors) > 0 {
+			allDetectors = append(allDetectors, detectors...)
+		}
+	}
+	return allDetectors
 }
 
 func parseChassisTemperature(ch chan<- prometheus.Metric, chassisID string, chassisTemperature redfish.Temperature, wg *sync.WaitGroup) {

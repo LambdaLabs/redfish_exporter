@@ -2,6 +2,7 @@ package collector
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -256,6 +257,10 @@ func NewTelemetryCollector(moduleName string, redfishClient *gofish.APIClient, l
 	}, nil
 }
 
+func (t *TelemetryCollector) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
+	t.collect(ctx, ch)
+}
+
 // Describe implements prometheus.Collector
 func (t *TelemetryCollector) Describe(ch chan<- *prometheus.Desc) {
 	for _, metric := range t.metrics {
@@ -266,6 +271,14 @@ func (t *TelemetryCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect implements prometheus.Collector
 func (t *TelemetryCollector) Collect(ch chan<- prometheus.Metric) {
+	t.collect(context.TODO(), ch)
+}
+
+func (t *TelemetryCollector) collect(ctx context.Context, ch chan<- prometheus.Metric) {
+	if ctx.Err() != nil {
+		t.logger.With("error", ctx.Err(), "collector", "telemetry").Debug("skipping collection")
+		return
+	}
 	t.collectorScrapeStatus.WithLabelValues("telemetry").Set(float64(0))
 
 	service := t.redfishClient.Service
@@ -316,6 +329,10 @@ func (t *TelemetryCollector) Collect(ch chan<- prometheus.Metric) {
 	// Process each metric report
 	wg := &sync.WaitGroup{}
 	for _, report := range metricReports {
+		if ctx.Err() != nil {
+			t.logger.With("error", ctx.Err(), "collector", "telemetry").Debug("skipping further collection")
+			continue
+		}
 		if strings.Contains(report.ID, reportIDProcessorGPMMetrics) {
 			wg.Add(1)
 			go t.collectGPMMetrics(ch, report, systemMap, wg)

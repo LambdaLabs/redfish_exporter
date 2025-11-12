@@ -217,7 +217,7 @@ func metricsHandler() http.HandlerFunc {
 // For ease onboarding from existing redfish_exporter deployments,
 // a modules[0] == "rf_exporter_default" will yield a []prometheus.Collector defined
 // in this function. Future relases will remove this behavior and require user input.
-func buildCollectorsFor(modules []string, moduleConfig map[string]config.Module, rfClient *gofish.APIClient, logger *slog.Logger) []prometheus.Collector {
+func buildCollectorsFor(modules []string, moduleConfig map[string]config.Module, rfClient *gofish.APIClient, logger *slog.Logger) []collector.ContextAwareCollector {
 	if modules[0] == "rf_exporter_default" {
 		logger.Warn("Using default collector bundle. In a future release, the exporter will require configuration of one or more modules.")
 		return buildCollectorsFor([]string{
@@ -228,7 +228,7 @@ func buildCollectorsFor(modules []string, moduleConfig map[string]config.Module,
 			"telemetry_collector",
 		}, config.DefaultModuleConfig, rfClient, logger)
 	}
-	c := []prometheus.Collector{}
+	c := []collector.ContextAwareCollector{}
 	for _, module := range modules {
 		if modConfig, found := moduleConfig[module]; found {
 			collector, err := collector.NewCollectorFromModule(module, &modConfig, rfClient, logger)

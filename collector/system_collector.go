@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -136,9 +137,20 @@ func (s *SystemCollector) Describe(ch chan<- *prometheus.Desc) {
 	s.collectorScrapeStatus.Describe(ch)
 }
 
-// Collect implements prometheus.Collector.
-func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocyclo // Complex but necessary for complete system collection
+func (s *SystemCollector) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
+	s.collect(ctx, ch)
+}
 
+// Collect implements prometheus.Collector.
+func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) {
+	s.collect(context.TODO(), ch)
+}
+
+func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metric) { //nolint:gocyclo // Complex but necessary for complete system collection
+	if ctx.Err() != nil {
+		s.logger.With("error", ctx.Err(), "collector", "system").Debug("skipping collection")
+		return
+	}
 	logger := s.logger.With(slog.String("collector", "SystemCollector"))
 	service := s.redfishClient.Service
 
@@ -147,6 +159,10 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 		logger.Error("error getting systems from service", slog.String("operation", "service.Systems()"), slog.Any("error", err))
 	} else {
 		for _, system := range systems {
+			if ctx.Err() != nil {
+				s.logger.With("error", ctx.Err(), "collector", "system").Debug("skipping further collection")
+				continue
+			}
 			systemLogger := logger.With(slog.String("System", system.ID))
 			systemLogger.Info("collector scrape started")
 

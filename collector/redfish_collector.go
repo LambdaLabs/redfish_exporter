@@ -2,7 +2,9 @@ package collector
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -30,19 +32,23 @@ var (
 // It implements prometheus.Collector, and at Describe or Collect time will iterate all of
 // its own collectors to yield data.
 type RedfishCollector struct {
+	ctx           context.Context
+	logger        *slog.Logger
 	redfishClient *gofish.APIClient
-	collectors    []prometheus.Collector
+	collectors    []ContextAwareCollector
 	redfishUp     prometheus.Gauge
 }
 
 // NewRedfishCollector returns a *RedfishCollector or an error.
-func NewRedfishCollector(host string, username, password string) (*RedfishCollector, error) {
-	redfishClient, err := newRedfishClient(host, username, password)
+func NewRedfishCollector(ctx context.Context, logger *slog.Logger, host string, username, password string) (*RedfishCollector, error) {
+	redfishClient, err := newRedfishClient(ctx, host, username, password)
 	if err != nil {
 		return nil, err
 	}
 
 	return &RedfishCollector{
+		ctx:           ctx,
+		logger:        logger,
 		redfishClient: redfishClient,
 		redfishUp: prometheus.NewGauge(
 			prometheus.GaugeOpts{
@@ -56,7 +62,7 @@ func NewRedfishCollector(host string, username, password string) (*RedfishCollec
 }
 
 // WithCollectors sets a slice of prometheus.Collector which this aggregated RedfishCollector should use.
-func (r *RedfishCollector) WithCollectors(c []prometheus.Collector) {
+func (r *RedfishCollector) WithCollectors(c []ContextAwareCollector) {
 	r.collectors = c
 }
 
@@ -80,11 +86,15 @@ func (r *RedfishCollector) Collect(ch chan<- prometheus.Metric) {
 		r.redfishUp.Set(1)
 		wg := &sync.WaitGroup{}
 		wg.Add(len(r.collectors))
-
 		for _, collector := range r.collectors {
-			go func(collector prometheus.Collector) {
+			if r.ctx.Err() != nil {
+				r.logger.With("error", r.ctx.Err()).Warn("skipping further collection")
+				wg.Done()
+				continue
+			}
+			go func(collector ContextAwareCollector) {
 				defer wg.Done()
-				collector.Collect(ch)
+				collector.CollectWithContext(r.ctx, ch)
 			}(collector)
 		}
 		wg.Wait()
@@ -96,8 +106,7 @@ func (r *RedfishCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(totalScrapeDurationDesc, prometheus.GaugeValue, time.Since(scrapeTime).Seconds())
 }
 
-func newRedfishClient(host string, username string, password string) (*gofish.APIClient, error) {
-
+func newRedfishClient(ctx context.Context, host string, username string, password string) (*gofish.APIClient, error) {
 	url := fmt.Sprintf("https://%s", host)
 
 	config := gofish.ClientConfig{
@@ -111,7 +120,7 @@ func newRedfishClient(host string, username string, password string) (*gofish.AP
 	if err != nil {
 		return nil, err
 	}
-	return redfishClient, nil
+	return redfishClient.WithContext(ctx), nil
 }
 
 func parseCommonStatusHealth(status gofishcommon.Health) (float64, bool) {

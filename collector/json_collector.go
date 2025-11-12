@@ -126,6 +126,10 @@ func (j *JSONCollector) Describe(ch chan<- *prometheus.Desc) {
 	}
 }
 
+func (j *JSONCollector) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
+	j.collect(ctx, ch)
+}
+
 // Collect implements prometheus.Collector.
 // Collect should generally be called after j.Describe, but in the chance
 // that this changes in the future, Collect will first check for cached Redfish response
@@ -133,8 +137,17 @@ func (j *JSONCollector) Describe(ch chan<- *prometheus.Desc) {
 // If no cache is populated, Collect will fetch and cache the Redfish API data before
 // processing and emitting timeseries.
 func (j *JSONCollector) Collect(ch chan<- prometheus.Metric) {
-	ctx, cancel := context.WithTimeout(context.Background(), j.config.Timeout)
+	j.collect(context.TODO(), ch)
+}
+
+func (j *JSONCollector) collect(ctx context.Context, ch chan<- prometheus.Metric) {
+	ctx, cancel := context.WithTimeout(ctx, j.config.Timeout)
 	defer cancel()
+	if ctx.Err() != nil {
+		j.logger.With("error", ctx.Err(), "collector", "chassis").Debug("skipping collection")
+		return
+	}
+
 	body, err := j.redfishResponse()
 	if err != nil {
 		j.logger.Warn("skipping Collect() as Redfish data was unavailable")

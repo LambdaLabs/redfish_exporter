@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -157,8 +158,20 @@ func (g *GPUCollector) Describe(ch chan<- *prometheus.Desc) {
 	g.collectorScrapeStatus.Describe(ch)
 }
 
+func (g *GPUCollector) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
+	g.collect(ctx, ch)
+}
+
 // Collect implements prometheus.Collector
 func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
+	g.collect(context.TODO(), ch)
+}
+
+func (g *GPUCollector) collect(ctx context.Context, ch chan<- prometheus.Metric) {
+	if ctx.Err() != nil {
+		g.logger.With("error", ctx.Err().Error()).Debug("skipping gpu collection")
+		return
+	}
 	g.collectorScrapeStatus.WithLabelValues("gpu").Set(float64(0))
 
 	service := g.redfishClient.Service
@@ -179,8 +192,12 @@ func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
 	uuidTracker := &sync.Map{} // map[uuid]gpuID
 
 	for _, system := range systems {
+		if ctx.Err() != nil {
+			g.logger.With("error", ctx.Err().Error()).Debug("skipping gpu collection as context is errored")
+			continue
+		}
 		wg.Add(1)
-		go g.collectSystemGPUs(ch, system, wg, gpuInfoChan, uuidTracker)
+		go g.collectSystemGPUs(ctx, ch, system, wg, gpuInfoChan, uuidTracker)
 	}
 
 	// Close channel after all systems are processed
@@ -189,6 +206,10 @@ func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
 		close(gpuInfoChan)
 	}()
 
+	if ctx.Err() != nil {
+		g.logger.With("error", ctx.Err().Error()).Debug("skipping gpu collection as context is errored")
+		return
+	}
 	// Gather all GPU info while systems are being processed
 	var allSystemGPUs []systemGPUInfo
 	for info := range gpuInfoChan {
@@ -202,13 +223,13 @@ func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
 
 	// Collect GPU context utilization metrics
 	// Note: GPU temperature and memory power are now collected via TelemetryService (HGX_PlatformEnvironmentMetrics_0)
-	g.collectGPUContextUtilization(ch, allSystemGPUs)
+	g.collectGPUContextUtilization(ctx, ch, allSystemGPUs)
 
 	g.collectorScrapeStatus.WithLabelValues("gpu").Set(float64(1))
 }
 
 // collectSystemGPUs collects all GPU-related metrics for a system
-func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *redfish.ComputerSystem, wg *sync.WaitGroup, gpuInfoChan chan<- systemGPUInfo, uuidTracker *sync.Map) {
+func (g *GPUCollector) collectSystemGPUs(ctx context.Context, ch chan<- prometheus.Metric, system *redfish.ComputerSystem, wg *sync.WaitGroup, gpuInfoChan chan<- systemGPUInfo, uuidTracker *sync.Map) {
 	defer wg.Done()
 
 	systemID := system.ID
@@ -299,7 +320,7 @@ func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *re
 			go func() {
 				semProcessor <- struct{}{}        // Acquire semaphore
 				defer func() { <-semProcessor }() // Release semaphore
-				g.collectGPUProcessor(ch, systemName, systemID, proc, wgProcessor, uuidTracker)
+				g.collectGPUProcessor(ctx, ch, systemName, systemID, proc, wgProcessor, uuidTracker)
 			}()
 		}
 	}
@@ -422,7 +443,7 @@ func (g *GPUCollector) collectGPUMemory(ch chan<- prometheus.Metric, systemName,
 }
 
 // collectGPUProcessor collects GPU processor metrics including OEM fields
-func (g *GPUCollector) collectGPUProcessor(ch chan<- prometheus.Metric, systemName, systemID string, processor *redfish.Processor, wg *sync.WaitGroup, uuidTracker *sync.Map) {
+func (g *GPUCollector) collectGPUProcessor(ctx context.Context, ch chan<- prometheus.Metric, systemName, systemID string, processor *redfish.Processor, wg *sync.WaitGroup, uuidTracker *sync.Map) {
 	defer wg.Done()
 
 	processorID := processor.ID
@@ -525,26 +546,29 @@ func (g *GPUCollector) collectGPUProcessor(ch chan<- prometheus.Metric, systemNa
 	}
 
 	// Collect NVLink port metrics
-	g.collectNVLinkPorts(ch, systemName, systemID, processorID, processor)
+	g.collectNVLinkPorts(ctx, ch, systemName, systemID, processorID, processor)
+
 }
 
 // collectNVLinkPorts collects NVLink port metrics for a GPU processor
-func (g *GPUCollector) collectNVLinkPorts(ch chan<- prometheus.Metric, systemName, systemID, gpuID string, processor *redfish.Processor) {
-	// Note: processor.Ports() won't return GPU ports per gofish code, and
-	// processor.GraphicsController().Ports() doesn't work on current hardware.
-	// Using direct URL construction as a workaround.
-	portsURL := processor.ODataID + "/Ports"
-	ports, err := redfish.ListReferencedPorts(processor.GetClient(), portsURL)
+func (g *GPUCollector) collectNVLinkPorts(ctx context.Context, ch chan<- prometheus.Metric, systemName, systemID, gpuID string, processor *redfish.Processor) {
+	if ctx.Err() != nil {
+		return
+	}
+
+	ports, err := processor.Ports()
 	if err != nil {
 		g.logger.Error("failed to get ports",
 			slog.String("gpu_id", gpuID),
 			slog.String("system_id", systemID),
-			slog.String("ports_url", portsURL),
 			slog.Any("error", err))
 		return
 	}
 
 	for _, port := range ports {
+		if ctx.Err() != nil {
+			continue
+		}
 		if port.PortProtocol != redfish.NVLinkPortProtocol && !strings.Contains(port.ID, "NVLink_") {
 			continue
 		}
@@ -623,12 +647,16 @@ func (g *GPUCollector) collectNVLinkPorts(ch chan<- prometheus.Metric, systemNam
 }
 
 // collectGPUContextUtilization collects accumulated GPU context utilization duration from ProcessorMetrics
-func (g *GPUCollector) collectGPUContextUtilization(ch chan<- prometheus.Metric, allSystemGPUs []systemGPUInfo) {
+func (g *GPUCollector) collectGPUContextUtilization(ctx context.Context, ch chan<- prometheus.Metric, allSystemGPUs []systemGPUInfo) {
 	wg := &sync.WaitGroup{}
 	// Limit concurrent requests
 	sem := make(chan struct{}, 5)
 
 	for _, sysInfo := range allSystemGPUs {
+		if ctx.Err() != nil {
+			g.logger.With("error", ctx.Err().Error()).Debug("skipping gpu collection as context is errored")
+			return
+		}
 		for _, gpu := range sysInfo.gpus {
 			wg.Add(1)
 			go func(gpuProcessor *redfish.Processor, systemName, systemID string) {
