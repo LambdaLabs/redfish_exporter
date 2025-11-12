@@ -3,15 +3,13 @@ package main
 import (
 	"flag"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
-
-	"log/slog"
 
 	"github.com/LambdaLabs/redfish_exporter/collector"
 	"github.com/LambdaLabs/redfish_exporter/config"
@@ -309,6 +307,7 @@ func main() {
 	}
 	err := web.ListenAndServe(srv, &exporterToolkitConf, logger)
 	if err != nil {
-		log.Fatal(err)
+		slog.With("error", err).Error("exiting on ListenAndServe error")
+		os.Exit(1)
 	}
 }
