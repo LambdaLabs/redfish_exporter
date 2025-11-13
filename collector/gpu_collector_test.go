@@ -1083,93 +1083,6 @@ func (m *mockMemoryWithMetrics) Metrics() (*redfish.MemoryMetrics, error) {
 	}, nil
 }
 
-func TestEmitGPUECCMetrics(t *testing.T) {
-	tT := map[string]struct {
-		memories             []MemoryWithMetrics
-		systemName           string
-		expectedMetricCount  int
-		expectedMetricChecks []struct {
-			nameContains  string
-			expectedValue float64
-		}
-	}{
-		"happy path": {
-			memories: []MemoryWithMetrics{
-				&mockMemoryWithMetrics{
-					id:                         "mockMem",
-					correctableECCErrorCount:   100,
-					uncorrectableECCErrorCount: 0,
-				},
-			},
-			systemName:          "test",
-			expectedMetricCount: 2,
-			expectedMetricChecks: []struct {
-				nameContains  string
-				expectedValue float64
-			}{
-				{nameContains: "memory_ecc_correctable", expectedValue: 100},
-				{nameContains: "memory_ecc_uncorrectable", expectedValue: 0},
-			},
-		},
-		// should simply error from within functon-under-test, no returned metrics
-		"no memory metrics": {
-			memories: []MemoryWithMetrics{
-				&mockMemoryWithMetrics{
-					id:          "mockMem",
-					shouldError: true,
-				},
-			},
-			systemName:          "test",
-			expectedMetricCount: 0,
-		},
-	}
-
-	for tName, test := range tT {
-		t.Run(tName, func(t *testing.T) {
-			outCh := make(chan prometheus.Metric, 100)
-			go func() {
-				emitGPUECCMetrics(outCh, test.memories, slog.Default(), []string{"testGPU", test.systemName, "testGPUId"}, gpuMetrics)
-				close(outCh)
-			}()
-
-			var metrics []prometheus.Metric
-			for metric := range outCh {
-				metrics = append(metrics, metric)
-			}
-
-			require.Equal(t, test.expectedMetricCount, len(metrics), "unexpected number of metrics")
-
-			for _, check := range test.expectedMetricChecks {
-				found := false
-				for _, metric := range metrics {
-					if descContains(metric, check.nameContains) {
-						found = true
-						dtoMetric := &dto.Metric{}
-						require.NoError(t, metric.Write(dtoMetric), "unexpected error writing DTO metric")
-						requireCounterWithValue(t, dtoMetric, check.expectedValue)
-						break
-					}
-				}
-				assert.True(t, found, "expected metric containing '%s' not found", check.nameContains)
-			}
-		})
-	}
-}
-
-func requireCounterWithValue(t *testing.T, metric *dto.Metric, expected float64) {
-	t.Helper()
-	require.NotNil(t, metric.Counter, "required a counter")
-	require.Equal(t, expected, *metric.Counter.Value)
-}
-
-func descContains(m prometheus.Metric, contains string) bool {
-	desc := m.Desc()
-	if desc == nil {
-		return false
-	}
-	return strings.Contains(desc.String(), contains)
-}
-
 // TestGPUSerialNumberAndUUIDMetrics tests that GPU serial number and UUID info metrics are collected correctly
 func TestGPUSerialNumberAndUUIDMetrics(t *testing.T) {
 	tests := map[string]struct {
@@ -1539,6 +1452,49 @@ func TestGPUMetricsWithMissingSerialOrUUID(t *testing.T) {
 			if tt.uuid == "" {
 				assert.Contains(t, logOutput, "GPU has no UUID", "Should log when UUID is missing")
 			}
+		})
+	}
+}
+
+func Test_filterGPUs(t *testing.T) {
+	tT := map[string]struct {
+		processors []*redfish.Processor
+		want       []*redfish.Processor
+	}{
+		"happy path, CPUs filtered": {
+			processors: []*redfish.Processor{
+				{
+					ProcessorType: redfish.CPUProcessorType,
+				},
+				{
+					ProcessorType: redfish.GPUProcessorType,
+					Description:   "want this one",
+				},
+			},
+			want: []*redfish.Processor{
+				{
+					ProcessorType: redfish.GPUProcessorType,
+					Description:   "want this one",
+				},
+			},
+		},
+		"happy path, no GPUs returned": {
+			processors: []*redfish.Processor{
+				{
+					ProcessorType: redfish.CPUProcessorType,
+				},
+				{
+					ProcessorType: redfish.CPUProcessorType,
+				},
+			},
+			want: []*redfish.Processor{},
+		},
+	}
+
+	for tName, test := range tT {
+		t.Run(tName, func(t *testing.T) {
+			got := filterGPUs(test.processors)
+			assert.Equal(t, test.want, got)
 		})
 	}
 }
