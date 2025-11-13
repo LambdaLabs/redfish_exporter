@@ -41,20 +41,21 @@ type MemoryMetricsOEMData struct {
 
 // ProcessorMetricsOEMData represents Nvidia OEM fields from ProcessorMetrics endpoint
 type ProcessorMetricsOEMData struct {
-	SMUtilizationPercent              float64  `json:"SMUtilizationPercent"`
-	SMActivityPercent                 float64  `json:"SMActivityPercent"`
-	SMOccupancyPercent                float64  `json:"SMOccupancyPercent"`
-	TensorCoreActivityPercent         float64  `json:"TensorCoreActivityPercent"`
-	FP16ActivityPercent               float64  `json:"FP16ActivityPercent"`
-	FP32ActivityPercent               float64  `json:"FP32ActivityPercent"`
-	FP64ActivityPercent               float64  `json:"FP64ActivityPercent"`
-	IntegerActivityUtilizationPercent float64  `json:"IntegerActivityUtilizationPercent"`
-	SRAMECCErrorThresholdExceeded     bool     `json:"SRAMECCErrorThresholdExceeded"`
-	NVLinkDataRxBandwidthGbps         float64  `json:"NVLinkDataRxBandwidthGbps"`
-	NVLinkDataTxBandwidthGbps         float64  `json:"NVLinkDataTxBandwidthGbps"`
-	PCIeRXBytes                       int64    `json:"PCIeRXBytes"`
-	PCIeTXBytes                       int64    `json:"PCIeTXBytes"`
-	ThrottleReasons                   []string `json:"ThrottleReasons"`
+	AccumulatedGPUContextUtilizationDuration string   `json:"AccumulatedGPUContextUtilizationDuration"`
+	SMUtilizationPercent                     float64  `json:"SMUtilizationPercent"`
+	SMActivityPercent                        float64  `json:"SMActivityPercent"`
+	SMOccupancyPercent                       float64  `json:"SMOccupancyPercent"`
+	TensorCoreActivityPercent                float64  `json:"TensorCoreActivityPercent"`
+	FP16ActivityPercent                      float64  `json:"FP16ActivityPercent"`
+	FP32ActivityPercent                      float64  `json:"FP32ActivityPercent"`
+	FP64ActivityPercent                      float64  `json:"FP64ActivityPercent"`
+	IntegerActivityUtilizationPercent        float64  `json:"IntegerActivityUtilizationPercent"`
+	SRAMECCErrorThresholdExceeded            bool     `json:"SRAMECCErrorThresholdExceeded"`
+	NVLinkDataRxBandwidthGbps                float64  `json:"NVLinkDataRxBandwidthGbps"`
+	NVLinkDataTxBandwidthGbps                float64  `json:"NVLinkDataTxBandwidthGbps"`
+	PCIeRXBytes                              int64    `json:"PCIeRXBytes"`
+	PCIeTXBytes                              int64    `json:"PCIeTXBytes"`
+	ThrottleReasons                          []string `json:"ThrottleReasons"`
 }
 
 // NVLinkErrors represents NVLink error states
