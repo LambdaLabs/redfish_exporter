@@ -256,7 +256,6 @@ func (g *GPUCollector) collect(ctx context.Context, ch chan<- prometheus.Metric)
 		rfPath := fmt.Sprintf(`%s/Ports?$expand=.($levels=2)`, gpu.ODataID)
 		response, err := rfClient.Get(rfPath)
 		if err != nil {
-
 			g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("unable to gather NVLink data, skipping")
 		} else {
 			type aggregateNVLinkData struct {

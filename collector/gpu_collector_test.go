@@ -2,11 +2,13 @@ package collector
 
 import (
 	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stmcginnis/gofish/common"
 	"github.com/stmcginnis/gofish/redfish"
 	"github.com/stretchr/testify/assert"
@@ -144,6 +146,19 @@ func TestGPUCollector_gatherGPUs(t *testing.T) {
 }
 
 func TestGPUCollector_emitGPUMemoryMetrics(t *testing.T) {
-	srv, _ := setupTestServerClient(t, "testdata/gpu_memory_gb300")
-	defer srv.Close()
+	_, client := setupTestServerClient(t, "testdata/gb300_happypath")
+	logger := NewTestLogger(t, slog.LevelDebug)
+	collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
+	require.NoError(t, err)
+	assert.Equal(t, 4, testutil.CollectAndCount(collector, "redfish_gpu_memory_state"))
+	wantedMemoryState := strings.NewReader(`
+# HELP redfish_gpu_memory_state GPU memory state,1(Enabled),2(Disabled),3(StandbyOffinline),4(StandbySpare),5(InTest),6(Starting),7(Absent),8(UnavailableOffline),9(Deferring),10(Quiesced),11(Updating)
+# TYPE redfish_gpu_memory_state gauge
+redfish_gpu_memory_state{gpu_id="GPU_0",memory_id="GPU_0_DRAM_0",system_id="HGX_Baseboard_0"} 1
+redfish_gpu_memory_state{gpu_id="GPU_1",memory_id="GPU_1_DRAM_0",system_id="HGX_Baseboard_0"} 1
+redfish_gpu_memory_state{gpu_id="GPU_2",memory_id="GPU_2_DRAM_0",system_id="HGX_Baseboard_0"} 1
+redfish_gpu_memory_state{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_Baseboard_0"} 1
+`)
+	assert.NoError(t, testutil.CollectAndCompare(collector, wantedMemoryState, "redfish_gpu_memory_state"))
+
 }
