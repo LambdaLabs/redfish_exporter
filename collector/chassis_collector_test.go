@@ -33,7 +33,7 @@ func TestGetLeakDetectors(t *testing.T) {
 				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_1_ColdPlate", "leak_detector_ok.json")
 				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_1_Manifold", "leak_detector_leak.json")
 
-				client := connectToTestServer(t, server)
+				client := connectToTestServer(t, server.Server)
 
 				return server, client
 			},
@@ -52,7 +52,7 @@ func TestGetLeakDetectors(t *testing.T) {
 				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_1_ColdPlate", "leak_detector_ok.json")
 				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_1_Manifold", "leak_detector_leak.json")
 
-				client := connectToTestServer(t, server)
+				client := connectToTestServer(t, server.Server)
 
 				return server, client
 			},
@@ -97,7 +97,7 @@ func TestParseLeakDetector(t *testing.T) {
 	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors", "leak_detectors_single.json")
 	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_0_ColdPlate", "leak_detector_ok.json")
 
-	client := connectToTestServer(t, server)
+	client := connectToTestServer(t, server.Server)
 	t.Cleanup(func() {
 		client.Logout()
 		server.Close()
@@ -206,7 +206,7 @@ func TestCollectTotalGPUPower(t *testing.T) {
 		},
 	})
 
-	client := connectToTestServer(t, server)
+	client := connectToTestServer(t, server.Server)
 	defer client.Logout()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -356,7 +356,7 @@ func TestCollectTotalGPUPowerMultipleChassis(t *testing.T) {
 		},
 	})
 
-	client := connectToTestServer(t, server)
+	client := connectToTestServer(t, server.Server)
 	defer client.Logout()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -512,7 +512,7 @@ func TestCollectTotalGPUPowerErrorHandling(t *testing.T) {
 			tc.controlResponse["@odata.id"] = "/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0"
 			server.addRoute("/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0", tc.controlResponse)
 
-			client := connectToTestServer(t, server)
+			client := connectToTestServer(t, server.Server)
 			defer client.Logout()
 
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
