@@ -169,105 +169,12 @@ func (g *GPUCollector) collect(ctx context.Context, ch chan<- prometheus.Metric)
 			return
 		}
 		commonLabels := []string{gpu.Name, gpu.SystemName, gpu.ID}
-		// NOTE(mfuller): NOT emitting gpu_health as it is duplicated with gpu_processor_* metrics further below
-		// emitGPUECCMetrics
 		gpuMems, err := gpu.Memory()
 		if err != nil {
 			g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("failed obtaining gpu memory, skipping")
 			continue
 		}
-		for _, mem := range gpuMems {
-			memMetric, err := mem.Metrics()
-			if err != nil {
-				g.logger.With("error", err, "gpu_id", gpu.ID, "memory_id", mem.ID, "system_name", gpu.SystemName).Error("failed obtaining gpu memory metrics, skipping")
-				continue
-			}
-			memLabels := make([]string, len(commonLabels))
-			copy(memLabels, commonLabels)
-			memLabels = append(memLabels, mem.ID)
-
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_memory_ecc_correctable"].desc,
-				prometheus.CounterValue,
-				float64(memMetric.CurrentPeriod.CorrectableECCErrorCount),
-				memLabels...)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_memory_ecc_uncorrectable"].desc,
-				prometheus.CounterValue,
-				float64(memMetric.CurrentPeriod.UncorrectableECCErrorCount),
-				memLabels...)
-			// collectGPUMemory
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_memory_capacity_mib"].desc,
-				prometheus.GaugeValue,
-				float64(mem.CapacityMiB),
-				[]string{gpu.SystemName, "", gpu.ID, mem.ID}...,
-			)
-			if stateValue, ok := parseCommonStatusState(mem.Status.State); ok {
-				ch <- prometheus.MustNewConstMetric(
-					g.metrics["gpu_memory_state"].desc,
-					prometheus.GaugeValue,
-					stateValue,
-					memLabels...,
-				)
-			}
-			if healthValue, ok := parseCommonStatusHealth(mem.Status.Health); ok {
-				ch <- prometheus.MustNewConstMetric(
-					g.metrics["gpu_memory_health"].desc,
-					prometheus.GaugeValue,
-					healthValue,
-					memLabels...,
-				)
-			}
-			// collectGPUMemory->OEM Metrics
-			var oemMem MemoryMetricsOEMData
-			if err := json.Unmarshal(memMetric.OEM, &oemMem); err != nil {
-				g.logger.With("error", err).Debug("unable to unmarshal OEM memory")
-				continue
-			}
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_memory_correctable_row_remapping_count"].desc,
-				prometheus.GaugeValue,
-				float64(oemMem.CorrectableRowRemappingCount),
-				memLabels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_memory_uncorrectable_row_remapping_count"].desc,
-				prometheus.GaugeValue,
-				float64(oemMem.UncorrectableRowRemappingCount),
-				memLabels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_memory_high_availability_bank_count"].desc,
-				prometheus.GaugeValue,
-				float64(oemMem.HighAvailabilityBankCount),
-				memLabels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_memory_low_availability_bank_count"].desc,
-				prometheus.GaugeValue,
-				float64(oemMem.LowAvailabilityBankCount),
-				memLabels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_memory_no_availability_bank_count"].desc,
-				prometheus.GaugeValue,
-				float64(oemMem.NoAvailabilityBankCount),
-				memLabels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_memory_partial_availability_bank_count"].desc,
-				prometheus.GaugeValue,
-				float64(oemMem.PartialAvailabilityBankCount),
-				memLabels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_memory_max_availability_bank_count"].desc,
-				prometheus.GaugeValue,
-				float64(oemMem.MaxAvailabilityBankCount),
-				memLabels...,
-			)
-		}
+		g.emitGPUMemoryMetrics(gpuMems, ch, gpu, commonLabels)
 		// collectGPUProcessor
 		// TODO(mfuller): Should drop the last label here, processor ID and Name are repetitive
 		procBaseLabels := []string{gpu.SystemName, "FIXME", gpu.ID, gpu.ID}
@@ -520,4 +427,97 @@ func filterGPUs(cpus []*redfish.Processor) []*redfish.Processor {
 		}
 	}
 	return gpus
+}
+
+func (g *GPUCollector) emitGPUMemoryMetrics(gpuMems []*redfish.Memory, ch chan<- prometheus.Metric, gpu SystemGPU, commonLabels []string) {
+	for _, mem := range gpuMems {
+		memMetric, err := mem.Metrics()
+		if err != nil {
+			g.logger.With("error", err, "gpu_id", gpu.ID, "memory_id", mem.ID, "system_name", gpu.SystemName).Error("failed obtaining gpu memory metrics, skipping")
+			continue
+		}
+		memLabels := make([]string, len(commonLabels))
+		copy(memLabels, commonLabels)
+		memLabels = append(memLabels, mem.ID)
+
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_ecc_correctable"].desc,
+			prometheus.CounterValue,
+			float64(memMetric.CurrentPeriod.CorrectableECCErrorCount),
+			memLabels...)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_ecc_uncorrectable"].desc,
+			prometheus.CounterValue,
+			float64(memMetric.CurrentPeriod.UncorrectableECCErrorCount),
+			memLabels...)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_capacity_mib"].desc,
+			prometheus.GaugeValue,
+			float64(mem.CapacityMiB),
+			[]string{gpu.SystemName, "", gpu.ID, mem.ID}...,
+		)
+		if stateValue, ok := parseCommonStatusState(mem.Status.State); ok {
+			ch <- prometheus.MustNewConstMetric(
+				g.metrics["gpu_memory_state"].desc,
+				prometheus.GaugeValue,
+				stateValue,
+				memLabels...,
+			)
+		}
+		if healthValue, ok := parseCommonStatusHealth(mem.Status.Health); ok {
+			ch <- prometheus.MustNewConstMetric(
+				g.metrics["gpu_memory_health"].desc,
+				prometheus.GaugeValue,
+				healthValue,
+				memLabels...,
+			)
+		}
+		var oemMem MemoryMetricsOEMData
+		if err := json.Unmarshal(memMetric.OEM, &oemMem); err != nil {
+			g.logger.With("error", err).Debug("unable to unmarshal OEM memory")
+			continue
+		}
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_correctable_row_remapping_count"].desc,
+			prometheus.GaugeValue,
+			float64(oemMem.CorrectableRowRemappingCount),
+			memLabels...,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_uncorrectable_row_remapping_count"].desc,
+			prometheus.GaugeValue,
+			float64(oemMem.UncorrectableRowRemappingCount),
+			memLabels...,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_high_availability_bank_count"].desc,
+			prometheus.GaugeValue,
+			float64(oemMem.HighAvailabilityBankCount),
+			memLabels...,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_low_availability_bank_count"].desc,
+			prometheus.GaugeValue,
+			float64(oemMem.LowAvailabilityBankCount),
+			memLabels...,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_no_availability_bank_count"].desc,
+			prometheus.GaugeValue,
+			float64(oemMem.NoAvailabilityBankCount),
+			memLabels...,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_partial_availability_bank_count"].desc,
+			prometheus.GaugeValue,
+			float64(oemMem.PartialAvailabilityBankCount),
+			memLabels...,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_max_availability_bank_count"].desc,
+			prometheus.GaugeValue,
+			float64(oemMem.MaxAvailabilityBankCount),
+			memLabels...,
+		)
+	}
 }
