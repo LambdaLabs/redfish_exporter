@@ -19,16 +19,18 @@ import (
 // GPUSubsystem is the GPU subsystem name
 const GPUSubsystem = "gpu"
 
-// GPU metric label names
 var (
-	// Base labels using the main branch pattern but with system_id instead of system
-	gpuBaseLabels      = []string{"hostname", "system_id", "gpu_id"}
-	gpuMemoryLabels    = baseWithExtraLabels([]string{"memory_id"})
+	// gpuBaseLabels are labels expected on all series emitted by this collector
+	gpuBaseLabels = []string{"system_id", "gpu_id"}
+	// gpuMemoryLabels appends memory_id to gpuBaseLabels, as an expected label for memory-related series
+	gpuMemoryLabels = baseWithExtraLabels([]string{"memory_id"})
+	// TODO(mfuller): remove gpuProcessorLabels
 	gpuProcessorLabels = baseWithExtraLabels([]string{"processor_name"})
-	gpuPortLabels      = baseWithExtraLabels([]string{"port_id", "port_type", "port_protocol"})
-	gpuInfoLabels      = baseWithExtraLabels([]string{"serial_number", "uuid"})
-
-	gpuMetrics = createGPUMetricMap()
+	// gpuPortLabels appends NVLink labels gpuBaseLabels for NVLink-related series
+	gpuPortLabels = baseWithExtraLabels([]string{"port_id", "port_type", "port_protocol"})
+	// gpuInfoLabels appends a S/N and UUID to gpuBaseLabels for the redfish_gpu_info series
+	gpuInfoLabels = baseWithExtraLabels([]string{"serial_number", "uuid"})
+	gpuMetrics    = createGPUMetricMap()
 )
 
 func baseWithExtraLabels(extra []string) []string {
@@ -37,14 +39,15 @@ func baseWithExtraLabels(extra []string) []string {
 	return append(gpuBaseLabelsCopy, extra...)
 }
 
+// SystemGPU is a type embedding [*redfish.Processor], with support for
+// extra fields related to the owning system: System Name and System ID
 type SystemGPU struct {
 	*redfish.Processor
-
 	SystemName string
 	SystemID   string
 }
 
-// GPUCollector collects GPU-specific metrics including Nvidia OEM fields
+// GPUCollector is responsible for collecting Nvidia GPU telemetry
 type GPUCollector struct {
 	redfishClient         *gofish.APIClient
 	config                config.GPUCollectorConfig
@@ -83,6 +86,7 @@ func createGPUMetricMap() map[string]Metric {
 	// GPU Processor metrics
 	addToMetricMap(gpuMetrics, GPUSubsystem, "state", fmt.Sprintf("GPU processor state,%s", CommonStateHelp), gpuProcessorLabels)
 	addToMetricMap(gpuMetrics, GPUSubsystem, "health", fmt.Sprintf("GPU processor health,%s", CommonHealthHelp), gpuProcessorLabels)
+	// TODO(mfuller): Remove these 2x
 	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_total_cores", "GPU processor total cores", gpuProcessorLabels)
 	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_total_threads", "GPU processor total threads", gpuProcessorLabels)
 
@@ -135,11 +139,13 @@ func (g *GPUCollector) Describe(ch chan<- *prometheus.Desc) {
 	g.collectorScrapeStatus.Describe(ch)
 }
 
+// CollectWithContext operates much like Collect, but propagates the provided [context.Context] down
 func (g *GPUCollector) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
 	g.collect(ctx, ch)
 }
 
-// Collect implements prometheus.Collector
+// Collect implements prometheus.Collector. It uses a [context.TODO], and care should be
+// taken such that concurrent scrape requests do not pile up.
 func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
 	g.collect(context.TODO(), ch)
 }
@@ -388,6 +394,10 @@ func (g *GPUCollector) collect(ctx context.Context, ch chan<- prometheus.Metric)
 	g.collectorScrapeStatus.WithLabelValues("gpu").Set(float64(1))
 }
 
+// gatherGPUs traverses all Redfish Systems, looking for Processors
+// which are reportedly GPUs.
+// To ease complexity on actual processing logic, gatherGPUs
+// returns a [SystemGPU] containing the GPU and system name and ID.
 func (g *GPUCollector) gatherGPUs(ctx context.Context) ([]SystemGPU, error) {
 	var ret []SystemGPU
 	if ctx.Err() != nil {
@@ -428,6 +438,9 @@ func filterGPUs(cpus []*redfish.Processor) []*redfish.Processor {
 	return gpus
 }
 
+// emitGPUMemoryMetrics iterates a slice of [*redfish.Memory] belonging to the provided [SystemGPU],
+// performing a network request to the Redfish device to gather memory metrics.
+// Collected metrics are emitted onto the provided channel.
 func (g *GPUCollector) emitGPUMemoryMetrics(gpuMems []*redfish.Memory, ch chan<- prometheus.Metric, gpu SystemGPU, commonLabels []string) {
 	for _, mem := range gpuMems {
 		memMetric, err := mem.Metrics()
