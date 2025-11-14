@@ -1,7 +1,10 @@
 package collector
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -219,32 +222,49 @@ func newTestServer(t *testing.T, root *os.Root, middleware ...testMiddleware) *T
 // in both cases, an index.json represnts whatever the system should return under each path.
 func dirIndexFileServer(fsys fs.FS) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		raw := path.Clean(r.URL.EscapedPath())
-		decoded, err := url.PathUnescape(raw)
+		md5URL := md5.Sum([]byte(r.URL.String()))
+		md5String := hex.EncodeToString(md5URL[:])
+		hashedFile, err := fsys.Open(fmt.Sprintf("hashedresponses/%s.json", md5String))
 		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		p := strings.TrimPrefix(decoded, "/")
-
-		info, err := fs.Stat(fsys, p)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-
-		servePath := p
-		if info.IsDir() {
-			servePath = path.Join(p, "index.json")
-			if _, derr := fs.Stat(fsys, servePath); derr != nil {
+			// Probably no hashed response file for this request, so traverse the fs
+			raw := path.Clean(r.URL.EscapedPath())
+			decoded, err := url.PathUnescape(raw)
+			if err != nil {
 				http.NotFound(w, r)
 				return
 			}
+			p := strings.TrimPrefix(decoded, "/")
+
+			info, err := fs.Stat(fsys, p)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+
+			servePath := p
+			if info.IsDir() {
+				servePath = path.Join(p, "index.json")
+				if _, derr := fs.Stat(fsys, servePath); derr != nil {
+					http.NotFound(w, r)
+					return
+				}
+			}
+
+			b, err := fs.ReadFile(fsys, servePath)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(b)
+			return
 		}
 
-		b, err := fs.ReadFile(fsys, servePath)
+		// Otherwise, we have a hashed file to respond with
+		b, err := io.ReadAll(hashedFile)
 		if err != nil {
-			http.NotFound(w, r)
+			w.WriteHeader(500)
+			_, _ = w.Write([]byte(err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusOK)

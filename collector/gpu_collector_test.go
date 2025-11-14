@@ -124,7 +124,8 @@ func TestGPUCollector_gatherGPUs(t *testing.T) {
 	for tName, test := range tests {
 		t.Run(tName, func(t *testing.T) {
 			_, client := setupTestServerClient(t, test.testdataDir)
-			collector, err := NewGPUCollector(t.Name(), client, slog.Default(), config.DefaultGPUCollector)
+			logger := NewTestLogger(t, slog.LevelDebug)
+			collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
 			require.NoError(t, err)
 			got, gotErr := collector.gatherGPUs(t.Context())
 			if test.wantErr {
