@@ -95,11 +95,10 @@ func Test_filterGPUs(t *testing.T) {
 
 func TestGPUCollector_gatherGPUs(t *testing.T) {
 	tests := map[string]struct {
-		want         []SystemGPU
-		wantErr      bool
-		wantErrMsg   string
-		rfRoutes     map[string]any
-		rfFileRoutes map[string]string
+		want        []SystemGPU
+		wantErr     bool
+		wantErrMsg  string
+		testdataDir string
 	}{
 		"happy path": {
 			want: []SystemGPU{
@@ -111,59 +110,20 @@ func TestGPUCollector_gatherGPUs(t *testing.T) {
 							ID:      "GPU_0",
 							ODataID: "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0",
 						},
+						ODataType:     "#Processor.v1_20_0.Processor",
 						ProcessorType: redfish.GPUProcessorType,
+						UUID:          "uuid-here",
 					},
 				},
 			},
-			wantErr:    false,
-			wantErrMsg: "",
-			rfRoutes: map[string]any{
-				"/redfish/v1/Systems": map[string]any{
-					"@odata.type": "#ComputerSystemCollection.ComputerSystemCollection",
-					"Members": []map[string]string{
-						{"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0"},
-					},
-				},
-				"/redfish/v1/Systems/HGX_Baseboard_0": map[string]any{
-					"@odata.id":   "/redfish/v1/Systems",
-					"@odata.type": "#ComputerSystem.v1_22_0.ComputerSystem",
-					"Id":          "HGX_Baseboard_0",
-					"Name":        "HGX_Baseboard_0",
-					"Processors": map[string]string{
-						"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors",
-					},
-				},
-				"/redfish/v1/Systems/HGX_Baseboard_0/Processors": map[string]any{
-					"@odata.id":   "/redfish/v1/Systems/HGX_Baseboard_0/Processors",
-					"@odata.type": "#ProcessorCollection.ProcessorCollection",
-					"Members": []map[string]string{
-						{
-							"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0",
-						},
-						{
-							"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/CPU_1",
-						},
-					},
-				},
-				"/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0": map[string]any{
-					"@odata.id":     "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0",
-					"Id":            "GPU_0",
-					"ProcessorType": "GPU",
-				},
-				"/redfish/v1/Systems/HGX_Baseboard_0/Processors/CPU_0": map[string]any{
-					"@odata.id":     "/redfish/v1/Systems/HGX_Baseboard_0/Processors/CPU_0",
-					"Id":            "CPU_0",
-					"ProcessorType": "CPU",
-				},
-			},
-			rfFileRoutes: map[string]string{
-				"/redfish/v1/": "service_root.json",
-			},
+			wantErr:     false,
+			wantErrMsg:  "",
+			testdataDir: "testdata/gathergpus_happypath",
 		},
 	}
 	for tName, test := range tests {
 		t.Run(tName, func(t *testing.T) {
-			_, client := testServer(t, test.rfRoutes, test.rfFileRoutes)
+			_, client := setupTestServerClient(t, test.testdataDir)
 			collector, err := NewGPUCollector(t.Name(), client, slog.Default(), config.DefaultGPUCollector)
 			require.NoError(t, err)
 			got, gotErr := collector.gatherGPUs(t.Context())
@@ -182,4 +142,7 @@ func TestGPUCollector_gatherGPUs(t *testing.T) {
 	}
 }
 
+func TestGPUCollector_emitGPUMemoryMetrics(t *testing.T) {
+	srv, _ := setupTestServerClient(t, "testdata/gpu_memory_gb300")
+	defer srv.Close()
 }
