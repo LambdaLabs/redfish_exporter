@@ -11,8 +11,12 @@ import (
 	"testing"
 
 	"github.com/LambdaLabs/redfish_exporter/config"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/stmcginnis/gofish"
+	"github.com/stmcginnis/gofish/common"
 	"github.com/stmcginnis/gofish/redfish"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1497,4 +1501,115 @@ func Test_filterGPUs(t *testing.T) {
 			assert.Equal(t, test.want, got)
 		})
 	}
+}
+
+func TestGPUCollector_gatherGPUs(t *testing.T) {
+	tests := map[string]struct {
+		want         []SystemGPU
+		wantErr      bool
+		wantErrMsg   string
+		rfRoutes     map[string]any
+		rfFileRoutes map[string]string
+	}{
+		"happy path": {
+			want: []SystemGPU{
+				{
+					SystemID:   "HGX_Baseboard_0",
+					SystemName: "HGX_Baseboard_0",
+					Processor: &redfish.Processor{
+						Entity: common.Entity{
+							ID:      "GPU_0",
+							ODataID: "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0",
+						},
+						ProcessorType: redfish.GPUProcessorType,
+					},
+				},
+			},
+			wantErr:    false,
+			wantErrMsg: "",
+			rfRoutes: map[string]any{
+				"/redfish/v1/Systems": map[string]any{
+					"@odata.type": "#ComputerSystemCollection.ComputerSystemCollection",
+					"Members": []map[string]string{
+						{"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0"},
+					},
+				},
+				"/redfish/v1/Systems/HGX_Baseboard_0": map[string]any{
+					"@odata.id":   "/redfish/v1/Systems",
+					"@odata.type": "#ComputerSystem.v1_22_0.ComputerSystem",
+					"Id":          "HGX_Baseboard_0",
+					"Name":        "HGX_Baseboard_0",
+					"Processors": map[string]string{
+						"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors",
+					},
+				},
+				"/redfish/v1/Systems/HGX_Baseboard_0/Processors": map[string]any{
+					"@odata.id":   "/redfish/v1/Systems/HGX_Baseboard_0/Processors",
+					"@odata.type": "#ProcessorCollection.ProcessorCollection",
+					"Members": []map[string]string{
+						{
+							"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0",
+						},
+						{
+							"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/CPU_1",
+						},
+					},
+				},
+				"/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0": map[string]any{
+					"@odata.id":     "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0",
+					"Id":            "GPU_0",
+					"ProcessorType": "GPU",
+				},
+				"/redfish/v1/Systems/HGX_Baseboard_0/Processors/CPU_0": map[string]any{
+					"@odata.id":     "/redfish/v1/Systems/HGX_Baseboard_0/Processors/CPU_0",
+					"Id":            "CPU_0",
+					"ProcessorType": "CPU",
+				},
+			},
+			rfFileRoutes: map[string]string{
+				"/redfish/v1/": "service_root.json",
+			},
+		},
+	}
+	for tName, test := range tests {
+		t.Run(tName, func(t *testing.T) {
+			_, client := testServer(t, test.rfRoutes, test.rfFileRoutes)
+			collector, err := NewGPUCollector(t.Name(), client, slog.Default(), config.DefaultGPUCollector)
+			require.NoError(t, err)
+			got, gotErr := collector.gatherGPUs(t.Context())
+			if test.wantErr {
+				require.Error(t, gotErr)
+				require.Contains(t, gotErr.Error(), test.wantErrMsg)
+			} else {
+				require.NoError(t, gotErr)
+			}
+			assert.Empty(t, cmp.Diff(test.want, got,
+				cmpopts.IgnoreUnexported(common.Entity{}),
+				cmpopts.IgnoreUnexported(redfish.Processor{}),
+				cmpopts.IgnoreUnexported(redfish.MemorySummary{}),
+			))
+		})
+	}
+}
+
+func testServer(t *testing.T, staticRoutes map[string]any, filepathRoutes map[string]string) (*testRedfishServer, *gofish.APIClient) {
+	t.Helper()
+	server := &testRedfishServer{
+		t:        t,
+		mux:      http.NewServeMux(),
+		requests: make([]string, 0),
+	}
+	server.Server = httptest.NewServer(server.mux)
+	for route, fp := range filepathRoutes {
+		server.addRouteFromFixture(route, fp)
+	}
+	for route, resp := range staticRoutes {
+		server.addRoute(route, resp)
+	}
+	client := connectToTestServer(t, server)
+	t.Cleanup(func() {
+		server.Close()
+		client.Logout()
+	})
+	return server, client
 }

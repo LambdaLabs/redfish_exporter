@@ -53,7 +53,7 @@ func (m *testRedfishServer) setupDefaultRoutes() {
 }
 
 // makeJSONHandler creates a handler that returns a JSON response
-func (m *testRedfishServer) makeJSONHandler(response interface{}) http.HandlerFunc {
+func (m *testRedfishServer) makeJSONHandler(response any) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		m.requests = append(m.requests, r.Method+" "+r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
@@ -65,7 +65,7 @@ func (m *testRedfishServer) makeJSONHandler(response interface{}) http.HandlerFu
 }
 
 // addRoute registers a new route with the given response
-func (m *testRedfishServer) addRoute(path string, response interface{}) {
+func (m *testRedfishServer) addRoute(path string, response any) {
 	m.mux.HandleFunc(path, m.makeJSONHandler(response))
 }
 
