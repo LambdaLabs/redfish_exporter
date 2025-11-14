@@ -271,3 +271,20 @@ func jsonContentTypeMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+type testWriter struct {
+	t *testing.T
+}
+
+func (w testWriter) Write(p []byte) (n int, err error) {
+	w.t.Log(strings.TrimSpace(string(p)))
+	return len(p), nil
+}
+
+func NewTestLogger(t *testing.T, loglevel slog.Level) *slog.Logger {
+	t.Helper()
+	opts := &slog.HandlerOptions{
+		Level: loglevel,
+	}
+	return slog.New(slog.NewJSONHandler(testWriter{t}, opts))
+}
