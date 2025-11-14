@@ -19,7 +19,7 @@
 "MaxAvailabilityBankCount": 5952,
 "NoAvailabilityBankCount": 0,
 "PartialAvailabilityBankCount": 0,
-"UncorrectableRowRemappingCount": 0
+"UncorrectableRowRemappingCount": 1
 }
 }
 },

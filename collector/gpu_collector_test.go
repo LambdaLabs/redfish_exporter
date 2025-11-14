@@ -146,19 +146,52 @@ func TestGPUCollector_gatherGPUs(t *testing.T) {
 }
 
 func TestGPUCollector_emitGPUMemoryMetrics(t *testing.T) {
-	_, client := setupTestServerClient(t, "testdata/gb300_happypath")
-	logger := NewTestLogger(t, slog.LevelDebug)
-	collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
-	require.NoError(t, err)
-	assert.Equal(t, 4, testutil.CollectAndCount(collector, "redfish_gpu_memory_state"))
-	wantedMemoryState := strings.NewReader(`
+	tT := map[string]struct {
+		testdataPath     string
+		seriesToCheck    string
+		testLogLevel     slog.Level
+		wantSeriesCount  int
+		wantSeriesString string
+	}{
+		"redfish_gpu_memory_state": {
+			testdataPath:    "testdata/gb300_happypath",
+			seriesToCheck:   "redfish_gpu_memory_state",
+			testLogLevel:    slog.LevelInfo,
+			wantSeriesCount: 4,
+			wantSeriesString: `
 # HELP redfish_gpu_memory_state GPU memory state,1(Enabled),2(Disabled),3(StandbyOffinline),4(StandbySpare),5(InTest),6(Starting),7(Absent),8(UnavailableOffline),9(Deferring),10(Quiesced),11(Updating)
 # TYPE redfish_gpu_memory_state gauge
 redfish_gpu_memory_state{gpu_id="GPU_0",memory_id="GPU_0_DRAM_0",system_id="HGX_Baseboard_0"} 1
 redfish_gpu_memory_state{gpu_id="GPU_1",memory_id="GPU_1_DRAM_0",system_id="HGX_Baseboard_0"} 1
 redfish_gpu_memory_state{gpu_id="GPU_2",memory_id="GPU_2_DRAM_0",system_id="HGX_Baseboard_0"} 1
 redfish_gpu_memory_state{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_Baseboard_0"} 1
-`)
-	assert.NoError(t, testutil.CollectAndCompare(collector, wantedMemoryState, "redfish_gpu_memory_state"))
+`,
+		},
+		"redfish_gpu_memory_uncorrectable_row_remapping_count": {
+			testdataPath:    "testdata/gb300_happypath",
+			seriesToCheck:   "redfish_gpu_memory_uncorrectable_row_remapping_count",
+			testLogLevel:    slog.LevelDebug,
+			wantSeriesCount: 4,
+			wantSeriesString: `
+# HELP redfish_gpu_memory_uncorrectable_row_remapping_count GPU memory uncorrectable row remapping count
+# TYPE redfish_gpu_memory_uncorrectable_row_remapping_count gauge
+redfish_gpu_memory_uncorrectable_row_remapping_count{gpu_id="GPU_0",memory_id="GPU_0_DRAM_0",system_id="HGX_Baseboard_0"} 1
+redfish_gpu_memory_uncorrectable_row_remapping_count{gpu_id="GPU_1",memory_id="GPU_1_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_gpu_memory_uncorrectable_row_remapping_count{gpu_id="GPU_2",memory_id="GPU_2_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_gpu_memory_uncorrectable_row_remapping_count{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_Baseboard_0"} 0
+`,
+		},
+	}
+	for tName, test := range tT {
+		t.Run(tName, func(t *testing.T) {
+			_, client := setupTestServerClient(t, test.testdataPath)
+			logger := NewTestLogger(t, test.testLogLevel)
+			collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
+			require.NoError(t, err)
 
+			assert.Equal(t, test.wantSeriesCount, testutil.CollectAndCount(collector, test.seriesToCheck))
+			wantedMemoryState := strings.NewReader(test.wantSeriesString)
+			assert.NoError(t, testutil.CollectAndCompare(collector, wantedMemoryState, test.seriesToCheck))
+		})
+	}
 }
