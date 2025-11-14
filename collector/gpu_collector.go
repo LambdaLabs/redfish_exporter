@@ -174,16 +174,15 @@ func (g *GPUCollector) collect(ctx context.Context, ch chan<- prometheus.Metric)
 			g.logger.With("error", ctx.Err().Error()).Debug("skipping further gpu collection")
 			return
 		}
-		commonLabels := []string{gpu.Name, gpu.SystemName, gpu.ID}
 		gpuMems, err := gpu.Memory()
 		if err != nil {
 			g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("failed obtaining gpu memory, skipping")
 			continue
 		}
-		g.emitGPUMemoryMetrics(gpuMems, ch, gpu, commonLabels)
+		g.emitGPUMemoryMetrics(gpuMems, ch, gpu, []string{gpu.SystemID, gpu.ID})
 		// collectGPUProcessor
 		// TODO(mfuller): Should drop the last label here, processor ID and Name are repetitive
-		procBaseLabels := []string{gpu.SystemName, "FIXME", gpu.ID, gpu.ID}
+		procBaseLabels := []string{gpu.SystemName, gpu.ID, gpu.ID}
 		// NOTE (0, mfuller): No longer emitting cores/threads series, GB200/GB300, B200 do not support it.
 		// In fact, no system at Lambda seems to emit this as a nonzero value.
 		// NOTE (1, mfuller): Consolidating and renaming the `gpu_health` and `gpu_processor_foo` series to just the two here.
@@ -211,7 +210,7 @@ func (g *GPUCollector) collect(ctx context.Context, ch chan<- prometheus.Metric)
 		if gpuUUID = gpu.UUID; gpuUUID == "" {
 			gpuUUID = "unknown"
 		}
-		infoLabels := []string{gpu.SystemName, "", gpu.ID, gpuSerial, gpuUUID}
+		infoLabels := []string{gpu.SystemName, gpu.ID, gpuSerial, gpuUUID}
 		ch <- prometheus.MustNewConstMetric(
 			g.metrics["gpu_info"].desc,
 			prometheus.GaugeValue,
@@ -245,7 +244,7 @@ func (g *GPUCollector) collect(ctx context.Context, ch chan<- prometheus.Metric)
 							Seconds: 0,
 						}
 					}
-					labels := []string{gpu.SystemName, "foo", gpu.ID}
+					labels := []string{gpu.SystemName, gpu.ID}
 					ch <- prometheus.MustNewConstMetric(
 						g.metrics["gpu_context_utilization_seconds_total"].desc,
 						prometheus.CounterValue,
@@ -327,7 +326,7 @@ func (g *GPUCollector) collect(ctx context.Context, ch chan<- prometheus.Metric)
 							continue
 						}
 						strProto := string(port.PortProtocol)
-						portLabels := []string{gpu.SystemName, "FIXME", gpu.ID, port.ID, port.PortType, strProto}
+						portLabels := []string{gpu.SystemName, gpu.ID, port.ID, port.PortType, strProto}
 						// Common
 						if stateValue, ok := parseCommonStatusState(port.Status.State); ok {
 							ch <- prometheus.MustNewConstMetric(
@@ -466,7 +465,7 @@ func (g *GPUCollector) emitGPUMemoryMetrics(gpuMems []*redfish.Memory, ch chan<-
 			g.metrics["gpu_memory_capacity_mib"].desc,
 			prometheus.GaugeValue,
 			float64(mem.CapacityMiB),
-			[]string{gpu.SystemName, "", gpu.ID, mem.ID}...,
+			[]string{gpu.SystemName, gpu.ID, mem.ID}...,
 		)
 		if stateValue, ok := parseCommonStatusState(mem.Status.State); ok {
 			ch <- prometheus.MustNewConstMetric(
