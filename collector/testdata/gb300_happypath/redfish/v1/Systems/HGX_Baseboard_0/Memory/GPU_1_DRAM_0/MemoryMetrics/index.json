@@ -5,7 +5,7 @@
 "CapacityUtilizationPercent": 0,
 "Id": "MemoryMetrics",
 "LifeTime": {
-"CorrectableECCErrorCount": 0,
+"CorrectableECCErrorCount": 100,
 "UncorrectableECCErrorCount": 0
 },
 "Name": "GPU_1_DRAM_0 Memory Metrics",

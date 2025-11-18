@@ -454,12 +454,12 @@ func (g *GPUCollector) emitGPUMemoryMetrics(gpuMems []*redfish.Memory, ch chan<-
 		ch <- prometheus.MustNewConstMetric(
 			g.metrics["gpu_memory_ecc_correctable"].desc,
 			prometheus.CounterValue,
-			float64(memMetric.CurrentPeriod.CorrectableECCErrorCount),
+			float64(memMetric.LifeTime.CorrectableECCErrorCount),
 			memLabels...)
 		ch <- prometheus.MustNewConstMetric(
 			g.metrics["gpu_memory_ecc_uncorrectable"].desc,
 			prometheus.CounterValue,
-			float64(memMetric.CurrentPeriod.UncorrectableECCErrorCount),
+			float64(memMetric.LifeTime.UncorrectableECCErrorCount),
 			memLabels...)
 		ch <- prometheus.MustNewConstMetric(
 			g.metrics["gpu_memory_capacity_mib"].desc,
