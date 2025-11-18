@@ -306,5 +306,5 @@ func NewTestLogger(t *testing.T, loglevel slog.Level) *slog.Logger {
 	opts := &slog.HandlerOptions{
 		Level: loglevel,
 	}
-	return slog.New(slog.NewJSONHandler(testWriter{t}, opts))
+	return slog.New(slog.NewJSONHandler(testWriter{t}, opts)).With("test_name", t.Name())
 }
