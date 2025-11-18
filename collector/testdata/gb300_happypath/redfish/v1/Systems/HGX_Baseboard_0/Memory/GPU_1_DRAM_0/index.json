@@ -42,7 +42,7 @@
 "Nvidia": {
 "@odata.type": "#NvidiaMemory.v1_0_0.NvidiaMemory",
 "RowRemappingFailed": false,
-"RowRemappingPending": false
+"RowRemappingPending": true
 }
 },
 "OperatingSpeedMhz": 3996,
