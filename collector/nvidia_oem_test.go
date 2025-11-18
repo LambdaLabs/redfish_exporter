@@ -13,51 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetProcessorMetricsOEMData(t *testing.T) {
-	metricsJSON := `{
-		"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/ProcessorMetrics",
-		"Oem": {
-			"Nvidia": {
-				"@odata.type": "#NvidiaProcessorMetrics.v1_0_0.NvidiaProcessorMetrics",
-				"SMUtilizationPercent": 75.5,
-				"SMActivityPercent": 80.2,
-				"SMOccupancyPercent": 65.0,
-				"TensorCoreActivityPercent": 45.5,
-				"FP16ActivityPercent": 30.0,
-				"FP32ActivityPercent": 25.5,
-				"FP64ActivityPercent": 10.0,
-				"IntegerActivityUtilizationPercent": 15.5,
-				"SRAMECCErrorThresholdExceeded": true,
-				"NVLinkDataRxBandwidthGbps": 100.5,
-				"NVLinkDataTxBandwidthGbps": 95.3,
-				"PCIeRXBytes": 1024000,
-				"PCIeTXBytes": 2048000,
-				"ThrottleReasons": ["ThermalLimit", "PowerLimit"]
-			}
-		}
-	}`
-
-	client := &common.TestClient{}
-	client.CustomReturnForActions = map[string][]interface{}{
-		http.MethodGet: {
-			&http.Response{
-				StatusCode: 200,
-				Body:       io.NopCloser(strings.NewReader(metricsJSON)),
-			},
-		},
-	}
-
-	logger := slog.Default()
-	oemClient := NewNvidiaOEMClient(client, logger)
-
-	metrics, err := oemClient.GetProcessorMetricsOEMData("/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/ProcessorMetrics")
-	require.NoError(t, err)
-
-	assert.Equal(t, 75.5, metrics.SMUtilizationPercent, "expected SMUtilizationPercent to be 75.5")
-	assert.True(t, metrics.SRAMECCErrorThresholdExceeded, "expected SRAMECCErrorThresholdExceeded to be true")
-	assert.Len(t, metrics.ThrottleReasons, 2, "expected 2 throttle reasons")
-}
-
 func TestGetPortMetricsOEMData(t *testing.T) {
 	metricsJSON := `{
 		"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/Ports/NVLink_0/Metrics",

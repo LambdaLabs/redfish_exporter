@@ -178,43 +178,8 @@ func (g *GPUCollector) collect(ctx context.Context, ch chan<- prometheus.Metric)
 
 		procBaseLabels := []string{gpu.SystemName, gpu.ID}
 		g.emitHealthInfo(ch, gpu, procBaseLabels)
+		g.emitGPUOem(ch, gpu, procBaseLabels)
 
-		// TODO: collectGPUProcessor -> OEM
-		gpuOEMMetrics, err := gpu.Metrics()
-		if err != nil {
-			g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("failed obtaining gpu processor metrics, skipping")
-		} else {
-			var gpuOEM struct {
-				Nvidia ProcessorMetricsOEMData `json:"Nvidia"`
-			}
-			if err := json.Unmarshal(gpuOEMMetrics.OEM, &gpuOEM); err != nil {
-				g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("failed unmarshaling gpu processor metrics, skipping")
-			} else {
-				ch <- prometheus.MustNewConstMetric(
-					g.metrics["gpu_sram_ecc_error_threshold_exceeded"].desc,
-					prometheus.GaugeValue,
-					boolToFloat64(gpuOEM.Nvidia.SRAMECCErrorThresholdExceeded),
-					procBaseLabels...,
-				)
-				// NOTE(mfuller): GPU context utilization
-				if gpuOEM.Nvidia.AccumulatedGPUContextUtilizationDuration != "" {
-					duration, err := isoDuration.Parse(gpuOEM.Nvidia.AccumulatedGPUContextUtilizationDuration)
-					if err != nil {
-						g.logger.With("error", err, "gpu_id", gpu.ID, "raw_duration", duration).Warn("unable to parse gpu context duration, setting to zero")
-						duration = &isoDuration.Duration{
-							Seconds: 0,
-						}
-					}
-					labels := []string{gpu.SystemName, gpu.ID}
-					ch <- prometheus.MustNewConstMetric(
-						g.metrics["gpu_context_utilization_seconds_total"].desc,
-						prometheus.CounterValue,
-						duration.Seconds,
-						labels...,
-					)
-				}
-			}
-		}
 		//   TODO: collectGPUProcessor -> collectNVLinkPorts
 		// NOTE(mfuller): Instead of for every port calling RF API, drop down
 		// to a direct client and use expansion.
@@ -547,4 +512,39 @@ func (g *GPUCollector) emitHealthInfo(ch chan<- prometheus.Metric, gpu SystemGPU
 		1,
 		infoLabels...,
 	)
+}
+
+func (g *GPUCollector) emitGPUOem(ch chan<- prometheus.Metric, gpu SystemGPU, procBaseLabels []string) {
+	gpuOEMMetrics, err := gpu.Metrics()
+	if err != nil {
+		g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("failed obtaining gpu processor metrics, skipping")
+		return
+	}
+	var gpuOEM ProcessorMetricsOEMResponse
+	if err := json.Unmarshal(gpuOEMMetrics.OEM, &gpuOEM); err != nil {
+		g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("failed unmarshaling gpu processor metrics, skipping")
+		return
+	}
+	ch <- prometheus.MustNewConstMetric(
+		g.metrics["gpu_sram_ecc_error_threshold_exceeded"].desc,
+		prometheus.GaugeValue,
+		boolToFloat64(gpuOEM.Nvidia.SRAMECCErrorThresholdExceeded),
+		procBaseLabels...,
+	)
+	if gpuOEM.Nvidia.AccumulatedGPUContextUtilizationDuration != "" {
+		duration, err := isoDuration.Parse(gpuOEM.Nvidia.AccumulatedGPUContextUtilizationDuration)
+		if err != nil {
+			g.logger.With("error", err, "gpu_id", gpu.ID, "raw_duration", duration).Warn("unable to parse gpu context duration, setting to zero")
+			duration = &isoDuration.Duration{
+				Seconds: 0,
+			}
+		}
+		labels := []string{gpu.SystemName, gpu.ID}
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_context_utilization_seconds_total"].desc,
+			prometheus.CounterValue,
+			duration.ToTimeDuration().Seconds(),
+			labels...,
+		)
+	}
 }

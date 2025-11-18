@@ -89,11 +89,9 @@ type MemoryMetricsResponse struct {
 	} `json:"Nvidia"`
 }
 
-// processorMetricsResponse represents the JSON structure from ProcessorMetrics endpoint
-type processorMetricsResponse struct {
-	Oem struct {
-		Nvidia ProcessorMetricsOEMData `json:"Nvidia"`
-	} `json:"Oem"`
+// ProcessorMetricsOEMResponse represents the JSON structure from ProcessorMetrics OEM data
+type ProcessorMetricsOEMResponse struct {
+	Nvidia ProcessorMetricsOEMData `json:"Nvidia"`
 }
 
 // portMetricsResponse represents the JSON structure from PortMetrics endpoint
@@ -117,29 +115,6 @@ func (c *NvidiaOEMClient) GetMemoryOEMMetrics(odataID string) (*MemoryOEMMetrics
 	}
 
 	metrics := &response.Oem.Nvidia
-
-	return metrics, nil
-}
-
-// GetProcessorMetricsOEMData fetches and parses Nvidia OEM fields from ProcessorMetrics endpoint
-func (c *NvidiaOEMClient) GetProcessorMetricsOEMData(metricsEndpoint string) (*ProcessorMetricsOEMData, error) {
-	resp, err := c.client.Get(metricsEndpoint)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch from %s: %w", metricsEndpoint, err)
-	}
-	defer resp.Body.Close() // nolint:errcheck // Close() errors on read are not actionable
-
-	var response processorMetricsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("failed to decode JSON from %s: %w", metricsEndpoint, err)
-	}
-
-	metrics := &response.Oem.Nvidia
-
-	c.logger.Debug("extracted ProcessorMetrics OEM data",
-		slog.String("endpoint", metricsEndpoint),
-		slog.Float64("sm_utilization", metrics.SMUtilizationPercent),
-		slog.Float64("tensor_core_activity", metrics.TensorCoreActivityPercent))
 
 	return metrics, nil
 }
