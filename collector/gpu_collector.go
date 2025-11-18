@@ -483,17 +483,28 @@ func (g *GPUCollector) emitGPUMemoryMetrics(gpuMems []*redfish.Memory, ch chan<-
 				memLabels...,
 			)
 		}
-		ch <- prometheus.MustNewConstMetric(
-			g.metrics["gpu_memory_row_remapping_failed"].desc,
-			prometheus.GaugeValue,
-			boolToFloat64(memOEM.RowRemappingFailed),
-			labels...,
-		)
-		ch <- prometheus.MustNewConstMetric(
-			g.metrics["gpu_memory_row_remapping_pending"].desc,
-			prometheus.GaugeValue,
-			boolToFloat64(memOEM.RowRemappingPending),
-			labels...)
+
+		// Get Memory OEM metrics
+		if memOEM, err := g.oemClient.GetMemoryOEMMetrics(mem.ODataID); err == nil {
+			ch <- prometheus.MustNewConstMetric(
+				g.metrics["gpu_memory_row_remapping_failed"].desc,
+				prometheus.GaugeValue,
+				boolToFloat64(memOEM.RowRemappingFailed),
+				memLabels...,
+			)
+			ch <- prometheus.MustNewConstMetric(
+				g.metrics["gpu_memory_row_remapping_pending"].desc,
+				prometheus.GaugeValue,
+				boolToFloat64(memOEM.RowRemappingPending),
+				memLabels...,
+			)
+		} else {
+			g.logger.Error("failed to get Memory OEM metrics",
+				slog.String("memory_id", mem.ID),
+				slog.Any("error", err),
+			)
+		}
+
 		var oemMem MemoryMetricsOEMData
 		if err := json.Unmarshal(memMetric.OEM, &oemMem); err != nil {
 			g.logger.With("error", err).Debug("unable to unmarshal OEM memory")

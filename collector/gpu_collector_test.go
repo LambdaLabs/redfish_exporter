@@ -187,9 +187,12 @@ redfish_gpu_memory_uncorrectable_row_remapping_count{gpu_id="GPU_3",memory_id="G
 			testLogLevel:    slog.LevelDebug,
 			wantSeriesCount: 4,
 			wantSeriesString: `
-# HELP redfish_gpu_memory_row_remapping_pending GPU memory uncorrectable row remapping count
 # TYPE redfish_gpu_memory_row_remapping_pending gauge
-redfish_gpu_memory_row_remapping_pending 1
+# HELP redfish_gpu_memory_row_remapping_pending GPU memory row remapping pending status (1 if pending)
+redfish_gpu_memory_row_remapping_pending{gpu_id="GPU_0",memory_id="GPU_0_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_gpu_memory_row_remapping_pending{gpu_id="GPU_1",memory_id="GPU_1_DRAM_0",system_id="HGX_Baseboard_0"} 1
+redfish_gpu_memory_row_remapping_pending{gpu_id="GPU_2",memory_id="GPU_2_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_gpu_memory_row_remapping_pending{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_Baseboard_0"} 0
 `,
 		},
 	}
