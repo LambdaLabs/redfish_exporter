@@ -82,13 +82,11 @@ type memoryResponse struct {
 	} `json:"Oem"`
 }
 
-// memoryMetricsResponse represents the JSON structure from MemoryMetrics endpoint
-type memoryMetricsResponse struct {
-	Oem struct {
-		Nvidia struct {
-			RowRemapping MemoryMetricsOEMData `json:"RowRemapping"`
-		} `json:"Nvidia"`
-	} `json:"Oem"`
+// MemoryMetricsResponse represents the JSON structure from MemoryMetrics endpoint
+type MemoryMetricsResponse struct {
+	Nvidia struct {
+		RowRemapping MemoryMetricsOEMData `json:"RowRemapping"`
+	} `json:"Nvidia"`
 }
 
 // processorMetricsResponse represents the JSON structure from ProcessorMetrics endpoint
@@ -119,34 +117,6 @@ func (c *NvidiaOEMClient) GetMemoryOEMMetrics(odataID string) (*MemoryOEMMetrics
 	}
 
 	metrics := &response.Oem.Nvidia
-
-	c.logger.Debug("extracted Memory OEM metrics",
-		slog.String("odataID", odataID),
-		slog.Bool("row_remapping_failed", metrics.RowRemappingFailed),
-		slog.Bool("row_remapping_pending", metrics.RowRemappingPending))
-
-	return metrics, nil
-}
-
-// GetMemoryMetricsOEMData fetches and parses Nvidia OEM fields from MemoryMetrics endpoint
-func (c *NvidiaOEMClient) GetMemoryMetricsOEMData(metricsEndpoint string) (*MemoryMetricsOEMData, error) {
-	resp, err := c.client.Get(metricsEndpoint)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch from %s: %w", metricsEndpoint, err)
-	}
-	defer resp.Body.Close() // nolint:errcheck // Close() errors on read are not actionable
-
-	var response memoryMetricsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("failed to decode JSON from %s: %w", metricsEndpoint, err)
-	}
-
-	metrics := &response.Oem.Nvidia.RowRemapping
-
-	c.logger.Debug("extracted MemoryMetrics OEM data",
-		slog.String("endpoint", metricsEndpoint),
-		slog.Int64("correctable_count", metrics.CorrectableRowRemappingCount),
-		slog.Int64("uncorrectable_count", metrics.UncorrectableRowRemappingCount))
 
 	return metrics, nil
 }

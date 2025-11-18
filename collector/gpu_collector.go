@@ -505,7 +505,7 @@ func (g *GPUCollector) emitGPUMemoryMetrics(gpuMems []*redfish.Memory, ch chan<-
 			)
 		}
 
-		var oemMem MemoryMetricsOEMData
+		var oemMem MemoryMetricsResponse
 		if err := json.Unmarshal(memMetric.OEM, &oemMem); err != nil {
 			g.logger.With("error", err).Debug("unable to unmarshal OEM memory")
 			continue
@@ -513,43 +513,43 @@ func (g *GPUCollector) emitGPUMemoryMetrics(gpuMems []*redfish.Memory, ch chan<-
 		ch <- prometheus.MustNewConstMetric(
 			g.metrics["gpu_memory_correctable_row_remapping_count"].desc,
 			prometheus.GaugeValue,
-			float64(oemMem.CorrectableRowRemappingCount),
+			float64(oemMem.Nvidia.RowRemapping.CorrectableRowRemappingCount),
 			memLabels...,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			g.metrics["gpu_memory_uncorrectable_row_remapping_count"].desc,
 			prometheus.GaugeValue,
-			float64(oemMem.UncorrectableRowRemappingCount),
+			float64(oemMem.Nvidia.RowRemapping.UncorrectableRowRemappingCount),
 			memLabels...,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			g.metrics["gpu_memory_high_availability_bank_count"].desc,
 			prometheus.GaugeValue,
-			float64(oemMem.HighAvailabilityBankCount),
+			float64(oemMem.Nvidia.RowRemapping.HighAvailabilityBankCount),
 			memLabels...,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			g.metrics["gpu_memory_low_availability_bank_count"].desc,
 			prometheus.GaugeValue,
-			float64(oemMem.LowAvailabilityBankCount),
+			float64(oemMem.Nvidia.RowRemapping.LowAvailabilityBankCount),
 			memLabels...,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			g.metrics["gpu_memory_no_availability_bank_count"].desc,
 			prometheus.GaugeValue,
-			float64(oemMem.NoAvailabilityBankCount),
+			float64(oemMem.Nvidia.RowRemapping.NoAvailabilityBankCount),
 			memLabels...,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			g.metrics["gpu_memory_partial_availability_bank_count"].desc,
 			prometheus.GaugeValue,
-			float64(oemMem.PartialAvailabilityBankCount),
+			float64(oemMem.Nvidia.RowRemapping.PartialAvailabilityBankCount),
 			memLabels...,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			g.metrics["gpu_memory_max_availability_bank_count"].desc,
 			prometheus.GaugeValue,
-			float64(oemMem.MaxAvailabilityBankCount),
+			float64(oemMem.Nvidia.RowRemapping.MaxAvailabilityBankCount),
 			memLabels...,
 		)
 	}

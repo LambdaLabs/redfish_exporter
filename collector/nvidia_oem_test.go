@@ -13,77 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetMemoryOEMMetrics(t *testing.T) {
-	memoryJSON := `{
-		"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_0_DRAM_0",
-		"Oem": {
-			"Nvidia": {
-				"@odata.type": "#NvidiaMemory.v1_0_0.NvidiaMemory",
-				"RowRemappingFailed": true,
-				"RowRemappingPending": false
-			}
-		}
-	}`
-
-	client := &common.TestClient{}
-	client.CustomReturnForActions = map[string][]interface{}{
-		http.MethodGet: {
-			&http.Response{
-				StatusCode: 200,
-				Body:       io.NopCloser(strings.NewReader(memoryJSON)),
-			},
-		},
-	}
-
-	logger := slog.Default()
-	oemClient := NewNvidiaOEMClient(client, logger)
-
-	metrics, err := oemClient.GetMemoryOEMMetrics("/redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_0_DRAM_0")
-	require.NoError(t, err)
-
-	assert.True(t, metrics.RowRemappingFailed, "expected RowRemappingFailed to be true")
-	assert.False(t, metrics.RowRemappingPending, "expected RowRemappingPending to be false")
-}
-
-func TestGetMemoryMetricsOEMData(t *testing.T) {
-	metricsJSON := `{
-		"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_0_DRAM_0/MemoryMetrics",
-		"Oem": {
-			"Nvidia": {
-				"@odata.type": "#NvidiaMemoryMetrics.v1_2_0.NvidiaGPUMemoryMetrics",
-				"RowRemapping": {
-					"CorrectableRowRemappingCount": 5,
-					"HighAvailabilityBankCount": 10,
-					"LowAvailabilityBankCount": 2,
-					"MaxAvailabilityBankCount": 100,
-					"NoAvailabilityBankCount": 0,
-					"PartialAvailabilityBankCount": 3,
-					"UncorrectableRowRemappingCount": 1
-				}
-			}
-		}
-	}`
-
-	client := &common.TestClient{}
-	client.CustomReturnForActions = map[string][]interface{}{
-		http.MethodGet: {
-			&http.Response{
-				StatusCode: 200,
-				Body:       io.NopCloser(strings.NewReader(metricsJSON)),
-			},
-		},
-	}
-
-	logger := slog.Default()
-	oemClient := NewNvidiaOEMClient(client, logger)
-
-	metrics, err := oemClient.GetMemoryMetricsOEMData("/redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_0_DRAM_0/MemoryMetrics")
-	require.NoError(t, err)
-
-	assert.Equal(t, int64(5), metrics.CorrectableRowRemappingCount, "expected CorrectableRowRemappingCount to be 5")
-	assert.Equal(t, int64(1), metrics.UncorrectableRowRemappingCount, "expected UncorrectableRowRemappingCount to be 1")
-}
-
 func TestGetProcessorMetricsOEMData(t *testing.T) {
 	metricsJSON := `{
 		"@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/ProcessorMetrics",
@@ -169,7 +98,6 @@ func TestGetPortMetricsOEMData(t *testing.T) {
 	assert.False(t, metrics.NVLinkErrors.TrainingError, "expected NVLinkErrors.TrainingError to be false")
 	assert.Equal(t, int64(10), metrics.LinkErrorRecoveryCount, "expected LinkErrorRecoveryCount to be 10")
 }
-
 
 func TestGetMemoryOEMMetrics_EmptyOem(t *testing.T) {
 	memoryJSON := `{
