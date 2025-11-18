@@ -17,43 +17,6 @@ import (
 	"gotest.tools/v3/golden"
 )
 
-// TestGPUCollectorWithNvidiaGPU tests the GPU collector with Nvidia GPU hardware
-// Note: GPU temperature and memory power metrics are now collected via TelemetryService (HGX_PlatformEnvironmentMetrics_0)
-func TestGPUCollectorWithNvidiaGPU(t *testing.T) {
-	t.Fail()
-}
-
-// TestGPUContextUtilization tests the collection of GPU context utilization duration metric
-func TestGPUContextUtilization(t *testing.T) {
-	t.Fail()
-}
-
-// TestGPUContextUtilizationWithDifferentOEMLocations tests finding the duration in different OEM locations
-func TestGPUContextUtilizationWithDifferentOEMLocations(t *testing.T) {
-	t.Fail()
-}
-
-// TestGPUTemperatureSensorEdgeCases tests edge cases for GPU temperature collection
-// Note: GPU temperature collection is now done via TelemetryService (HGX_PlatformEnvironmentMetrics_0)
-func TestGPUTemperatureSensorEdgeCases(t *testing.T) {
-	t.Fail()
-}
-
-// TestCollectGPUProcessorMetrics tests collection of GPU processor metrics with various health states
-func TestCollectGPUProcessorMetrics(t *testing.T) {
-	t.Fail()
-}
-
-// TestGPUSerialNumberAndUUIDMetrics tests that GPU serial number and UUID info metrics are collected correctly
-func TestGPUSerialNumberAndUUIDMetrics(t *testing.T) {
-	t.Fail()
-}
-
-// TestGPUMetricsWithMissingSerialOrUUID tests handling of GPUs with missing serial number or UUID
-func TestGPUMetricsWithMissingSerialOrUUID(t *testing.T) {
-	t.Fail()
-}
-
 func Test_filterGPUs(t *testing.T) {
 	tT := map[string]struct {
 		processors []*redfish.Processor
