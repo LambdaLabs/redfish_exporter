@@ -24,8 +24,6 @@ var (
 	gpuBaseLabels = []string{"system_id", "gpu_id"}
 	// gpuMemoryLabels appends memory_id to gpuBaseLabels, as an expected label for memory-related series
 	gpuMemoryLabels = baseWithExtraLabels([]string{"memory_id"})
-	// TODO(mfuller): remove gpuProcessorLabels
-	gpuProcessorLabels = baseWithExtraLabels([]string{"processor_name"})
 	// gpuPortLabels appends NVLink labels gpuBaseLabels for NVLink-related series
 	gpuPortLabels = baseWithExtraLabels([]string{"port_id", "port_type", "port_protocol"})
 	// gpuInfoLabels appends a S/N and UUID to gpuBaseLabels for the redfish_gpu_info series
@@ -84,16 +82,13 @@ func createGPUMetricMap() map[string]Metric {
 	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_max_availability_bank_count", "GPU memory max availability bank count", gpuMemoryLabels)
 
 	// GPU Processor metrics
-	addToMetricMap(gpuMetrics, GPUSubsystem, "state", fmt.Sprintf("GPU processor state,%s", CommonStateHelp), gpuProcessorLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "health", fmt.Sprintf("GPU processor health,%s", CommonHealthHelp), gpuProcessorLabels)
-	// TODO(mfuller): Remove these 2x
-	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_total_cores", "GPU processor total cores", gpuProcessorLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_total_threads", "GPU processor total threads", gpuProcessorLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "state", fmt.Sprintf("GPU processor state,%s", CommonStateHelp), gpuBaseLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "health", fmt.Sprintf("GPU processor health,%s", CommonHealthHelp), gpuBaseLabels)
 
 	// Nvidia GPU Processor OEM metrics
 	// Note: SM utilization, activity, occupancy, tensor/FP activity, and PCIe bandwidth metrics
 	// are now collected via TelemetryService (HGX_ProcessorGPMMetrics_0) for better performance
-	addToMetricMap(gpuMetrics, GPUSubsystem, "sram_ecc_error_threshold_exceeded", "GPU SRAM ECC error threshold exceeded (1 if exceeded)", gpuProcessorLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "sram_ecc_error_threshold_exceeded", "GPU SRAM ECC error threshold exceeded (1 if exceeded)", gpuBaseLabels)
 
 	// NVLink Port metrics
 	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_state", fmt.Sprintf("NVLink port state,%s", CommonStateHelp), gpuPortLabels)
@@ -180,12 +175,10 @@ func (g *GPUCollector) collect(ctx context.Context, ch chan<- prometheus.Metric)
 			continue
 		}
 		g.emitGPUMemoryMetrics(gpuMems, ch, gpu, []string{gpu.SystemID, gpu.ID})
+
 		// collectGPUProcessor
 		// TODO(mfuller): Should drop the last label here, processor ID and Name are repetitive
-		procBaseLabels := []string{gpu.SystemName, gpu.ID, gpu.ID}
-		// NOTE (0, mfuller): No longer emitting cores/threads series, GB200/GB300, B200 do not support it.
-		// In fact, no system at Lambda seems to emit this as a nonzero value.
-		// NOTE (1, mfuller): Consolidating and renaming the `gpu_health` and `gpu_processor_foo` series to just the two here.
+		procBaseLabels := []string{gpu.SystemName, gpu.ID}
 		if stateValue, ok := parseCommonStatusState(gpu.Status.State); ok {
 			ch <- prometheus.MustNewConstMetric(
 				g.metrics["gpu_state"].desc,
