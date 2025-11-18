@@ -286,3 +286,47 @@ redfish_gpu_info{gpu_id="GPU_SXM_2",serial_number="unknown",system_id="HGX_Baseb
 		})
 	}
 }
+
+func TestGPUCollector_emitGPUOem(t *testing.T) {
+	tT := map[string]struct {
+		testdataPath     string
+		seriesToCheck    []string
+		testLogLevel     slog.Level
+		wantSeriesCount  int
+		wantSeriesString string
+	}{
+		"happy path": {
+			testdataPath:    "testdata/gb300_happypath",
+			seriesToCheck:   []string{"redfish_gpu_context_utilization_seconds_total", "redfish_gpu_sram_ecc_error_threshold_exceeded"},
+			testLogLevel:    slog.LevelDebug,
+			wantSeriesCount: 8,
+			wantSeriesString: `
+# HELP redfish_gpu_context_utilization_seconds_total Accumulated GPU context utilization duration in seconds
+# TYPE redfish_gpu_context_utilization_seconds_total counter
+redfish_gpu_context_utilization_seconds_total{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 60
+redfish_gpu_context_utilization_seconds_total{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_gpu_context_utilization_seconds_total{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_gpu_context_utilization_seconds_total{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_gpu_sram_ecc_error_threshold_exceeded GPU SRAM ECC error threshold exceeded (1 if exceeded)
+# TYPE redfish_gpu_sram_ecc_error_threshold_exceeded gauge
+redfish_gpu_sram_ecc_error_threshold_exceeded{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_gpu_sram_ecc_error_threshold_exceeded{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_gpu_sram_ecc_error_threshold_exceeded{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 1
+redfish_gpu_sram_ecc_error_threshold_exceeded{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+`,
+		},
+	}
+	for tName, test := range tT {
+		t.Run(tName, func(t *testing.T) {
+			_, client := setupTestServerClient(t, test.testdataPath)
+			logger := NewTestLogger(t, test.testLogLevel)
+			collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
+			require.NoError(t, err)
+			assert.Equal(t, test.wantSeriesCount, testutil.CollectAndCount(collector, test.seriesToCheck...))
+			wantedMemoryState := strings.NewReader(test.wantSeriesString)
+			if test.wantSeriesString != "" {
+				assert.NoError(t, testutil.CollectAndCompare(collector, wantedMemoryState, test.seriesToCheck...))
+			}
+		})
+	}
+}

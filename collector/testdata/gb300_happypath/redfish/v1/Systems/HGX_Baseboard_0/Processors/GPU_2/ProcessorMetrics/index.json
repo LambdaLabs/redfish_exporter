@@ -63,7 +63,7 @@
 "SMActivityPercent": 0.0,
 "SMOccupancyPercent": 0.0,
 "SMUtilizationPercent": 0.0,
-"SRAMECCErrorThresholdExceeded": false,
+"SRAMECCErrorThresholdExceeded": true,
 "TensorCoreActivityPercent": 0.0,
 "ThrottleReasons": [
 "NA"

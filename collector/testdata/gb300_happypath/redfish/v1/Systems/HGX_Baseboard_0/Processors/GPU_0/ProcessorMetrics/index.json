@@ -17,7 +17,7 @@
 "Oem": {
 "Nvidia": {
 "@odata.type": "#NvidiaProcessorMetrics.v1_4_0.NvidiaGPUProcessorMetrics",
-"AccumulatedGPUContextUtilizationDuration": "PT0S",
+"AccumulatedGPUContextUtilizationDuration": "PT1M",
 "AccumulatedSMUtilizationDuration": "PT0S",
 "DMMAUtilizationPercent": 0.0,
 "FP16ActivityPercent": 0.0,
