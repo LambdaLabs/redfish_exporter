@@ -91,7 +91,7 @@ func TestGPUCollector_gatherGPUs(t *testing.T) {
 	for tName, test := range tests {
 		t.Run(tName, func(t *testing.T) {
 			_, client := setupTestServerClient(t, test.testdataDir)
-			logger := NewTestLogger(t, slog.LevelDebug)
+			logger := NewTestLogger(t, slog.LevelInfo)
 			collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
 			require.NoError(t, err)
 			got, gotErr := collector.gatherGPUs(t.Context())
@@ -135,7 +135,7 @@ redfish_gpu_memory_state{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_
 		"redfish_gpu_memory_uncorrectable_row_remapping_count": {
 			testdataPath:    "testdata/gb300_happypath",
 			seriesToCheck:   []string{"redfish_gpu_memory_uncorrectable_row_remapping_count"},
-			testLogLevel:    slog.LevelDebug,
+			testLogLevel:    slog.LevelInfo,
 			wantSeriesCount: 4,
 			wantSeriesString: `
 # HELP redfish_gpu_memory_uncorrectable_row_remapping_count GPU memory uncorrectable row remapping count
@@ -149,7 +149,7 @@ redfish_gpu_memory_uncorrectable_row_remapping_count{gpu_id="GPU_3",memory_id="G
 		"redfish_gpu_memory_row_remapping_pending": {
 			testdataPath:    "testdata/gb300_happypath",
 			seriesToCheck:   []string{"redfish_gpu_memory_row_remapping_pending"},
-			testLogLevel:    slog.LevelDebug,
+			testLogLevel:    slog.LevelInfo,
 			wantSeriesCount: 4,
 			wantSeriesString: `
 # TYPE redfish_gpu_memory_row_remapping_pending gauge
@@ -163,7 +163,7 @@ redfish_gpu_memory_row_remapping_pending{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0"
 		"redfish_gpu_memory_ecc_correctable": {
 			testdataPath:    "testdata/gb300_happypath",
 			seriesToCheck:   []string{"redfish_gpu_memory_ecc_correctable"},
-			testLogLevel:    slog.LevelDebug,
+			testLogLevel:    slog.LevelInfo,
 			wantSeriesCount: 4,
 			wantSeriesString: `
 # HELP redfish_gpu_memory_ecc_correctable current correctable memory ecc errors reported on the gpu
@@ -201,7 +201,7 @@ func TestGPUCollector_emitHealthInfo(t *testing.T) {
 		"gpu info/health/state": {
 			testdataPath:    "testdata/gb300_happypath",
 			seriesToCheck:   []string{"redfish_gpu_info", "redfish_gpu_health", "redfish_gpu_state"},
-			testLogLevel:    slog.LevelDebug,
+			testLogLevel:    slog.LevelInfo,
 			wantSeriesCount: 12,
 			wantSeriesString: `
 # HELP redfish_gpu_health GPU processor health,1(OK),2(Warning),3(Critical)
@@ -263,7 +263,7 @@ func TestGPUCollector_emitGPUOem(t *testing.T) {
 		"happy path": {
 			testdataPath:    "testdata/gb300_happypath",
 			seriesToCheck:   []string{"redfish_gpu_context_utilization_seconds_total", "redfish_gpu_sram_ecc_error_threshold_exceeded"},
-			testLogLevel:    slog.LevelDebug,
+			testLogLevel:    slog.LevelInfo,
 			wantSeriesCount: 8,
 			wantSeriesString: `
 # HELP redfish_gpu_context_utilization_seconds_total Accumulated GPU context utilization duration in seconds
@@ -315,7 +315,7 @@ func TestGPUCollector_emitGPUNVLinkTelemetry(t *testing.T) {
 				"redfish_gpu_nvlink_symbol_errors",
 				"redfish_gpu_nvlink_bit_error_rate",
 			},
-			testLogLevel:         slog.LevelDebug,
+			testLogLevel:         slog.LevelInfo,
 			wantSeriesCount:      576,
 			wantSeriesGoldenPath: "golden/gb300_nvlink_happy.golden",
 		},
