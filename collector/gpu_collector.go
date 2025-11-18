@@ -125,6 +125,16 @@ func NewGPUCollector(collectorName string, redfishClient *gofish.APIClient, logg
 	}, nil
 }
 
+func (g *GPUCollector) whileContextAllows(ctx context.Context, fns ...func()) {
+	for _, fn := range fns {
+		if ctx.Err() != nil {
+			g.logger.With("error", ctx.Err()).Warn("unable to run function as context is done")
+			return
+		}
+		fn()
+	}
+}
+
 // Describe implements prometheus.Collector
 func (g *GPUCollector) Describe(ch chan<- *prometheus.Desc) {
 	for _, metric := range g.metrics {
@@ -168,17 +178,13 @@ func (g *GPUCollector) collect(ctx context.Context, ch chan<- prometheus.Metric)
 			g.logger.With("error", ctx.Err().Error()).Debug("skipping further gpu collection")
 			return
 		}
-		gpuMems, err := gpu.Memory()
-		if err != nil {
-			g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("failed obtaining gpu memory, skipping")
-		} else {
-			g.emitGPUMemoryMetrics(gpuMems, ch, gpu, []string{gpu.SystemID, gpu.ID})
-		}
-
 		procBaseLabels := []string{gpu.SystemName, gpu.ID}
-		g.emitHealthInfo(ch, gpu, procBaseLabels)
-		g.emitGPUOem(ch, gpu, procBaseLabels)
-		g.emitNVLinkTelemetry(ctx, ch, gpu)
+		g.whileContextAllows(ctx,
+			func() { g.emitGPUMemoryMetrics(ch, gpu, []string{gpu.SystemID, gpu.ID}) },
+			func() { g.emitHealthInfo(ch, gpu, procBaseLabels) },
+			func() { g.emitGPUOem(ch, gpu, procBaseLabels) },
+			func() { g.emitNVLinkTelemetry(ctx, ch, gpu) },
+		)
 	}
 
 	g.collectorScrapeStatus.WithLabelValues("gpu").Set(float64(1))
@@ -231,7 +237,12 @@ func filterGPUs(cpus []*redfish.Processor) []*redfish.Processor {
 // emitGPUMemoryMetrics iterates a slice of [*redfish.Memory] belonging to the provided [SystemGPU],
 // performing a network request to the Redfish device to gather memory metrics.
 // Collected metrics are emitted onto the provided channel.
-func (g *GPUCollector) emitGPUMemoryMetrics(gpuMems []*redfish.Memory, ch chan<- prometheus.Metric, gpu SystemGPU, commonLabels []string) {
+func (g *GPUCollector) emitGPUMemoryMetrics(ch chan<- prometheus.Metric, gpu SystemGPU, commonLabels []string) {
+	gpuMems, err := gpu.Memory()
+	if err != nil {
+		g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("failed obtaining gpu memory, skipping")
+		return
+	}
 	for _, mem := range gpuMems {
 		memMetric, err := mem.Metrics()
 		if err != nil {
