@@ -1,0 +1,132 @@
+{
+  "@odata.type": "#Processor.v1_16_0.Processor",
+  "@odata.id": "/redfish/v1/Systems/1/Processors/1",
+  "Id": "1",
+  "Name": "Processor",
+  "InstructionSet": "x86-64",
+  "Manufacturer": "Intel(R) Corporation",
+  "PartNumber": null,
+  "SerialNumber": null,
+  "MaxSpeedMHz": 4000,
+  "OperatingSpeedMHz": 2100,
+  "Family": "Intel(R) Xeon(R) processor",
+  "MaxTDPWatts": 350,
+  "Model": "INTEL(R) XEON(R) PLATINUM 8570",
+  "Version": "INTEL(R) XEON(R) PLATINUM 8570",
+  "ProcessorArchitecture": "x86",
+  "ProcessorType": "CPU",
+  "Socket": "CPU1",
+  "TotalCores": 56,
+  "TotalEnabledCores": 56,
+  "TotalThreads": 112,
+  "Location": {
+    "PartLocation": {
+      "ServiceLabel": "CPU 1",
+      "LocationType": "Socket",
+      "LocationOrdinalValue": 0
+    }
+  },
+  "ProcessorId": {
+    "EffectiveFamily": "0x6",
+    "EffectiveModel": "0xCF",
+    "IdentificationRegisters": "0x123456",
+    "Step": "0x2",
+    "VendorId": "GenuineIntel",
+    "MicrocodeInfo": "0x21000283"
+  },
+  "ProcessorMemory": [
+    {
+      "CapacityMiB": 4,
+      "MemoryType": "L1Cache"
+    },
+    {
+      "CapacityMiB": 112,
+      "MemoryType": "L2Cache"
+    },
+    {
+      "CapacityMiB": 300,
+      "MemoryType": "L3Cache"
+    }
+  ],
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "Oem": {
+    "Supermicro": {
+      "@odata.type": "#SmcProcessorsExtensions.v1_0_0.Processors",
+      "IntelLicense": [],
+      "IntelSDSiSupported": false
+    }
+  },
+  "ProcessorIndex": 0,
+  "EnvironmentMetrics": {
+    "@odata.id": "/redfish/v1/Systems/1/Processors/1/EnvironmentMetrics"
+  },
+  "Metrics": {
+    "@odata.id": "/redfish/v1/Systems/1/Processors/1/ProcessorMetrics"
+  },
+  "Links": {
+    "Chassis": {
+      "@odata.id": "/redfish/v1/Chassis/1/"
+    },
+    "Memory": [
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/1"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/2"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/3"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/4"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/5"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/6"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/7"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/8"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/9"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/10"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/11"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/12"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/13"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/14"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/15"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/1/Memory/16"
+      }
+    ]
+  },
+  "MemorySummary": {
+    "TotalCacheSizeMiB": 416,
+    "TotalMemorySizeMiB": 1572864,
+    "Metrics": {
+      "@odata.id": "/redfish/v1/Systems/1/MemorySummary/MemoryMetrics"
+    }
+  },
+  "@odata.etag": "\"foo\""
+}

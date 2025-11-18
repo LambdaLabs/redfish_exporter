@@ -230,6 +230,18 @@ redfish_gpu_state{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 1
 redfish_gpu_state{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 5
 `,
 		},
+		"special case for gpu info, unknown everything": {
+			testdataPath:    "testdata/gpu_info_unknown_multi",
+			seriesToCheck:   []string{"redfish_gpu_info"},
+			testLogLevel:    9, // Disable even error logging for this test, the testdata dir cuts many corners
+			wantSeriesCount: 2,
+			wantSeriesString: `
+# HELP redfish_gpu_info GPU information with serial number and UUID
+# TYPE redfish_gpu_info gauge
+redfish_gpu_info{gpu_id="GPU_SXM_1",serial_number="unknown",system_id="HGX_Baseboard_0",uuid="unknown"} 1
+redfish_gpu_info{gpu_id="GPU_SXM_2",serial_number="unknown",system_id="HGX_Baseboard_0",uuid="unknown"} 1
+`,
+		},
 		"redfish_gpu_memory_ecc_correctable": {
 			testdataPath:    "testdata/gb300_happypath",
 			seriesToCheck:   []string{"redfish_gpu_memory_ecc_correctable"},
@@ -251,7 +263,6 @@ redfish_gpu_memory_ecc_correctable{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",syste
 			logger := NewTestLogger(t, test.testLogLevel)
 			collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
 			require.NoError(t, err)
-
 			assert.Equal(t, test.wantSeriesCount, testutil.CollectAndCount(collector, test.seriesToCheck...))
 			wantedMemoryState := strings.NewReader(test.wantSeriesString)
 			if test.wantSeriesString != "" {

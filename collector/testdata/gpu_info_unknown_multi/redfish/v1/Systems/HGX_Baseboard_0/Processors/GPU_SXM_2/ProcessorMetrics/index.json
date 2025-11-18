@@ -1,0 +1,87 @@
+{
+  "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_2/ProcessorMetrics",
+  "@odata.type": "#ProcessorMetrics.v1_6_1.ProcessorMetrics",
+  "BandwidthPercent": 0.0,
+  "CacheMetricsTotal": {
+    "LifeTime": {
+      "CorrectableECCErrorCount": 0,
+      "UncorrectableECCErrorCount": 0
+    }
+  },
+  "CoreVoltage": {
+    "DataSourceUri": "/redfish/v1/Chassis/HGX_GPU_SXM_2/Sensors/HGX_GPU_SXM_2_Voltage_0",
+    "Reading": 0.89
+  },
+  "Id": "ProcessorMetrics",
+  "Name": "GPU_SXM_2 Processor Metrics",
+  "Oem": {
+    "Nvidia": {
+      "@odata.type": "#NvidiaProcessorMetrics.v1_4_0.NvidiaGPUProcessorMetrics",
+      "AccumulatedGPUContextUtilizationDuration": "PT0.087490980S",
+      "AccumulatedSMUtilizationDuration": "PT0.020061500S",
+      "DMMAUtilizationPercent": 0.0,
+      "FP16ActivityPercent": 0.0,
+      "FP32ActivityPercent": 0.0,
+      "FP64ActivityPercent": 0.0,
+      "GlobalSoftwareViolationThrottleDuration": "PT0S",
+      "GraphicsEngineActivityPercent": 0.0,
+      "HMMAUtilizationPercent": 0.0,
+      "HardwareViolationThrottleDuration": "PT0S",
+      "IMMAUtilizationPercent": 0.0,
+      "IntegerActivityUtilizationPercent": 0.0,
+      "NVDecInstanceUtilizationPercent": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "NVDecUtilizationPercent": 0.0,
+      "NVJpgInstanceUtilizationPercent": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "NVJpgUtilizationPercent": 0.0,
+      "NVLinkDataRxBandwidthGbps": 0.0,
+      "NVLinkDataTxBandwidthGbps": 0.0,
+      "NVLinkRawRxBandwidthGbps": 0.0,
+      "NVLinkRawTxBandwidthGbps": 0.0,
+      "NVOfaUtilizationPercent": 0.0,
+      "PCIeRXBytes": 2478494117,
+      "PCIeRawRxBandwidthGbps": 0.10160446166992188,
+      "PCIeRawTxBandwidthGbps": 0.129486083984375,
+      "PCIeTXBytes": 2433377803,
+      "SMActivityPercent": 0.0,
+      "SMOccupancyPercent": 0.0,
+      "SMUtilizationPercent": 0.0,
+      "SRAMECCErrorThresholdExceeded": false,
+      "TensorCoreActivityPercent": 0.0,
+      "ThrottleReasons": [
+        "NA"
+      ]
+    }
+  },
+  "OperatingSpeedMHz": 1965,
+  "PCIeErrors": {
+    "CorrectableErrorCount": 0,
+    "FatalErrorCount": 0,
+    "L0ToRecoveryCount": 3,
+    "NAKReceivedCount": 0,
+    "NAKSentCount": 0,
+    "NonFatalErrorCount": 0,
+    "ReplayCount": 0,
+    "ReplayRolloverCount": 0,
+    "UnsupportedRequestCount": 0
+  },
+  "PowerLimitThrottleDuration": "PT0S",
+  "ThermalLimitThrottleDuration": "PT0S"
+}

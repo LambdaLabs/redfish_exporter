@@ -176,40 +176,8 @@ func (g *GPUCollector) collect(ctx context.Context, ch chan<- prometheus.Metric)
 			g.emitGPUMemoryMetrics(gpuMems, ch, gpu, []string{gpu.SystemID, gpu.ID})
 		}
 
-		// collectGPUProcessor
-		// TODO(mfuller): Should drop the last label here, processor ID and Name are repetitive
 		procBaseLabels := []string{gpu.SystemName, gpu.ID}
-		if stateValue, ok := parseCommonStatusState(gpu.Status.State); ok {
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_state"].desc,
-				prometheus.GaugeValue,
-				stateValue,
-				procBaseLabels...,
-			)
-		}
-		if healthValue, ok := parseCommonStatusHealth(gpu.Status.Health); ok {
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_health"].desc,
-				prometheus.GaugeValue,
-				healthValue,
-				procBaseLabels...,
-			)
-		}
-		// NOTE(mfuller): Always emit this, if value are unknown then just say that
-		var gpuSerial, gpuUUID string
-		if gpuSerial = gpu.SerialNumber; gpuSerial == "" {
-			gpuSerial = "unknown"
-		}
-		if gpuUUID = gpu.UUID; gpuUUID == "" {
-			gpuUUID = "unknown"
-		}
-		infoLabels := []string{gpu.SystemName, gpu.ID, gpuSerial, gpuUUID}
-		ch <- prometheus.MustNewConstMetric(
-			g.metrics["gpu_info"].desc,
-			prometheus.GaugeValue,
-			1,
-			infoLabels...,
-		)
+		g.emitHealthInfo(ch, gpu, procBaseLabels)
 
 		// TODO: collectGPUProcessor -> OEM
 		gpuOEMMetrics, err := gpu.Metrics()
@@ -546,4 +514,37 @@ func (g *GPUCollector) emitGPUMemoryMetrics(gpuMems []*redfish.Memory, ch chan<-
 			memLabels...,
 		)
 	}
+}
+
+func (g *GPUCollector) emitHealthInfo(ch chan<- prometheus.Metric, gpu SystemGPU, procBaseLabels []string) {
+	if stateValue, ok := parseCommonStatusState(gpu.Status.State); ok {
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_state"].desc,
+			prometheus.GaugeValue,
+			stateValue,
+			procBaseLabels...,
+		)
+	}
+	if healthValue, ok := parseCommonStatusHealth(gpu.Status.Health); ok {
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_health"].desc,
+			prometheus.GaugeValue,
+			healthValue,
+			procBaseLabels...,
+		)
+	}
+	var gpuSerial, gpuUUID string
+	if gpuSerial = gpu.SerialNumber; gpuSerial == "" {
+		gpuSerial = "unknown"
+	}
+	if gpuUUID = gpu.UUID; gpuUUID == "" {
+		gpuUUID = "unknown"
+	}
+	infoLabels := []string{gpu.SystemName, gpu.ID, gpuSerial, gpuUUID}
+	ch <- prometheus.MustNewConstMetric(
+		g.metrics["gpu_info"].desc,
+		prometheus.GaugeValue,
+		1,
+		infoLabels...,
+	)
 }
