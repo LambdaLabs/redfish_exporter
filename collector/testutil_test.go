@@ -275,7 +275,7 @@ func dirIndexFileServer(fsys fs.FS) http.Handler {
 type testMiddleware func(http.Handler) http.Handler
 
 // DelayMiddleware sleeps for some duration prior to response.
-func delayMiddleware(delay time.Duration) testMiddleware {
+func delayMiddleware(delay time.Duration) testMiddleware { //nolint:unused
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			time.Sleep(delay)

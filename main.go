@@ -20,9 +20,13 @@ import (
 	"github.com/stmcginnis/gofish"
 )
 
+type (
+	rfContextKey int
+)
+
 const (
-	scrapeRequestCtxKey = "scrapeRequest"
-	loggerCtxKey        = "logger"
+	scrapeRequestCtxKey rfContextKey = iota
+	loggerCtxKey
 )
 
 var (

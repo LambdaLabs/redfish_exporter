@@ -95,13 +95,6 @@ type ProcessorMetricsOEMResponse struct {
 	Nvidia ProcessorMetricsOEMData `json:"Nvidia"`
 }
 
-// portMetricsResponse represents the JSON structure from PortMetrics endpoint
-type portMetricsResponse struct {
-	Oem struct {
-		Nvidia PortMetricsOEMData `json:"Nvidia"`
-	} `json:"Oem"`
-}
-
 // GetMemoryOEMMetrics fetches and parses Nvidia OEM fields from Memory endpoint
 func (c *NvidiaOEMClient) GetMemoryOEMMetrics(odataID string) (*MemoryOEMMetrics, error) {
 	resp, err := c.client.Get(odataID)
@@ -155,7 +148,7 @@ type GPUNVLinkCollection struct {
 					VL15Dropped                int          `json:"VL15Dropped,omitempty"`
 					VL15TXBytes                int          `json:"VL15TXBytes,omitempty"`
 					VL15TXPackets              int          `json:"VL15TXPackets,omitempty"`
-				} `json:"Nvidia,omittempty"`
+				} `json:"Nvidia,omitempty"`
 			} `json:"Oem"`
 		} `json:"Metrics"`
 		PortType     string               `json:"PortType"`
