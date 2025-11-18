@@ -350,9 +350,9 @@
 "SpeedLocked": false,
 "Status": {
 "Conditions": [],
-"Health": "OK",
-"HealthRollup": "OK",
-"State": "Enabled"
+"Health": "Warning",
+"HealthRollup": "Warning",
+"State": "InTest"
 },
 "SystemInterface": {
 "InterfaceType": "PCIe",
