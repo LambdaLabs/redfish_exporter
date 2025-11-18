@@ -483,6 +483,17 @@ func (g *GPUCollector) emitGPUMemoryMetrics(gpuMems []*redfish.Memory, ch chan<-
 				memLabels...,
 			)
 		}
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_row_remapping_failed"].desc,
+			prometheus.GaugeValue,
+			boolToFloat64(memOEM.RowRemappingFailed),
+			labels...,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_row_remapping_pending"].desc,
+			prometheus.GaugeValue,
+			boolToFloat64(memOEM.RowRemappingPending),
+			labels...)
 		var oemMem MemoryMetricsOEMData
 		if err := json.Unmarshal(memMetric.OEM, &oemMem); err != nil {
 			g.logger.With("error", err).Debug("unable to unmarshal OEM memory")
