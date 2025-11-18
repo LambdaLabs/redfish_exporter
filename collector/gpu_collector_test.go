@@ -1,10 +1,7 @@
 package collector
 
 import (
-	"fmt"
 	"log/slog"
-	"maps"
-	"slices"
 	"strings"
 	"testing"
 
@@ -149,12 +146,6 @@ func TestGPUCollector_gatherGPUs(t *testing.T) {
 }
 
 func TestGPUCollector_emitGPUMemoryMetrics(t *testing.T) {
-	localMetricsMap := createGPUMetricMap()
-	unprefixedMetricNames := slices.Sorted(maps.Keys(localMetricsMap))
-	var metricNames []string
-	for _, name := range unprefixedMetricNames {
-		metricNames = append(metricNames, fmt.Sprintf("redfish_%s", name))
-	}
 	tT := map[string]struct {
 		testdataPath     string
 		seriesToCheck    []string
@@ -204,6 +195,44 @@ redfish_gpu_memory_row_remapping_pending{gpu_id="GPU_2",memory_id="GPU_2_DRAM_0"
 redfish_gpu_memory_row_remapping_pending{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_Baseboard_0"} 0
 `,
 		},
+		"redfish_gpu_memory_ecc_correctable": {
+			testdataPath:    "testdata/gb300_happypath",
+			seriesToCheck:   []string{"redfish_gpu_memory_ecc_correctable"},
+			testLogLevel:    slog.LevelDebug,
+			wantSeriesCount: 4,
+			wantSeriesString: `
+# HELP redfish_gpu_memory_ecc_correctable current correctable memory ecc errors reported on the gpu
+# TYPE redfish_gpu_memory_ecc_correctable counter
+redfish_gpu_memory_ecc_correctable{gpu_id="GPU_0",memory_id="GPU_0_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_gpu_memory_ecc_correctable{gpu_id="GPU_1",memory_id="GPU_1_DRAM_0",system_id="HGX_Baseboard_0"} 100
+redfish_gpu_memory_ecc_correctable{gpu_id="GPU_2",memory_id="GPU_2_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_gpu_memory_ecc_correctable{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_Baseboard_0"} 0
+`,
+		},
+	}
+	for tName, test := range tT {
+		t.Run(tName, func(t *testing.T) {
+			_, client := setupTestServerClient(t, test.testdataPath)
+			logger := NewTestLogger(t, test.testLogLevel)
+			collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
+			require.NoError(t, err)
+			assert.Equal(t, test.wantSeriesCount, testutil.CollectAndCount(collector, test.seriesToCheck...))
+			wantedMemoryState := strings.NewReader(test.wantSeriesString)
+			if test.wantSeriesString != "" {
+				assert.NoError(t, testutil.CollectAndCompare(collector, wantedMemoryState, test.seriesToCheck...))
+			}
+		})
+	}
+}
+
+func TestGPUCollector_emitHealthInfo(t *testing.T) {
+	tT := map[string]struct {
+		testdataPath     string
+		seriesToCheck    []string
+		testLogLevel     slog.Level
+		wantSeriesCount  int
+		wantSeriesString string
+	}{
 		"gpu info/health/state": {
 			testdataPath:    "testdata/gb300_happypath",
 			seriesToCheck:   []string{"redfish_gpu_info", "redfish_gpu_health", "redfish_gpu_state"},
@@ -240,20 +269,6 @@ redfish_gpu_state{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 5
 # TYPE redfish_gpu_info gauge
 redfish_gpu_info{gpu_id="GPU_SXM_1",serial_number="unknown",system_id="HGX_Baseboard_0",uuid="unknown"} 1
 redfish_gpu_info{gpu_id="GPU_SXM_2",serial_number="unknown",system_id="HGX_Baseboard_0",uuid="unknown"} 1
-`,
-		},
-		"redfish_gpu_memory_ecc_correctable": {
-			testdataPath:    "testdata/gb300_happypath",
-			seriesToCheck:   []string{"redfish_gpu_memory_ecc_correctable"},
-			testLogLevel:    slog.LevelDebug,
-			wantSeriesCount: 4,
-			wantSeriesString: `
-# HELP redfish_gpu_memory_ecc_correctable current correctable memory ecc errors reported on the gpu
-# TYPE redfish_gpu_memory_ecc_correctable counter
-redfish_gpu_memory_ecc_correctable{gpu_id="GPU_0",memory_id="GPU_0_DRAM_0",system_id="HGX_Baseboard_0"} 0
-redfish_gpu_memory_ecc_correctable{gpu_id="GPU_1",memory_id="GPU_1_DRAM_0",system_id="HGX_Baseboard_0"} 100
-redfish_gpu_memory_ecc_correctable{gpu_id="GPU_2",memory_id="GPU_2_DRAM_0",system_id="HGX_Baseboard_0"} 0
-redfish_gpu_memory_ecc_correctable{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_Baseboard_0"} 0
 `,
 		},
 	}
