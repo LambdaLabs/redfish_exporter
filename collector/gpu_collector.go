@@ -12,7 +12,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	isoDuration "github.com/sosodev/duration"
 	"github.com/stmcginnis/gofish"
-	"github.com/stmcginnis/gofish/common"
 	"github.com/stmcginnis/gofish/redfish"
 )
 
@@ -189,61 +188,12 @@ func (g *GPUCollector) collect(ctx context.Context, ch chan<- prometheus.Metric)
 		if err != nil {
 			g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("unable to gather NVLink data, skipping")
 		} else {
-			type aggregateNVLinkData struct {
-				ODataID   string `json:"@odata.id"`
-				ODataType string `json:"@odata.type"`
-				Members   []struct {
-					ID      string `json:"Id"`
-					Metrics struct {
-						Oem struct {
-							NVidiaOEM struct {
-								OdataType string `json:"@odata.type,omitempty"`
-								// PCIe-specific fields
-								RXErrorsPerLane []int `json:"RXErrorsPerLane,omitempty"`
-								// NVLink-specific fields
-								BitErrorRate              float64 `json:"BitErrorRate,omitempty"`
-								EffectiveBER              float64 `json:"EffectiveBER,omitempty"`
-								EffectiveError            int     `json:"EffectiveError,omitempty"`
-								IntentionalLinkDownCount  int     `json:"IntentionalLinkDownCount,omitempty"`
-								LinkDownReasonCode        string  `json:"LinkDownReasonCode,omitempty"`
-								LinkDownedCount           int     `json:"LinkDownedCount,omitempty"`
-								LinkErrorRecoveryCount    int     `json:"LinkErrorRecoveryCount,omitempty"`
-								MalformedPackets          int     `json:"MalformedPackets,omitempty"`
-								NVLinkDataRxBandwidthGbps float64 `json:"NVLinkDataRxBandwidthGbps,omitempty"`
-								NVLinkDataTxBandwidthGbps float64 `json:"NVLinkDataTxBandwidthGbps,omitempty"`
-								NVLinkErrors              struct {
-									RuntimeError  bool `json:"RuntimeError"`
-									TrainingError bool `json:"TrainingError"`
-								} `json:"NVLinkErrors,omitempty"`
-								NVLinkRawRxBandwidthGbps   float64 `json:"NVLinkRawRxBandwidthGbps,omitempty"`
-								NVLinkRawTxBandwidthGbps   float64 `json:"NVLinkRawTxBandwidthGbps,omitempty"`
-								RXNoProtocolBytes          int64   `json:"RXNoProtocolBytes,omitempty"`
-								SymbolErrors               int     `json:"SymbolErrors,omitempty"`
-								TXNoProtocolBytes          int64   `json:"TXNoProtocolBytes,omitempty"`
-								TXWait                     int     `json:"TXWait,omitempty"`
-								TotalRawBER                float64 `json:"TotalRawBER,omitempty"`
-								TotalRawError              int     `json:"TotalRawError,omitempty"`
-								UnintentionalLinkDownCount int     `json:"UnintentionalLinkDownCount,omitempty"`
-								VL15Dropped                int     `json:"VL15Dropped,omitempty"`
-								VL15TXBytes                int     `json:"VL15TXBytes,omitempty"`
-								VL15TXPackets              int     `json:"VL15TXPackets,omitempty"`
-							} `json:"Nvidia,omittempty"`
-						} `json:"Oem"`
-					} `json:"Metrics"`
-					PortType     string               `json:"PortType"`
-					PortProtocol redfish.PortProtocol `json:"PortProtocol"`
-					Status       struct {
-						Health common.Health `json:"Health"`
-						State  common.State  `json:"State"`
-					} `json:"Status"`
-				} `json:"Members"`
-			}
 			body, err := io.ReadAll(response.Body)
 			if err != nil {
 				g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("unable to read in NVLink data, skipping")
 			} else {
-				agg := &aggregateNVLinkData{}
-				if err := json.Unmarshal(body, agg); err != nil {
+				var agg GPUNVLinkCollection
+				if err := json.Unmarshal(body, &agg); err != nil {
 					g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("unable to unmarshal NVLink data, skipping")
 				} else {
 					for _, port := range agg.Members {

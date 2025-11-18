@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/stmcginnis/gofish/common"
+	"github.com/stmcginnis/gofish/redfish"
 )
 
 // NvidiaOEMClient provides methods to extract Nvidia OEM fields from Redfish responses
@@ -119,26 +120,46 @@ func (c *NvidiaOEMClient) GetMemoryOEMMetrics(odataID string) (*MemoryOEMMetrics
 	return metrics, nil
 }
 
-// GetPortMetricsOEMData fetches and parses Nvidia OEM fields from PortMetrics endpoint
-func (c *NvidiaOEMClient) GetPortMetricsOEMData(metricsEndpoint string) (*PortMetricsOEMData, error) {
-	resp, err := c.client.Get(metricsEndpoint)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch from %s: %w", metricsEndpoint, err)
-	}
-	defer resp.Body.Close() // nolint:errcheck // Close() errors on read are not actionable
-
-	var response portMetricsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("failed to decode JSON from %s: %w", metricsEndpoint, err)
-	}
-
-	metrics := &response.Oem.Nvidia
-
-	c.logger.Debug("extracted PortMetrics OEM data",
-		slog.String("endpoint", metricsEndpoint),
-		slog.Bool("runtime_error", metrics.NVLinkErrors.RuntimeError),
-		slog.Bool("training_error", metrics.NVLinkErrors.TrainingError),
-		slog.Int64("link_recovery_count", metrics.LinkErrorRecoveryCount))
-
-	return metrics, nil
+type GPUNVLinkCollection struct {
+	ODataID   string `json:"@odata.id"`
+	ODataType string `json:"@odata.type"`
+	Members   []struct {
+		ID      string `json:"Id"`
+		Metrics struct {
+			Oem struct {
+				NVidiaOEM struct {
+					OdataType string `json:"@odata.type,omitempty"`
+					// PCIe-specific fields
+					RXErrorsPerLane []int `json:"RXErrorsPerLane,omitempty"`
+					// NVLink-specific fields
+					BitErrorRate               float64      `json:"BitErrorRate,omitempty"`
+					EffectiveBER               float64      `json:"EffectiveBER,omitempty"`
+					EffectiveError             int          `json:"EffectiveError,omitempty"`
+					IntentionalLinkDownCount   int          `json:"IntentionalLinkDownCount,omitempty"`
+					LinkDownReasonCode         string       `json:"LinkDownReasonCode,omitempty"`
+					LinkDownedCount            int          `json:"LinkDownedCount,omitempty"`
+					LinkErrorRecoveryCount     int          `json:"LinkErrorRecoveryCount,omitempty"`
+					MalformedPackets           int          `json:"MalformedPackets,omitempty"`
+					NVLinkDataRxBandwidthGbps  float64      `json:"NVLinkDataRxBandwidthGbps,omitempty"`
+					NVLinkDataTxBandwidthGbps  float64      `json:"NVLinkDataTxBandwidthGbps,omitempty"`
+					NVLinkErrors               NVLinkErrors `json:"NVLinkErrors,omitempty"`
+					NVLinkRawRxBandwidthGbps   float64      `json:"NVLinkRawRxBandwidthGbps,omitempty"`
+					NVLinkRawTxBandwidthGbps   float64      `json:"NVLinkRawTxBandwidthGbps,omitempty"`
+					RXNoProtocolBytes          int64        `json:"RXNoProtocolBytes,omitempty"`
+					SymbolErrors               int          `json:"SymbolErrors,omitempty"`
+					TXNoProtocolBytes          int64        `json:"TXNoProtocolBytes,omitempty"`
+					TXWait                     int          `json:"TXWait,omitempty"`
+					TotalRawBER                float64      `json:"TotalRawBER,omitempty"`
+					TotalRawError              int          `json:"TotalRawError,omitempty"`
+					UnintentionalLinkDownCount int          `json:"UnintentionalLinkDownCount,omitempty"`
+					VL15Dropped                int          `json:"VL15Dropped,omitempty"`
+					VL15TXBytes                int          `json:"VL15TXBytes,omitempty"`
+					VL15TXPackets              int          `json:"VL15TXPackets,omitempty"`
+				} `json:"Nvidia,omittempty"`
+			} `json:"Oem"`
+		} `json:"Metrics"`
+		PortType     string               `json:"PortType"`
+		PortProtocol redfish.PortProtocol `json:"PortProtocol"`
+		Status       common.Status        `json:"Status"`
+	} `json:"Members"`
 }
