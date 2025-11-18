@@ -308,12 +308,10 @@ func (g *GPUCollector) collect(ctx context.Context, ch chan<- prometheus.Metric)
 							port.Metrics.Oem.NVidiaOEM.BitErrorRate,
 							portLabels...,
 						)
-
 					}
 				}
 			}
 		}
-
 	}
 
 	g.collectorScrapeStatus.WithLabelValues("gpu").Set(float64(1))

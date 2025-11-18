@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"bytes"
 	"log/slog"
 	"strings"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"github.com/stmcginnis/gofish/redfish"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gotest.tools/v3/golden"
 )
 
 // TestGPUCollectorWithNvidiaGPU tests the GPU collector with Nvidia GPU hardware
@@ -217,9 +219,9 @@ redfish_gpu_memory_ecc_correctable{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",syste
 			collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
 			require.NoError(t, err)
 			assert.Equal(t, test.wantSeriesCount, testutil.CollectAndCount(collector, test.seriesToCheck...))
-			wantedMemoryState := strings.NewReader(test.wantSeriesString)
+			wanted := strings.NewReader(test.wantSeriesString)
 			if test.wantSeriesString != "" {
-				assert.NoError(t, testutil.CollectAndCompare(collector, wantedMemoryState, test.seriesToCheck...))
+				assert.NoError(t, testutil.CollectAndCompare(collector, wanted, test.seriesToCheck...))
 			}
 		})
 	}
@@ -279,9 +281,9 @@ redfish_gpu_info{gpu_id="GPU_SXM_2",serial_number="unknown",system_id="HGX_Baseb
 			collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
 			require.NoError(t, err)
 			assert.Equal(t, test.wantSeriesCount, testutil.CollectAndCount(collector, test.seriesToCheck...))
-			wantedMemoryState := strings.NewReader(test.wantSeriesString)
+			wanted := strings.NewReader(test.wantSeriesString)
 			if test.wantSeriesString != "" {
-				assert.NoError(t, testutil.CollectAndCompare(collector, wantedMemoryState, test.seriesToCheck...))
+				assert.NoError(t, testutil.CollectAndCompare(collector, wanted, test.seriesToCheck...))
 			}
 		})
 	}
@@ -323,9 +325,48 @@ redfish_gpu_sram_ecc_error_threshold_exceeded{gpu_id="GPU_3",system_id="HGX_Base
 			collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
 			require.NoError(t, err)
 			assert.Equal(t, test.wantSeriesCount, testutil.CollectAndCount(collector, test.seriesToCheck...))
-			wantedMemoryState := strings.NewReader(test.wantSeriesString)
+			wanted := strings.NewReader(test.wantSeriesString)
 			if test.wantSeriesString != "" {
-				assert.NoError(t, testutil.CollectAndCompare(collector, wantedMemoryState, test.seriesToCheck...))
+				assert.NoError(t, testutil.CollectAndCompare(collector, wanted, test.seriesToCheck...))
+			}
+		})
+	}
+}
+
+func TestGPUCollector_emitGPUNVLinkTelemetry(t *testing.T) {
+	tT := map[string]struct {
+		testdataPath         string
+		seriesToCheck        []string
+		testLogLevel         slog.Level
+		wantSeriesCount      int
+		wantSeriesGoldenPath string // NVLink telemetry is a lot, so use golden files instead
+	}{
+		"happy path": {
+			testdataPath: "testdata/gb300_happypath",
+			seriesToCheck: []string{"redfish_gpu_nvlink_state",
+				"redfish_gpu_nvlink_health",
+				"redfish_gpu_nvlink_runtime_error",
+				"redfish_gpu_nvlink_training_error",
+				"redfish_gpu_nvlink_link_error_recovery_count",
+				"redfish_gpu_nvlink_link_downed_count",
+				"redfish_gpu_nvlink_symbol_errors",
+				"redfish_gpu_nvlink_bit_error_rate",
+			},
+			testLogLevel:         slog.LevelDebug,
+			wantSeriesCount:      576,
+			wantSeriesGoldenPath: "golden/gb300_nvlink_happy.golden",
+		},
+	}
+	for tName, test := range tT {
+		t.Run(tName, func(t *testing.T) {
+			_, client := setupTestServerClient(t, test.testdataPath)
+			logger := NewTestLogger(t, test.testLogLevel)
+			collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
+			require.NoError(t, err)
+			assert.Equal(t, test.wantSeriesCount, testutil.CollectAndCount(collector, test.seriesToCheck...))
+			if test.wantSeriesGoldenPath != "" {
+				wanted := golden.Get(t, test.wantSeriesGoldenPath)
+				assert.NoError(t, testutil.CollectAndCompare(collector, bytes.NewReader(wanted), test.seriesToCheck...))
 			}
 		})
 	}
