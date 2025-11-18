@@ -172,9 +172,9 @@ func (g *GPUCollector) collect(ctx context.Context, ch chan<- prometheus.Metric)
 		gpuMems, err := gpu.Memory()
 		if err != nil {
 			g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("failed obtaining gpu memory, skipping")
-			continue
+		} else {
+			g.emitGPUMemoryMetrics(gpuMems, ch, gpu, []string{gpu.SystemID, gpu.ID})
 		}
-		g.emitGPUMemoryMetrics(gpuMems, ch, gpu, []string{gpu.SystemID, gpu.ID})
 
 		// collectGPUProcessor
 		// TODO(mfuller): Should drop the last label here, processor ID and Name are repetitive
