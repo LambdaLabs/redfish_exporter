@@ -345,7 +345,7 @@
 },
 "ProcessorType": "GPU",
 "Replaceable": false,
-"SerialNumber": "123456",
+"SerialNumber": "234567",
 "SpeedLimitMHz": 2070,
 "SpeedLocked": false,
 "Status": {
@@ -363,6 +363,6 @@
 "PCIeType": "Gen6"
 }
 },
-"UUID": "gpu1-uuid",
+"UUID": "gpu-1-uuid",
 "Version": "31C2-893-A1"
 }

@@ -1,7 +1,10 @@
 package collector
 
 import (
+	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -146,16 +149,22 @@ func TestGPUCollector_gatherGPUs(t *testing.T) {
 }
 
 func TestGPUCollector_emitGPUMemoryMetrics(t *testing.T) {
+	localMetricsMap := createGPUMetricMap()
+	unprefixedMetricNames := slices.Sorted(maps.Keys(localMetricsMap))
+	var metricNames []string
+	for _, name := range unprefixedMetricNames {
+		metricNames = append(metricNames, fmt.Sprintf("redfish_%s", name))
+	}
 	tT := map[string]struct {
 		testdataPath     string
-		seriesToCheck    string
+		seriesToCheck    []string
 		testLogLevel     slog.Level
 		wantSeriesCount  int
 		wantSeriesString string
 	}{
 		"redfish_gpu_memory_state": {
 			testdataPath:    "testdata/gb300_happypath",
-			seriesToCheck:   "redfish_gpu_memory_state",
+			seriesToCheck:   []string{"redfish_gpu_memory_state"},
 			testLogLevel:    slog.LevelInfo,
 			wantSeriesCount: 4,
 			wantSeriesString: `
@@ -169,7 +178,7 @@ redfish_gpu_memory_state{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_
 		},
 		"redfish_gpu_memory_uncorrectable_row_remapping_count": {
 			testdataPath:    "testdata/gb300_happypath",
-			seriesToCheck:   "redfish_gpu_memory_uncorrectable_row_remapping_count",
+			seriesToCheck:   []string{"redfish_gpu_memory_uncorrectable_row_remapping_count"},
 			testLogLevel:    slog.LevelDebug,
 			wantSeriesCount: 4,
 			wantSeriesString: `
@@ -183,7 +192,7 @@ redfish_gpu_memory_uncorrectable_row_remapping_count{gpu_id="GPU_3",memory_id="G
 		},
 		"redfish_gpu_memory_row_remapping_pending": {
 			testdataPath:    "testdata/gb300_happypath",
-			seriesToCheck:   "redfish_gpu_memory_row_remapping_pending",
+			seriesToCheck:   []string{"redfish_gpu_memory_row_remapping_pending"},
 			testLogLevel:    slog.LevelDebug,
 			wantSeriesCount: 4,
 			wantSeriesString: `
@@ -195,6 +204,20 @@ redfish_gpu_memory_row_remapping_pending{gpu_id="GPU_2",memory_id="GPU_2_DRAM_0"
 redfish_gpu_memory_row_remapping_pending{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_Baseboard_0"} 0
 `,
 		},
+		"redfish_gpu_info": {
+			testdataPath:    "testdata/gb300_happypath",
+			seriesToCheck:   []string{"redfish_gpu_info"},
+			testLogLevel:    slog.LevelDebug,
+			wantSeriesCount: 4,
+			wantSeriesString: `
+# HELP redfish_gpu_info GPU information with serial number and UUID
+# TYPE redfish_gpu_info gauge
+redfish_gpu_info{gpu_id="GPU_0",serial_number="123456",system_id="HGX_Baseboard_0",uuid="gpu-0-uuid"} 1
+redfish_gpu_info{gpu_id="GPU_1",serial_number="234567",system_id="HGX_Baseboard_0",uuid="gpu-1-uuid"} 1
+redfish_gpu_info{gpu_id="GPU_2",serial_number="345678",system_id="HGX_Baseboard_0",uuid="gpu-2-uuid"} 1
+redfish_gpu_info{gpu_id="GPU_3",serial_number="456789",system_id="HGX_Baseboard_0",uuid="gpu-3-uuid"} 1
+`,
+		},
 	}
 	for tName, test := range tT {
 		t.Run(tName, func(t *testing.T) {
@@ -203,9 +226,11 @@ redfish_gpu_memory_row_remapping_pending{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0"
 			collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
 			require.NoError(t, err)
 
-			assert.Equal(t, test.wantSeriesCount, testutil.CollectAndCount(collector, test.seriesToCheck))
+			assert.Equal(t, test.wantSeriesCount, testutil.CollectAndCount(collector, test.seriesToCheck...))
 			wantedMemoryState := strings.NewReader(test.wantSeriesString)
-			assert.NoError(t, testutil.CollectAndCompare(collector, wantedMemoryState, test.seriesToCheck))
+			if test.wantSeriesString != "" {
+				assert.NoError(t, testutil.CollectAndCompare(collector, wantedMemoryState, test.seriesToCheck...))
+			}
 		})
 	}
 }
