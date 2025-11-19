@@ -276,23 +276,6 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 				}
 			}
 
-			// process log services
-			logServices, err := chassis.LogServices()
-			if err != nil {
-				chassisLogger.Error("error getting log services from chassis", slog.String("operation", "chassis.LogServices()"), slog.Any("error", err))
-			} else if logServices == nil {
-				chassisLogger.Info("no log services found", slog.String("operation", "chassis.LogServices()"))
-			} else {
-				wg6 := &sync.WaitGroup{}
-				wg6.Add(len(logServices))
-
-				for _, logService := range logServices {
-					if err = parseLogService(ch, chassisMetrics, ChassisSubsystem, chassisID, logService, wg6); err != nil {
-						chassisLogger.Error("error getting log entries from log service", slog.String("operation", "chassis.LogServices()"), slog.Any("error", err))
-					}
-				}
-			}
-
 			chassisLogger.Info("collector scrape completed")
 		}
 	}

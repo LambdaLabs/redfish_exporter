@@ -2,10 +2,8 @@ package collector
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stmcginnis/gofish/redfish"
 )
 
 const (
@@ -31,25 +29,4 @@ func addToMetricMap(metricMap map[string]Metric, subsystem, name, help string, v
 			nil,
 		),
 	}
-}
-
-func parseLogService(ch chan<- prometheus.Metric, metrics map[string]Metric, subsystem, collectorID string, logService *redfish.LogService, wg *sync.WaitGroup) (err error) {
-	defer wg.Done()
-	logServiceName := logService.Name
-	logServiceID := logService.ID
-	logServiceEnabled := fmt.Sprint(logService.ServiceEnabled)
-	logServiceOverWritePolicy := string(logService.OverWritePolicy)
-	logServiceState := logService.Status.State
-	logServiceHealthState := logService.Status.Health
-
-	logServiceLabelValues := []string{collectorID, logServiceName, logServiceID, logServiceEnabled, logServiceOverWritePolicy}
-
-	if logServiceStateValue, ok := parseCommonStatusState(logServiceState); ok {
-		ch <- prometheus.MustNewConstMetric(metrics[fmt.Sprintf("%s_%s", subsystem, "log_service_state")].desc, prometheus.GaugeValue, logServiceStateValue, logServiceLabelValues...)
-	}
-	if logServiceHealthStateValue, ok := parseCommonStatusHealth(logServiceHealthState); ok {
-		ch <- prometheus.MustNewConstMetric(metrics[fmt.Sprintf("%s_%s", subsystem, "log_service_health_state")].desc, prometheus.GaugeValue, logServiceHealthStateValue, logServiceLabelValues...)
-	}
-
-	return
 }

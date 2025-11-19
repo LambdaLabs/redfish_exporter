@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 // TestDriveMetrics tests drive metric generation with controller dimension
 func TestDriveMetrics(t *testing.T) {
 	// Define metric value mappings
@@ -40,17 +39,17 @@ func TestDriveMetrics(t *testing.T) {
 	}
 
 	tests := []struct {
-		name         string
-		drives       []driveScenario
-		wantMetrics  int
-		wantValues   map[string]driveMetrics // driveID -> metrics
+		name        string
+		drives      []driveScenario
+		wantMetrics int
+		wantValues  map[string]driveMetrics // driveID -> metrics
 	}{
 		{
 			name: "single drive",
 			drives: []driveScenario{
 				{driveID: "Disk.Bay.0", driveName: "Drive 0", controllerID: "RAID.Slot.1", capacity: 1000000000000, state: "Enabled", health: "OK"},
 			},
-			wantMetrics:  3,
+			wantMetrics: 3,
 			wantValues: map[string]driveMetrics{
 				"Disk.Bay.0:RAID.Slot.1": {capacity: 1000000000000, state: stateEnabled, health: healthOK},
 			},
@@ -61,7 +60,7 @@ func TestDriveMetrics(t *testing.T) {
 				{driveID: "Disk.Bay.0", driveName: "Drive 0", controllerID: "RAID.Slot.1", capacity: 1000000000000, state: "Enabled", health: "OK"},
 				{driveID: "Disk.Bay.0", driveName: "Drive 0", controllerID: "RAID.Slot.2", capacity: 1000000000000, state: "Enabled", health: "OK"},
 			},
-			wantMetrics:  6, // 3 metrics × 2 controllers
+			wantMetrics: 6, // 3 metrics × 2 controllers
 			wantValues: map[string]driveMetrics{
 				"Disk.Bay.0:RAID.Slot.1": {capacity: 1000000000000, state: stateEnabled, health: healthOK},
 				"Disk.Bay.0:RAID.Slot.2": {capacity: 1000000000000, state: stateEnabled, health: healthOK},
@@ -73,7 +72,7 @@ func TestDriveMetrics(t *testing.T) {
 				{driveID: "Disk.Bay.1", driveName: "Drive 1", controllerID: "RAID.Slot.1", capacity: 2000000000000, state: "Enabled", health: "OK"},
 				{driveID: "Disk.Bay.1", driveName: "Drive 1", controllerID: "RAID.Slot.2", capacity: 2000000000000, state: "Enabled", health: "Warning"},
 			},
-			wantMetrics:  6, // 3 metrics × 2 controllers
+			wantMetrics: 6, // 3 metrics × 2 controllers
 			wantValues: map[string]driveMetrics{
 				"Disk.Bay.1:RAID.Slot.1": {capacity: 2000000000000, state: stateEnabled, health: healthOK},
 				"Disk.Bay.1:RAID.Slot.2": {capacity: 2000000000000, state: stateEnabled, health: healthWarning},
@@ -86,7 +85,7 @@ func TestDriveMetrics(t *testing.T) {
 				{driveID: "Disk.Bay.2", driveName: "Drive 2", controllerID: "RAID.Slot.2", capacity: 3000000000000, state: "Enabled", health: "Critical"},
 				{driveID: "Disk.Bay.2", driveName: "Drive 2", controllerID: "RAID.Slot.3", capacity: 3000000000000, state: "Enabled", health: "OK"},
 			},
-			wantMetrics:  9, // 3 metrics × 3 controllers
+			wantMetrics: 9, // 3 metrics × 3 controllers
 			wantValues: map[string]driveMetrics{
 				"Disk.Bay.2:RAID.Slot.1": {capacity: 3000000000000, state: stateEnabled, health: healthWarning},
 				"Disk.Bay.2:RAID.Slot.2": {capacity: 3000000000000, state: stateEnabled, health: healthCritical},
@@ -99,7 +98,7 @@ func TestDriveMetrics(t *testing.T) {
 				{driveID: "Disk.Bay.3", driveName: "Drive 3", controllerID: "RAID.Slot.1", capacity: 4000000000000, state: "Enabled", health: "OK"},
 				{driveID: "Disk.Bay.3", driveName: "Drive 3", controllerID: "RAID.Slot.2", capacity: 4000000000000, state: "Disabled", health: "OK"},
 			},
-			wantMetrics:  6, // 3 metrics × 2 controllers
+			wantMetrics: 6, // 3 metrics × 2 controllers
 			wantValues: map[string]driveMetrics{
 				"Disk.Bay.3:RAID.Slot.1": {capacity: 4000000000000, state: stateEnabled, health: healthOK},
 				"Disk.Bay.3:RAID.Slot.2": {capacity: 4000000000000, state: stateDisabled, health: healthOK},
@@ -112,7 +111,7 @@ func TestDriveMetrics(t *testing.T) {
 				{driveID: "Disk.Bay.1", driveName: "Drive 1", controllerID: "RAID.Slot.1", capacity: 2000000000000, state: "Enabled", health: "Warning"},
 				{driveID: "Disk.Bay.2", driveName: "Drive 2", controllerID: "RAID.Slot.2", capacity: 500000000000, state: "Disabled", health: "Critical"},
 			},
-			wantMetrics:  9,
+			wantMetrics: 9,
 			wantValues: map[string]driveMetrics{
 				"Disk.Bay.0:RAID.Slot.1": {capacity: 1000000000000, state: stateEnabled, health: healthOK},
 				"Disk.Bay.1:RAID.Slot.1": {capacity: 2000000000000, state: stateEnabled, health: healthWarning},
@@ -142,7 +141,7 @@ func TestDriveMetrics(t *testing.T) {
 
 				// Create drive metrics with controller ID
 				wg.Add(1)
-				go parseDrive(ch, "test-host", drive, d.controllerID, wg)
+				go parseDrive(ch, drive, d.controllerID, wg)
 			}
 			wg.Wait()
 
@@ -228,11 +227,11 @@ func TestProcessorWithoutMetrics(t *testing.T) {
 	ch := make(chan prometheus.Metric, 100)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	
+
 	// Create a test logger
 	logger := slog.Default()
 
-	go parseProcessor(ch, "test-host", mockProcessor, wg, logger)
+	go parseProcessor(ch, mockProcessor, wg, logger)
 	wg.Wait()
 
 	// Collect metrics from channel
@@ -277,7 +276,7 @@ func TestProcessorWithoutMetrics(t *testing.T) {
 
 	// Verify no PCIe error metrics were collected when ProcessorMetrics is unavailable
 	assert.Equal(t, 0, pcieErrorMetricCount, "Should have no PCIe error metrics when ProcessorMetrics is unavailable")
-	
+
 	// Verify no cache metrics were collected when ProcessorMetrics is unavailable
 	assert.Equal(t, 0, cacheMetricCount, "Should have no cache metrics when ProcessorMetrics is unavailable")
 }

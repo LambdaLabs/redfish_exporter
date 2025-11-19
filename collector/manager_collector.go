@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"sync"
 
 	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
@@ -119,22 +118,6 @@ func (m *ManagerCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 				ch <- prometheus.MustNewConstMetric(m.metrics["manager_power_state"].desc, prometheus.GaugeValue, managerPowerStateValue, ManagerLabelValues...)
 			}
 
-			// process log services
-			logServices, err := manager.LogServices()
-			if err != nil {
-				managerLogger.Error("error getting log services from manager", slog.Any("error", err), slog.String("operation", "manager.LogServices()"))
-			} else if logServices == nil {
-				managerLogger.Info("no log services found", slog.String("operation", "manager.LogServices()"))
-			} else {
-				wg := &sync.WaitGroup{}
-				wg.Add(len(logServices))
-
-				for _, logService := range logServices {
-					if err = parseLogService(ch, managerMetrics, ManagerSubmanager, ManagerID, logService, wg); err != nil {
-						managerLogger.Error("error getting log entries from log service", slog.String("operation", "manager.LogServices()"))
-					}
-				}
-			}
 			managerLogger.Info("collector scrape completed")
 		}
 		m.collectorScrapeStatus.WithLabelValues("manager").Set(float64(1))
