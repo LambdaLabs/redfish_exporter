@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/http"
 	"sync"
 	"time"
 
@@ -108,19 +110,35 @@ func (r *RedfishCollector) Collect(ch chan<- prometheus.Metric) {
 
 func newRedfishClient(ctx context.Context, host string, username string, password string) (*gofish.APIClient, error) {
 	url := fmt.Sprintf("https://%s", host)
+	// TODO(mfuller): Allow customization of these, if it works how we'd want
+	dialer := &net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+
+	transport := &http.Transport{
+		DialContext:         dialer.DialContext,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}
+
+	client := &http.Client{
+		Transport: transport,
+	}
 
 	config := gofish.ClientConfig{
-		Endpoint:         url,
-		Username:         username,
-		Password:         password,
-		Insecure:         true,
-		ReuseConnections: true, // Enable HTTP keepalive for connection reuse
+		HTTPClient:            client,
+		MaxConcurrentRequests: 5, //TODO(mfuller): ditto here re: configuration
+		Endpoint:              url,
+		Username:              username,
+		Password:              password,
+		Insecure:              true,
+		ReuseConnections:      true, // Enable HTTP keepalive for connection reuse
 	}
-	redfishClient, err := gofish.Connect(config)
+	redfishClient, err := gofish.ConnectContext(ctx, config)
 	if err != nil {
 		return nil, err
 	}
-	return redfishClient.WithContext(ctx), nil
+	return redfishClient, nil
 }
 
 func parseCommonStatusHealth(status gofishcommon.Health) (float64, bool) {
