@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	gofish "github.com/stmcginnis/gofish"
 	gofishcommon "github.com/stmcginnis/gofish/common"
@@ -42,8 +43,8 @@ type RedfishCollector struct {
 }
 
 // NewRedfishCollector returns a *RedfishCollector or an error.
-func NewRedfishCollector(ctx context.Context, logger *slog.Logger, host string, username, password string) (*RedfishCollector, error) {
-	redfishClient, err := newRedfishClient(ctx, host, username, password)
+func NewRedfishCollector(ctx context.Context, logger *slog.Logger, host string, username string, password string, rfConfig config.RedfishClientConfig) (*RedfishCollector, error) {
+	redfishClient, err := newRedfishClient(ctx, host, username, password, rfConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -108,17 +109,16 @@ func (r *RedfishCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(totalScrapeDurationDesc, prometheus.GaugeValue, time.Since(scrapeTime).Seconds())
 }
 
-func newRedfishClient(ctx context.Context, host string, username string, password string) (*gofish.APIClient, error) {
+func newRedfishClient(ctx context.Context, host string, username string, password string, rfConfig config.RedfishClientConfig) (*gofish.APIClient, error) {
 	url := fmt.Sprintf("https://%s", host)
-	// TODO(mfuller): Allow customization of these, if it works how we'd want
 	dialer := &net.Dialer{
-		Timeout:   10 * time.Second,
+		Timeout:   rfConfig.DialTimeout,
 		KeepAlive: 30 * time.Second,
 	}
 
 	transport := &http.Transport{
 		DialContext:         dialer.DialContext,
-		TLSHandshakeTimeout: 10 * time.Second,
+		TLSHandshakeTimeout: rfConfig.DialTimeout,
 	}
 
 	client := &http.Client{
@@ -127,7 +127,7 @@ func newRedfishClient(ctx context.Context, host string, username string, passwor
 
 	config := gofish.ClientConfig{
 		HTTPClient:            client,
-		MaxConcurrentRequests: 5, //TODO(mfuller): ditto here re: configuration
+		MaxConcurrentRequests: rfConfig.MaxConcurrentRequests,
 		Endpoint:              url,
 		Username:              username,
 		Password:              password,

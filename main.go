@@ -193,10 +193,13 @@ func metricsHandler() http.HandlerFunc {
 			http.Error(w, "scrape request not found in context", 500)
 			return
 		}
+
 		scrapeLogger := ctxLogger.With("scrape_host", sr.Target)
+		rfClientConfig := safeConfig.RedfishClientConfig()
 		aggregateCollector, err := collector.NewRedfishCollector(r.Context(), scrapeLogger, sr.Target,
 			sr.HostConfig.Username,
-			sr.HostConfig.Password)
+			sr.HostConfig.Password,
+			rfClientConfig)
 
 		if err != nil {
 			scrapeLogger.With("error", err).Error("unable to create redfish aggregate collector, bailing")
