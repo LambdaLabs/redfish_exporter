@@ -193,17 +193,18 @@ func metricsHandler() http.HandlerFunc {
 			http.Error(w, "scrape request not found in context", 500)
 			return
 		}
-		aggregateCollector, err := collector.NewRedfishCollector(r.Context(), ctxLogger, sr.Target,
+		scrapeLogger := ctxLogger.With("scrape_host", sr.Target)
+		aggregateCollector, err := collector.NewRedfishCollector(r.Context(), scrapeLogger, sr.Target,
 			sr.HostConfig.Username,
 			sr.HostConfig.Password)
 
 		if err != nil {
-			ctxLogger.With("error", err).Error("unable to create redfish aggregate collector, bailing")
+			scrapeLogger.With("error", err).Error("unable to create redfish aggregate collector, bailing")
 			http.Error(w, "unable to construct aggregate collector", 500)
 			return
 		}
 
-		collectors := buildCollectorsFor(sr.Modules, safeConfig.GetModules(), aggregateCollector.Client(), ctxLogger)
+		collectors := buildCollectorsFor(sr.Modules, safeConfig.GetModules(), aggregateCollector.Client(), scrapeLogger)
 		aggregateCollector.WithCollectors(collectors)
 		registry.MustRegister(aggregateCollector)
 		gatherers := prometheus.Gatherers{
