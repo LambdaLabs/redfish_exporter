@@ -25,6 +25,62 @@ func TestConfigFromFile(t *testing.T) {
 	assert.Equal(t, "gpu_collector", config.Modules["foo"].Prober)
 }
 
+func TestRedfishClientConfig(t *testing.T) {
+	tT := map[string]struct {
+		inputYAML     string
+		wantErrString string
+		wantConfig    *Config
+	}{
+		"happy path, no user config": {
+			inputYAML: `
+loglevel: info
+`,
+			wantErrString: "",
+			wantConfig: &Config{
+				Loglevel:      "info",
+				RedfishClient: DefaultRedfishConfig,
+			},
+		},
+		"happy path, just one value changed": {
+			inputYAML: `
+redfish_client:
+  max_concurrent_requests: 100
+`,
+			wantErrString: "",
+			wantConfig: &Config{
+				RedfishClient: RedfishClientConfig{
+					MaxConcurrentRequests: 100,
+					DialTimeout:           10 * time.Second,
+				},
+			},
+		},
+		"happy path, all values changed": {
+			inputYAML: `
+redfish_client:
+  max_concurrent_requests: 100
+  dial_timeout: 30s
+`,
+			wantErrString: "",
+			wantConfig: &Config{
+				RedfishClient: RedfishClientConfig{
+					MaxConcurrentRequests: 100,
+					DialTimeout:           30 * time.Second,
+				},
+			},
+		},
+	}
+	for tName, test := range tT {
+		t.Run(tName, func(t *testing.T) {
+			byteReader := bytes.NewReader([]byte(test.inputYAML))
+			gotConfig, err := readConfigFrom(byteReader)
+			if test.wantErrString != "" {
+				gta.ErrorContains(t, err, test.wantErrString)
+			}
+			gta.Assert(t, cmp.DeepEqual(test.wantConfig, gotConfig))
+		})
+	}
+}
+
 func TestModulesConfig(t *testing.T) {
 	tT := map[string]struct {
 		inputYAML     string
@@ -40,6 +96,7 @@ modules:
 `,
 			wantErrString: "",
 			wantConfig: &Config{
+				RedfishClient: DefaultRedfishConfig,
 				Modules: map[string]Module{
 					"foo": {
 						Prober:           "gpu_collector",
@@ -68,7 +125,8 @@ modules:
 `,
 			wantErrString: "",
 			wantConfig: &Config{
-				Loglevel: "info",
+				Loglevel:      "info",
+				RedfishClient: DefaultRedfishConfig,
 				Modules: map[string]Module{
 					"foo": {
 						Prober:           "gpu_collector",
@@ -108,6 +166,7 @@ modules:
 `,
 			wantErrString: "module foo is not valid: module requires a prober to be configured",
 			wantConfig: &Config{
+				RedfishClient: DefaultRedfishConfig,
 				Modules: map[string]Module{
 					"foo": {
 						JSONCollector: JSONCollectorConfig{
@@ -140,6 +199,7 @@ func TestModulesConfig_JSONCollector(t *testing.T) {
 			inputFile:     "testdata/config.j2m.yaml",
 			wantErrString: "",
 			wantConfig: &Config{
+				RedfishClient: DefaultRedfishConfig,
 				Modules: map[string]Module{
 					"rf_version": {
 						Prober: "json_collector",
@@ -186,6 +246,7 @@ map(.help = "Value yielded from the Redfish API /Chassis/PowerShelf_0, expanded 
 			inputFile:     "testdata/json_collector_with_timeout.yaml",
 			wantErrString: "",
 			wantConfig: &Config{
+				RedfishClient: DefaultRedfishConfig,
 				Modules: map[string]Module{
 					"31s_timeout_collector": {
 						Prober: "json_collector",
