@@ -351,8 +351,7 @@ func BenchmarkGPUCollector_NoDelay(b *testing.B) {
 	registry.MustRegister(collector)
 	b.ResetTimer()
 	for b.Loop() {
-		registry.Gather()
-
+		registry.Gather() //nolint:errcheck
 	}
 }
 
@@ -369,8 +368,7 @@ func BenchmarkGPUCollector_MinDelay(b *testing.B) {
 	registry.MustRegister(collector)
 	b.ResetTimer()
 	for b.Loop() {
-		registry.Gather()
-
+		registry.Gather() //nolint:errcheck
 	}
 }
 
@@ -387,8 +385,7 @@ func BenchmarkGPUCollector_AvgDelay(b *testing.B) {
 	registry.MustRegister(collector)
 	b.ResetTimer()
 	for b.Loop() {
-		registry.Gather()
-
+		registry.Gather() //nolint:errcheck
 	}
 }
 
@@ -405,8 +402,7 @@ func BenchmarkGPUCollector_MaxDelay(b *testing.B) {
 	registry.MustRegister(collector)
 	b.ResetTimer()
 	for b.Loop() {
-		registry.Gather()
-
+		registry.Gather() //nolint:errcheck
 	}
 }
 
@@ -423,7 +419,6 @@ func BenchmarkGPUCollector_ExtremeDelay(b *testing.B) {
 	registry.MustRegister(collector)
 	b.ResetTimer()
 	for b.Loop() {
-		registry.Gather()
-
+		registry.Gather() //nolint:errcheck
 	}
 }
