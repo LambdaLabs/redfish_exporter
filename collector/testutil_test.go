@@ -155,7 +155,7 @@ func contains(s, substr string) bool {
 }
 
 // connectToTestServer creates a gofish client connected to the test server
-func connectToTestServer(t *testing.T, server *httptest.Server) *gofish.APIClient {
+func connectToTestServer(t testing.TB, server *httptest.Server) *gofish.APIClient {
 	t.Helper()
 
 	config := gofish.ClientConfig{
@@ -175,7 +175,7 @@ func connectToTestServer(t *testing.T, server *httptest.Server) *gofish.APIClien
 // It also sets up and connects a Gofish client to the httptest server.
 // Both the server and client are returned for consumption in tests.
 // A cleanup function is registered to close the server and logout the client.
-func setupTestServerClient(t *testing.T, basepath string) (*TestServer, *gofish.APIClient) {
+func setupTestServerClient(t testing.TB, basepath string) (*TestServer, *gofish.APIClient) {
 	t.Helper()
 	osRoot, err := os.OpenRoot(basepath)
 	require.NoError(t, err)
@@ -196,7 +196,7 @@ type TestServer struct {
 }
 
 // newTestServer creates a test server that serves files from the given os.Root and with the given test server middlewares.
-func newTestServer(t *testing.T, root *os.Root, middleware ...testMiddleware) *TestServer {
+func newTestServer(t testing.TB, root *os.Root, middleware ...testMiddleware) *TestServer {
 	t.Helper()
 	// Create the file server handler
 	handler := dirIndexFileServer(root.FS())
@@ -293,7 +293,7 @@ func jsonContentTypeMiddleware(next http.Handler) http.Handler {
 }
 
 type testWriter struct {
-	t *testing.T
+	t testing.TB
 }
 
 func (w testWriter) Write(p []byte) (n int, err error) {
@@ -301,7 +301,7 @@ func (w testWriter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func NewTestLogger(t *testing.T, loglevel slog.Level) *slog.Logger {
+func NewTestLogger(t testing.TB, loglevel slog.Level) *slog.Logger {
 	t.Helper()
 	opts := &slog.HandlerOptions{
 		Level: loglevel,

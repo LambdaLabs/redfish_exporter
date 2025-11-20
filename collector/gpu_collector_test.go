@@ -3,12 +3,15 @@ package collector
 import (
 	"bytes"
 	"log/slog"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stmcginnis/gofish/common"
 	"github.com/stmcginnis/gofish/redfish"
@@ -332,5 +335,95 @@ func TestGPUCollector_emitGPUNVLinkTelemetry(t *testing.T) {
 				assert.NoError(t, testutil.CollectAndCompare(collector, bytes.NewReader(wanted), test.seriesToCheck...))
 			}
 		})
+	}
+}
+
+// BenchmarkGPUCollector_NoDelay benchmarks the GPU collector in the most ideal condition (no artificial delay added)
+func BenchmarkGPUCollector_NoDelay(b *testing.B) {
+	root, err := os.OpenRoot("testdata/gb300_happypath")
+	require.NoError(b, err)
+	srv := newTestServer(b, root, jsonContentTypeMiddleware)
+	client := connectToTestServer(b, srv.Server)
+	logger := slog.New(slog.DiscardHandler)
+	collector, err := NewGPUCollector("nodelay-gpu-collector", client, logger, config.DefaultGPUCollector)
+	require.NoError(b, err)
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(collector)
+	b.ResetTimer()
+	for b.Loop() {
+		registry.Gather()
+
+	}
+}
+
+// BenchmarkGPUCollector_MinDelay benchmarks the GPU collector with a minimum artificial delay (0.195ms)
+func BenchmarkGPUCollector_MinDelay(b *testing.B) {
+	root, err := os.OpenRoot("testdata/gb300_happypath")
+	require.NoError(b, err)
+	srv := newTestServer(b, root, jsonContentTypeMiddleware, delayMiddleware(195*time.Microsecond))
+	client := connectToTestServer(b, srv.Server)
+	logger := slog.New(slog.DiscardHandler)
+	collector, err := NewGPUCollector("nodelay-gpu-collector", client, logger, config.DefaultGPUCollector)
+	require.NoError(b, err)
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(collector)
+	b.ResetTimer()
+	for b.Loop() {
+		registry.Gather()
+
+	}
+}
+
+// BenchmarkGPUCollector_AvgDelay benchmarks the GPU collector with an average artificial delay (0.391ms)
+func BenchmarkGPUCollector_AvgDelay(b *testing.B) {
+	root, err := os.OpenRoot("testdata/gb300_happypath")
+	require.NoError(b, err)
+	srv := newTestServer(b, root, jsonContentTypeMiddleware, delayMiddleware(391*time.Microsecond))
+	client := connectToTestServer(b, srv.Server)
+	logger := slog.New(slog.DiscardHandler)
+	collector, err := NewGPUCollector("nodelay-gpu-collector", client, logger, config.DefaultGPUCollector)
+	require.NoError(b, err)
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(collector)
+	b.ResetTimer()
+	for b.Loop() {
+		registry.Gather()
+
+	}
+}
+
+// BenchmarkGPUCollector_MaxDelay benchmarks the GPU collector with an excessive artificial delay (1.852ms)
+func BenchmarkGPUCollector_MaxDelay(b *testing.B) {
+	root, err := os.OpenRoot("testdata/gb300_happypath")
+	require.NoError(b, err)
+	srv := newTestServer(b, root, jsonContentTypeMiddleware, delayMiddleware(1852*time.Microsecond))
+	client := connectToTestServer(b, srv.Server)
+	logger := slog.New(slog.DiscardHandler)
+	collector, err := NewGPUCollector("nodelay-gpu-collector", client, logger, config.DefaultGPUCollector)
+	require.NoError(b, err)
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(collector)
+	b.ResetTimer()
+	for b.Loop() {
+		registry.Gather()
+
+	}
+}
+
+// BenchmarkGPUCollector_ExtremeDelay benchmarks the GPU collector with an extreme artificial delay (5.556ms)
+func BenchmarkGPUCollector_ExtremeDelay(b *testing.B) {
+	root, err := os.OpenRoot("testdata/gb300_happypath")
+	require.NoError(b, err)
+	srv := newTestServer(b, root, jsonContentTypeMiddleware, delayMiddleware(5560*time.Microsecond))
+	client := connectToTestServer(b, srv.Server)
+	logger := slog.New(slog.DiscardHandler)
+	collector, err := NewGPUCollector("nodelay-gpu-collector", client, logger, config.DefaultGPUCollector)
+	require.NoError(b, err)
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(collector)
+	b.ResetTimer()
+	for b.Loop() {
+		registry.Gather()
+
 	}
 }
