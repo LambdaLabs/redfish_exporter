@@ -209,6 +209,7 @@ func (g *GPUCollector) gatherGPUs(ctx context.Context) ([]SystemGPU, error) {
 			procs, err := sys.Processors()
 			if err != nil {
 				g.logger.With("error", err, "system", sys.ODataID).Debug("unable to obtain system processors")
+				continue
 			}
 			for _, gpu := range filterGPUs(procs) {
 				ret = append(ret, SystemGPU{

@@ -94,7 +94,7 @@ func registerMetaMetrics() {
 	prometheus.DefaultRegisterer.MustRegister(custom...)
 }
 
-type ScrapeRequest struct {
+type scrapeRequest struct {
 	Target     string
 	Modules    []string
 	HostConfig *config.HostConfig
@@ -160,7 +160,7 @@ func mustScrapeRequest(next http.Handler) http.Handler {
 				return
 			}
 		}
-		sr := &ScrapeRequest{
+		sr := &scrapeRequest{
 			Target:     target,
 			Modules:    modules,
 			HostConfig: hostConfig,
@@ -171,8 +171,8 @@ func mustScrapeRequest(next http.Handler) http.Handler {
 	})
 }
 
-func getScrapeRequest(r *http.Request) (*ScrapeRequest, bool) {
-	sr, ok := r.Context().Value(scrapeRequestCtxKey).(*ScrapeRequest)
+func getScrapeRequest(r *http.Request) (*scrapeRequest, bool) {
+	sr, ok := r.Context().Value(scrapeRequestCtxKey).(*scrapeRequest)
 	return sr, ok
 }
 
