@@ -1,14 +1,23 @@
 package collector
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
+	"path"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stmcginnis/gofish"
@@ -52,7 +61,7 @@ func (m *testRedfishServer) setupDefaultRoutes() {
 }
 
 // makeJSONHandler creates a handler that returns a JSON response
-func (m *testRedfishServer) makeJSONHandler(response interface{}) http.HandlerFunc {
+func (m *testRedfishServer) makeJSONHandler(response any) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		m.requests = append(m.requests, r.Method+" "+r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
@@ -64,7 +73,7 @@ func (m *testRedfishServer) makeJSONHandler(response interface{}) http.HandlerFu
 }
 
 // addRoute registers a new route with the given response
-func (m *testRedfishServer) addRoute(path string, response interface{}) {
+func (m *testRedfishServer) addRoute(path string, response any) {
 	m.mux.HandleFunc(path, m.makeJSONHandler(response))
 }
 
@@ -100,30 +109,13 @@ func (m *testRedfishServer) setupSystemWithProcessor(systemID, processorID strin
 	})
 }
 
-// connectToTestServer creates a gofish client connected to the test server
-func connectToTestServer(t *testing.T, server *testRedfishServer) *gofish.APIClient {
-	t.Helper()
-
-	config := gofish.ClientConfig{
-		Endpoint: server.URL,
-		Username: "",
-		Password: "",
-		Insecure: true,
-	}
-
-	client, err := gofish.Connect(config)
-	require.NoError(t, err, "Failed to connect to test server")
-
-	return client
-}
-
 // collectSystemMetrics runs the system collector and returns metrics as a map
 func collectSystemMetrics(t *testing.T, client *gofish.APIClient) map[string]float64 {
 	t.Helper()
 
 	// Create a test logger that discards output
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewSystemCollector(t.Name(), client, logger, nil)
+	collector, err := NewSystemCollector(t.Name(), client, logger, config.DefaultSystemCollector)
 	require.NoError(t, err)
 
 	ch := make(chan prometheus.Metric, 100)
@@ -160,4 +152,159 @@ func collectSystemMetrics(t *testing.T, client *gofish.APIClient) map[string]flo
 // contains is a helper function for string matching
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
+}
+
+// connectToTestServer creates a gofish client connected to the test server
+func connectToTestServer(t testing.TB, server *httptest.Server) *gofish.APIClient {
+	t.Helper()
+
+	config := gofish.ClientConfig{
+		Endpoint: server.URL,
+		Username: "",
+		Password: "",
+		Insecure: true,
+	}
+
+	client, err := gofish.Connect(config)
+	require.NoError(t, err, "Failed to connect to test server")
+
+	return client
+}
+
+// setupTestServerClient spawns a httptest server which serves contents from a given basepath.
+// It also sets up and connects a Gofish client to the httptest server.
+// Both the server and client are returned for consumption in tests.
+// A cleanup function is registered to close the server and logout the client.
+func setupTestServerClient(t testing.TB, basepath string) (*TestServer, *gofish.APIClient) {
+	t.Helper()
+	osRoot, err := os.OpenRoot(basepath)
+	require.NoError(t, err)
+
+	server := newTestServer(t, osRoot, jsonContentTypeMiddleware)
+
+	client := connectToTestServer(t, server.Server)
+	t.Cleanup(func() {
+		server.Close()
+		client.Logout()
+	})
+	return server, client
+}
+
+// TestServer wraps httptest.Server to serve files from an os.Root
+type TestServer struct {
+	*httptest.Server
+}
+
+// newTestServer creates a test server that serves files from the given os.Root and with the given test server middlewares.
+func newTestServer(t testing.TB, root *os.Root, middleware ...testMiddleware) *TestServer {
+	t.Helper()
+	// Create the file server handler
+	handler := dirIndexFileServer(root.FS())
+
+	// Apply middleware
+	for i := len(middleware) - 1; i >= 0; i-- {
+		handler = middleware[i](handler)
+	}
+
+	// Create and return the test server
+	return &TestServer{
+		Server: httptest.NewServer(handler),
+	}
+}
+
+// dirIndexFileServer is an HTTP handler that is similar to [http.FileServer], in that contents are read from a filesystem.
+// It allows for a filesystem tree representative of a Redfish system.
+// It differs from [http.FileServer] in that placing an 'index.json' file in a directory will serve that contents by default.
+// That is, a Redfish request path like /redfish/v1 will look for and respond with contents from redfish/v1/index.json.
+// This works well for Redfish APIs where paths are nested
+// e.g. redfish/v1/Systems/HGX_Baseboard_0/Processors may serve a collection
+// whereas redfish/v1/Systems/HGX_Baseboard_0/Processors/CPU_0 is a 'real' Redfish CPU
+// in both cases, an index.json represnts whatever the system should return under each path.
+func dirIndexFileServer(fsys fs.FS) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		md5URL := md5.Sum([]byte(r.URL.String()))
+		md5String := hex.EncodeToString(md5URL[:])
+		hashedFile, err := fsys.Open(fmt.Sprintf("hashedresponses/%s.json", md5String))
+		if err != nil {
+			// Probably no hashed response file for this request, so traverse the fs
+			raw := path.Clean(r.URL.EscapedPath())
+			decoded, err := url.PathUnescape(raw)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			p := strings.TrimPrefix(decoded, "/")
+
+			info, err := fs.Stat(fsys, p)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+
+			servePath := p
+			if info.IsDir() {
+				servePath = path.Join(p, "index.json")
+				if _, derr := fs.Stat(fsys, servePath); derr != nil {
+					http.NotFound(w, r)
+					return
+				}
+			}
+
+			b, err := fs.ReadFile(fsys, servePath)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(b)
+			return
+		}
+
+		// Otherwise, we have a hashed file to respond with
+		b, err := io.ReadAll(hashedFile)
+		if err != nil {
+			w.WriteHeader(500)
+			_, _ = w.Write([]byte(err.Error()))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(b)
+	})
+}
+
+type testMiddleware func(http.Handler) http.Handler
+
+// DelayMiddleware sleeps for some duration prior to response.
+func delayMiddleware(delay time.Duration) testMiddleware { //nolint:unused
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(delay)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// JSONContentTypeMiddleware ensures all responses have JSON content type.
+func jsonContentTypeMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		next.ServeHTTP(w, r)
+	})
+}
+
+type testWriter struct {
+	t testing.TB
+}
+
+func (w testWriter) Write(p []byte) (n int, err error) {
+	w.t.Log(strings.TrimSpace(string(p)))
+	return len(p), nil
+}
+
+func NewTestLogger(t testing.TB, loglevel slog.Level) *slog.Logger {
+	t.Helper()
+	opts := &slog.HandlerOptions{
+		Level: loglevel,
+	}
+	return slog.New(slog.NewJSONHandler(testWriter{t}, opts)).With("test_name", t.Name())
 }

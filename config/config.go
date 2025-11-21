@@ -63,6 +63,10 @@ var (
 			TelemetryCollector: DefaultTelemetryCollector,
 		},
 	}
+	DefaultRedfishConfig = RedfishClientConfig{
+		MaxConcurrentRequests: 1,
+		DialTimeout:           10 * time.Second,
+	}
 )
 
 // ChassisCollectorConfig is a prober configuration.
@@ -170,6 +174,28 @@ type Module struct {
 	TelemetryCollector TelemetryCollectorConfig `yaml:"telemetry_collector"`
 }
 
+// RedfishClient describes configuration passed to the gofish API client for Redfish
+type RedfishClientConfig struct {
+	// MaxConcurrentRequests sets the gofish client maximum permitted concurrent requests.
+	// If unset, gofish defaults to 1, which often leads to backpressure in redfish_exporter
+	// and failed scrape requests.
+	// To minimize surprise, if unset in the redfish_exporter config, defaults to 1
+	MaxConcurrentRequests int64 `yaml:"max_concurrent_requests"`
+	// DialTimeout sets the gofish client timeout when connecting to a host.
+	// If unset in the redfish_exporter config, defaults to 10s
+	DialTimeout time.Duration `yaml:"dial_timeout"`
+}
+
+func (r *RedfishClientConfig) UnmarshalYAML(unmarshal func(any) error) error {
+	type plain RedfishClientConfig
+	*r = DefaultRedfishConfig
+
+	if err := unmarshal((*plain)(r)); err != nil {
+		return err
+	}
+	return nil
+}
+
 // UnmarshalYAML implements the yaml.Unmarshaler interface
 func (m *Module) UnmarshalYAML(unmarshal func(any) error) error {
 	*m = DefaultModule
@@ -190,10 +216,11 @@ func (m *Module) Validate() error {
 
 // Config represents the redfish_exporter config file
 type Config struct {
-	Hosts    map[string]HostConfig `yaml:"hosts"`
-	Groups   map[string]HostConfig `yaml:"groups"`
-	Loglevel string                `yaml:"loglevel"`
-	Modules  map[string]Module     `yaml:"modules"`
+	Hosts         map[string]HostConfig `yaml:"hosts"`
+	Groups        map[string]HostConfig `yaml:"groups"`
+	Loglevel      string                `yaml:"loglevel"`
+	Modules       map[string]Module     `yaml:"modules"`
+	RedfishClient RedfishClientConfig   `yaml:"redfish_client"`
 }
 
 // UnmarshalYAML is a custom YAML unmarshaler.
@@ -202,6 +229,12 @@ func (c *Config) UnmarshalYAML(unmarshal func(any) error) error {
 	type plain Config
 	if err := unmarshal((*plain)(c)); err != nil {
 		return err
+	}
+	if c.RedfishClient.DialTimeout == 0 {
+		c.RedfishClient.DialTimeout = DefaultRedfishConfig.DialTimeout
+	}
+	if c.RedfishClient.MaxConcurrentRequests == 0 {
+		c.RedfishClient.MaxConcurrentRequests = DefaultRedfishConfig.MaxConcurrentRequests
 	}
 
 	return c.Validate()
@@ -307,4 +340,10 @@ func (sc *SafeConfig) AppLogLevel() string {
 		return logLevel
 	}
 	return "info"
+}
+
+func (sc *SafeConfig) RedfishClientConfig() RedfishClientConfig {
+	sc.Lock()
+	defer sc.Unlock()
+	return sc.Config.RedfishClient
 }

@@ -71,7 +71,7 @@ func TestProcessorMetricsIntegration(t *testing.T) {
 			server := newTestRedfishServer(t)
 			tt.setupMock(server)
 
-			client := connectToTestServer(t, server)
+			client := connectToTestServer(t, server.Server)
 
 			// Act
 			metrics := collectSystemMetrics(t, client)
@@ -131,7 +131,7 @@ func TestProcessorMetricsBackwardsCompatibility(t *testing.T) {
 			// Apply version-specific setup
 			tt.setupMock(server)
 
-			client := connectToTestServer(t, server)
+			client := connectToTestServer(t, server.Server)
 			metrics := collectSystemMetrics(t, client)
 
 			if tt.expectMetrics {

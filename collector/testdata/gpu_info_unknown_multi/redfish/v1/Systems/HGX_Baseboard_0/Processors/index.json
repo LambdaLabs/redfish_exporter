@@ -1,0 +1,17 @@
+{
+  "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors",
+  "@odata.type": "#ProcessorCollection.ProcessorCollection",
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/FPGA_0"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_1"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_2"
+    }
+  ],
+  "Members@odata.count": 9,
+  "Name": "Processor Collection"
+}

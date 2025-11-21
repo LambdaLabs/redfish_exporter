@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stmcginnis/gofish"
@@ -32,7 +33,7 @@ func TestGetLeakDetectors(t *testing.T) {
 				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_1_ColdPlate", "leak_detector_ok.json")
 				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_1_Manifold", "leak_detector_leak.json")
 
-				client := connectToTestServer(t, server)
+				client := connectToTestServer(t, server.Server)
 
 				return server, client
 			},
@@ -51,7 +52,7 @@ func TestGetLeakDetectors(t *testing.T) {
 				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_1_ColdPlate", "leak_detector_ok.json")
 				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_1_Manifold", "leak_detector_leak.json")
 
-				client := connectToTestServer(t, server)
+				client := connectToTestServer(t, server.Server)
 
 				return server, client
 			},
@@ -75,7 +76,7 @@ func TestGetLeakDetectors(t *testing.T) {
 			require.NotEmpty(t, chassis, "Expected at least one chassis")
 
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-			collector, err := NewChassisCollector(t.Name(), client, logger, nil)
+			collector, err := NewChassisCollector(t.Name(), client, logger, config.DefaultChassisCollector)
 			require.NoError(t, err)
 			thermalSubsystem, err := chassis[0].ThermalSubsystem()
 			require.NoError(t, err)
@@ -96,7 +97,7 @@ func TestParseLeakDetector(t *testing.T) {
 	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors", "leak_detectors_single.json")
 	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_0_ColdPlate", "leak_detector_ok.json")
 
-	client := connectToTestServer(t, server)
+	client := connectToTestServer(t, server.Server)
 	t.Cleanup(func() {
 		client.Logout()
 		server.Close()
@@ -107,7 +108,7 @@ func TestParseLeakDetector(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewChassisCollector(t.Name(), client, logger, nil)
+	collector, err := NewChassisCollector(t.Name(), client, logger, config.DefaultChassisCollector)
 	require.NoError(t, err)
 	thermalSubsystem, err := chassis[0].ThermalSubsystem()
 	require.NoError(t, err)
@@ -205,11 +206,11 @@ func TestCollectTotalGPUPower(t *testing.T) {
 		},
 	})
 
-	client := connectToTestServer(t, server)
+	client := connectToTestServer(t, server.Server)
 	defer client.Logout()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewChassisCollector(t.Name(), client, logger, nil)
+	collector, err := NewChassisCollector(t.Name(), client, logger, config.DefaultChassisCollector)
 	require.NoError(t, err)
 
 	// Collect metrics
@@ -355,11 +356,11 @@ func TestCollectTotalGPUPowerMultipleChassis(t *testing.T) {
 		},
 	})
 
-	client := connectToTestServer(t, server)
+	client := connectToTestServer(t, server.Server)
 	defer client.Logout()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewChassisCollector(t.Name(), client, logger, nil)
+	collector, err := NewChassisCollector(t.Name(), client, logger, config.DefaultChassisCollector)
 	require.NoError(t, err)
 
 	// Collect metrics
@@ -511,11 +512,11 @@ func TestCollectTotalGPUPowerErrorHandling(t *testing.T) {
 			tc.controlResponse["@odata.id"] = "/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0"
 			server.addRoute("/redfish/v1/Chassis/HGX_Chassis_0/Controls/TotalGPU_Power_0", tc.controlResponse)
 
-			client := connectToTestServer(t, server)
+			client := connectToTestServer(t, server.Server)
 			defer client.Logout()
 
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-			collector, err := NewChassisCollector(t.Name(), client, logger, nil)
+			collector, err := NewChassisCollector(t.Name(), client, logger, config.DefaultChassisCollector)
 			require.NoError(t, err)
 
 			// Collect metrics

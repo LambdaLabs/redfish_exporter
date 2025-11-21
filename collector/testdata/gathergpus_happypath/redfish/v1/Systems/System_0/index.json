@@ -1,0 +1,142 @@
+{
+"@Redfish.Settings": {
+"@odata.type": "#Settings.v1_3_5.Settings",
+"SettingsObject": {
+"@odata.id": "/redfish/v1/Systems/System_0/Settings"
+}
+},
+"@odata.id": "/redfish/v1/Systems/System_0",
+"@odata.type": "#ComputerSystem.v1_22_0.ComputerSystem",
+"Actions": {
+"#ComputerSystem.Reset": {
+"@Redfish.ActionInfo": "/redfish/v1/Systems/System_0/ResetActionInfo",
+"target": "/redfish/v1/Systems/System_0/Actions/ComputerSystem.Reset"
+}
+},
+"AssetTag": "",
+"Bios": {
+"@odata.id": "/redfish/v1/Systems/System_0/Bios"
+},
+"BiosVersion": "",
+"Boot": {
+"AutomaticRetryAttempts": 3,
+"AutomaticRetryConfig": "RetryAttempts",
+"AutomaticRetryConfig@Redfish.AllowableValues": [
+"Disabled",
+"RetryAttempts"
+],
+"BootOptions": {
+"@odata.id": "/redfish/v1/Systems/System_0/BootOptions"
+},
+"BootOrder": [
+"Boot0002",
+"Boot0003",
+"Boot0004",
+"Boot000A",
+"Boot000B",
+"Boot000C",
+"Boot0009",
+"Boot0000",
+"Boot0001",
+"Boot0005",
+"Boot0006",
+"Boot0007",
+"Boot0008"
+],
+"BootOrderPropertySelection": "BootOrder",
+"BootSourceOverrideEnabled": "Disabled",
+"BootSourceOverrideEnabled@Redfish.AllowableValues": [
+"Once",
+"Continuous",
+"Disabled"
+],
+"BootSourceOverrideTarget": "Pxe",
+"BootSourceOverrideTarget@Redfish.AllowableValues": [
+"None",
+"Pxe",
+"Hdd",
+"Cd",
+"Diags",
+"BiosSetup",
+"Usb"
+],
+"RemainingAutomaticRetryAttempts": 3,
+"StopBootOnFault": "Never"
+},
+"BootProgress": {
+"LastState": "OSRunning",
+"LastStateTime": "2025-11-13T15:58:57.023691+00:00"
+},
+"Description": "Computer System",
+"GraphicalConsole": {
+"ConnectTypesSupported": [
+"KVMIP"
+],
+"MaxConcurrentSessions": 4,
+"ServiceEnabled": true
+},
+"HostWatchdogTimer": {
+"FunctionEnabled": false,
+"Status": {
+"State": "Enabled"
+},
+"TimeoutAction": "ResetSystem"
+},
+"Id": "System_0",
+"IndicatorLED": "Off",
+"LastResetTime": "2025-11-12T18:40:14+00:00",
+"Links": {
+"Chassis": [
+{
+"@odata.id": "/redfish/v1/Chassis/BMC_0"
+}
+],
+"ManagedBy": [
+{
+"@odata.id": "/redfish/v1/Managers/BMC_0"
+}
+]
+},
+"LocationIndicatorActive": false,
+"LogServices": {
+"@odata.id": "/redfish/v1/Systems/System_0/LogServices"
+},
+"Manufacturer": "Supermicro",
+"Memory": {
+"@odata.id": "/redfish/v1/Systems/System_0/Memory"
+},
+"Model": "GB NVL",
+"Name": "System_0",
+"PartNumber": "ARS-11111-222-333-44444",
+"PowerOnDelaySeconds": 0,
+"PowerRestorePolicy": "LastState",
+"PowerState": "On",
+"Processors": {
+"@odata.id": "/redfish/v1/Systems/System_0/Processors"
+},
+"SecureBoot": {
+"@odata.id": "/redfish/v1/Systems/System_0/SecureBoot"
+},
+"SerialConsole": {
+"IPMI": {
+"ServiceEnabled": true
+},
+"MaxConcurrentSessions": 15,
+"SSH": {
+"HotKeySequenceDisplay": "Press ~. to exit console",
+"Port": 2200,
+"ServiceEnabled": true
+}
+},
+"SerialNumber": "S123456",
+"Status": {
+"Conditions": [],
+"Health": "OK",
+"State": "Enabled"
+},
+"Storage": {
+"@odata.id": "/redfish/v1/Systems/System_0/Storage"
+},
+"SystemType": "Physical",
+"UUID": "sys0-uuid"
+}

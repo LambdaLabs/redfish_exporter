@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"math"
@@ -35,7 +36,7 @@ var (
 // ChassisCollector implements the prometheus.Collector.
 type ChassisCollector struct {
 	redfishClient         *gofish.APIClient
-	config                *config.ChassisCollectorConfig
+	config                config.ChassisCollectorConfig
 	metrics               map[string]Metric
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
@@ -96,7 +97,7 @@ func createChassisMetricMap() map[string]Metric {
 }
 
 // NewChassisCollector returns a collector that collecting chassis statistics
-func NewChassisCollector(collectorName string, redfishClient *gofish.APIClient, logger *slog.Logger, config *config.ChassisCollectorConfig) (*ChassisCollector, error) {
+func NewChassisCollector(collectorName string, redfishClient *gofish.APIClient, logger *slog.Logger, config config.ChassisCollectorConfig) (*ChassisCollector, error) {
 	// get service from redfish client
 
 	return &ChassisCollector{
@@ -115,73 +116,37 @@ func NewChassisCollector(collectorName string, redfishClient *gofish.APIClient, 
 	}, nil
 }
 
-// Describe implemented prometheus.Collector
-func (c *ChassisCollector) Describe(ch chan<- *prometheus.Desc) {
-	for _, metric := range c.metrics {
-		ch <- metric.desc
-	}
-	c.collectorScrapeStatus.Describe(ch)
-
-}
-
-// getLeakDetectors works around an unfortunate fact that the LeakDetection schema is not yet standard, and some OEMs return
-// a single LeakDetection object from their ThermalSubsystem, instead of a gofish-expected collection.
-func (c *ChassisCollector) getLeakDetectors(thermalSubsystem *redfish.ThermalSubsystem, logger *slog.Logger) []*redfish.LeakDetector {
-	var allDetectors []*redfish.LeakDetector
-
-	// Standard gofish approach, for starters
-	leakDetectionCollection, err := thermalSubsystem.LeakDetection()
-	if err != nil {
-		logger.Debug("standard LeakDetection() call failed, will try fallback", slog.Any("error", err))
-	} else if len(leakDetectionCollection) > 0 {
-		for _, leakDetection := range leakDetectionCollection {
-			detectors, err := leakDetection.LeakDetectors()
-			if err != nil {
-				logger.Debug("error fetching leak detectors from collection", slog.Any("error", err))
-			} else if len(detectors) > 0 {
-				allDetectors = append(allDetectors, detectors...)
-			}
-		}
-		// Standard gofish call worked and we have some leak detectors, so return them...
-		if len(allDetectors) > 0 {
-			return allDetectors
-		}
-	}
-
-	// ...otherwise, try a fallback to handle buggy OEM implementations.
-	leakDetectionURL := thermalSubsystem.ODataID + "/LeakDetection"
-	leakDetection, err := redfish.GetLeakDetection(c.redfishClient.Service.GetClient(), leakDetectionURL)
-	if err != nil {
-		logger.Debug("fallback GetLeakDetection failed", slog.Any("error", err))
-		return allDetectors
-	}
-
-	if leakDetection != nil {
-		detectors, err := leakDetection.LeakDetectors()
-		if err != nil {
-			logger.Debug("error fetching leak detectors via fallback method", slog.Any("error", err))
-			return nil
-		}
-
-		if len(detectors) > 0 {
-			allDetectors = append(allDetectors, detectors...)
-		}
-	}
-	return allDetectors
+func (c *ChassisCollector) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
+	c.collect(ctx, ch)
 }
 
 // Collect implemented prometheus.Collector
 func (c *ChassisCollector) Collect(ch chan<- prometheus.Metric) {
+	c.collect(context.TODO(), ch)
+}
 
+func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Metric) {
+	if ctx.Err() != nil {
+		c.logger.With("error", ctx.Err(), "collector", "chassis").Debug("skipping collection")
+		return
+	}
 	logger := c.logger.With(slog.String("collector", "ChassisCollector"))
 	service := c.redfishClient.Service
 
+	if ctx.Err() != nil {
+		c.logger.With("error", ctx.Err(), "collector", "chassis").Debug("skipping collection")
+		return
+	}
 	// get a list of chassis from service
 	if chassises, err := service.Chassis(); err != nil {
 		logger.Error("error getting chassis from service", slog.String("operation", "service.Chassis()"), slog.Any("error", err))
 	} else {
 		// process the chassises
 		for _, chassis := range chassises {
+			if ctx.Err() != nil {
+				c.logger.With("error", ctx.Err()).Warn("skipping further collection")
+				continue
+			}
 			chassisLogger := logger.With(slog.String("Chassis", chassis.ID))
 			chassisLogger.Info("collector scrape started")
 			chassisID := chassis.ID
@@ -311,28 +276,62 @@ func (c *ChassisCollector) Collect(ch chan<- prometheus.Metric) {
 				}
 			}
 
-			// process log services
-			logServices, err := chassis.LogServices()
-			if err != nil {
-				chassisLogger.Error("error getting log services from chassis", slog.String("operation", "chassis.LogServices()"), slog.Any("error", err))
-			} else if logServices == nil {
-				chassisLogger.Info("no log services found", slog.String("operation", "chassis.LogServices()"))
-			} else {
-				wg6 := &sync.WaitGroup{}
-				wg6.Add(len(logServices))
-
-				for _, logService := range logServices {
-					if err = parseLogService(ch, chassisMetrics, ChassisSubsystem, chassisID, logService, wg6); err != nil {
-						chassisLogger.Error("error getting log entries from log service", slog.String("operation", "chassis.LogServices()"), slog.Any("error", err))
-					}
-				}
-			}
-
 			chassisLogger.Info("collector scrape completed")
 		}
 	}
 
 	c.collectorScrapeStatus.WithLabelValues("chassis").Set(float64(1))
+}
+
+// Describe implemented prometheus.Collector
+func (c *ChassisCollector) Describe(ch chan<- *prometheus.Desc) {
+	for _, metric := range c.metrics {
+		ch <- metric.desc
+	}
+	c.collectorScrapeStatus.Describe(ch)
+
+}
+
+// getLeakDetectors works around an unfortunate fact that the LeakDetection schema is not yet standard, and some OEMs return
+// a single LeakDetection object from their ThermalSubsystem, instead of a gofish-expected collection.
+func (c *ChassisCollector) getLeakDetectors(thermalSubsystem *redfish.ThermalSubsystem, logger *slog.Logger) []*redfish.LeakDetector {
+	var allDetectors []*redfish.LeakDetector
+
+	// Standard gofish approach, for starters
+	leakDetectionCollection, err := thermalSubsystem.LeakDetection()
+	if err != nil {
+		logger.Debug("standard LeakDetection() call failed, will try fallback", slog.Any("error", err))
+		if leakDetectionCollection != nil {
+			detectors, err := leakDetectionCollection.LeakDetectors()
+			if err != nil {
+				logger.Error("failed obtaining LeakDetectors at all", slog.Any("error", err))
+				return nil
+			}
+			allDetectors = append(allDetectors, detectors...)
+		}
+		return allDetectors
+	}
+
+	// ...otherwise, try a fallback to handle buggy OEM implementations.
+	leakDetectionURL := thermalSubsystem.ODataID + "/LeakDetection"
+	leakDetection, err := redfish.GetLeakDetection(c.redfishClient.Service.GetClient(), leakDetectionURL)
+	if err != nil {
+		logger.Debug("fallback GetLeakDetection failed", slog.Any("error", err))
+		return allDetectors
+	}
+
+	if leakDetection != nil {
+		detectors, err := leakDetection.LeakDetectors()
+		if err != nil {
+			logger.Debug("error fetching leak detectors via fallback method", slog.Any("error", err))
+			return nil
+		}
+
+		if len(detectors) > 0 {
+			allDetectors = append(allDetectors, detectors...)
+		}
+	}
+	return allDetectors
 }
 
 func parseChassisTemperature(ch chan<- prometheus.Metric, chassisID string, chassisTemperature redfish.Temperature, wg *sync.WaitGroup) {
@@ -355,7 +354,7 @@ func parseChassisTemperature(ch chan<- prometheus.Metric, chassisID string, chas
 	}
 
 	chassisTemperatureReadingCelsius := chassisTemperature.ReadingCelsius
-	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_temperature_celsius"].desc, prometheus.GaugeValue, float64(chassisTemperatureReadingCelsius), chassisTemperatureLabelvalues...)
+	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_temperature_celsius"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisTemperatureReadingCelsius), chassisTemperatureLabelvalues...)
 }
 
 func parseChassisFan(ch chan<- prometheus.Metric, chassisID string, chassisFan redfish.ThermalFan, wg *sync.WaitGroup) {
@@ -365,14 +364,14 @@ func parseChassisFan(ch chan<- prometheus.Metric, chassisID string, chassisFan r
 	chassisFanStaus := chassisFan.Status
 	chassisFanStausHealth := chassisFanStaus.Health
 	chassisFanStausState := chassisFanStaus.State
-	chassisFanRPM := float64(chassisFan.Reading)
+	chassisFanRPM := intPtrToFloat64(chassisFan.Reading)
 	chassisFanUnit := chassisFan.ReadingUnits
-	chassisFanRPMLowerCriticalThreshold := float64(chassisFan.LowerThresholdCritical)
-	chassisFanRPMUpperCriticalThreshold := float64(chassisFan.UpperThresholdCritical)
-	chassisFanRPMLowerFatalThreshold := float64(chassisFan.LowerThresholdFatal)
-	chassisFanRPMUpperFatalThreshold := float64(chassisFan.UpperThresholdFatal)
-	chassisFanRPMMin := float64(chassisFan.MinReadingRange)
-	chassisFanRPMMax := float64(chassisFan.MaxReadingRange)
+	chassisFanRPMLowerCriticalThreshold := intPtrToFloat64(chassisFan.LowerThresholdCritical)
+	chassisFanRPMUpperCriticalThreshold := intPtrToFloat64(chassisFan.UpperThresholdCritical)
+	chassisFanRPMLowerFatalThreshold := intPtrToFloat64(chassisFan.LowerThresholdFatal)
+	chassisFanRPMUpperFatalThreshold := intPtrToFloat64(chassisFan.UpperThresholdFatal)
+	chassisFanRPMMin := intPtrToFloat64(chassisFan.MinReadingRange)
+	chassisFanRPMMax := intPtrToFloat64(chassisFan.MaxReadingRange)
 
 	chassisFanPercentage := chassisFanRPM
 	if chassisFanUnit != redfish.PercentReadingUnits {
@@ -429,7 +428,7 @@ func parseChassisPowerInfoVoltage(ch chan<- prometheus.Metric, chassisID string,
 	if chassisPowerInfoVoltageStateValue, ok := parseCommonStatusState(chassisPowerInfoVoltageState); ok {
 		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_voltage_state"].desc, prometheus.GaugeValue, chassisPowerInfoVoltageStateValue, chassisPowerVoltageLabelvalues...)
 	}
-	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_voltage_volts"].desc, prometheus.GaugeValue, float64(chassisPowerInfoVoltageNameReadingVolts), chassisPowerVoltageLabelvalues...)
+	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_voltage_volts"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisPowerInfoVoltageNameReadingVolts), chassisPowerVoltageLabelvalues...)
 }
 
 func parseChassisPowerInfoPowerControl(ch chan<- prometheus.Metric, chassisID string, chassisPowerInfoPowerControl redfish.PowerControl, wg *sync.WaitGroup) {
@@ -438,7 +437,7 @@ func parseChassisPowerInfoPowerControl(ch chan<- prometheus.Metric, chassisID st
 	id := chassisPowerInfoPowerControl.MemberID
 	pm := chassisPowerInfoPowerControl.PowerMetrics
 	chassisPowerVoltageLabelvalues := []string{"power_wattage", chassisID, name, id}
-	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_average_consumed_watts"].desc, prometheus.GaugeValue, float64(pm.AverageConsumedWatts), chassisPowerVoltageLabelvalues...)
+	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_average_consumed_watts"].desc, prometheus.GaugeValue, float32PtrToFloat64(pm.AverageConsumedWatts), chassisPowerVoltageLabelvalues...)
 }
 
 func parseChassisPowerInfoPowerSupply(ch chan<- prometheus.Metric, chassisID string, chassisPowerInfoPowerSupply redfish.PowerSupply, wg *sync.WaitGroup) {
@@ -469,11 +468,11 @@ func parseChassisPowerInfoPowerSupply(ch chan<- prometheus.Metric, chassisID str
 	if chassisPowerInfoPowerSupplyHealthValue, ok := parseCommonStatusHealth(chassisPowerInfoPowerSupplyHealth); ok {
 		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_health"].desc, prometheus.GaugeValue, chassisPowerInfoPowerSupplyHealthValue, chassisPowerSupplyLabelvalues...)
 	}
-	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_efficiency_percentage"].desc, prometheus.GaugeValue, float64(chassisPowerInfoPowerSupplyEfficiencyPercent), chassisPowerSupplyLabelvalues...)
-	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_last_power_output_watts"].desc, prometheus.GaugeValue, float64(chassisPowerInfoPowerSupplyLastPowerOutputWatts), chassisPowerSupplyLabelvalues...)
-	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_capacity_watts"].desc, prometheus.GaugeValue, float64(chassisPowerInfoPowerSupplyPowerCapacityWatts), chassisPowerSupplyLabelvalues...)
-	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_input_watts"].desc, prometheus.GaugeValue, float64(chassisPowerInfoPowerSupplyPowerInputWatts), chassisPowerSupplyLabelvalues...)
-	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_output_watts"].desc, prometheus.GaugeValue, float64(chassisPowerInfoPowerSupplyPowerOutputWatts), chassisPowerSupplyLabelvalues...)
+	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_efficiency_percentage"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisPowerInfoPowerSupplyEfficiencyPercent), chassisPowerSupplyLabelvalues...)
+	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_last_power_output_watts"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisPowerInfoPowerSupplyLastPowerOutputWatts), chassisPowerSupplyLabelvalues...)
+	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_capacity_watts"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisPowerInfoPowerSupplyPowerCapacityWatts), chassisPowerSupplyLabelvalues...)
+	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_input_watts"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisPowerInfoPowerSupplyPowerInputWatts), chassisPowerSupplyLabelvalues...)
+	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_output_watts"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisPowerInfoPowerSupplyPowerOutputWatts), chassisPowerSupplyLabelvalues...)
 }
 
 func parseNetworkAdapter(ch chan<- prometheus.Metric, chassisID string, networkAdapter *redfish.NetworkAdapter, wg *sync.WaitGroup) error {

@@ -21,8 +21,8 @@ type ScrapeResult struct {
 	MetricsCount   int
 	Error          error
 	CollectorTimes map[string]time.Duration // From redfish_exporter_collector_duration_seconds
-	RedfishUp      float64 // Value of redfish_up metric (0 = failed, 1 = success)
-	ScrapeSuccess  bool    // Whether this was a successful hardware scrape
+	RedfishUp      float64                  // Value of redfish_up metric (0 = failed, 1 = success)
+	ScrapeSuccess  bool                     // Whether this was a successful hardware scrape
 }
 
 // Config holds the configuration for the analysis
@@ -412,12 +412,12 @@ func printSummary(results []ScrapeResult, config Config) {
 	if config.Format == "json" {
 		fmt.Println("\n=== JSON Output ===")
 		output := map[string]interface{}{
-			"target":         config.Target,
-			"runs":           len(results),
-			"successful":     successCount,
-			"avg_duration":   avgDuration.Seconds(),
-			"avg_metrics":    avgMetrics,
-			"results":        results,
+			"target":       config.Target,
+			"runs":         len(results),
+			"successful":   successCount,
+			"avg_duration": avgDuration.Seconds(),
+			"avg_metrics":  avgMetrics,
+			"results":      results,
 		}
 
 		jsonData, err := json.MarshalIndent(output, "", "  ")

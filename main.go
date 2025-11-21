@@ -1,9 +1,10 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
@@ -11,14 +12,21 @@ import (
 	"os/signal"
 	"syscall"
 
-	"log/slog"
-
 	"github.com/LambdaLabs/redfish_exporter/collector"
 	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/exporter-toolkit/web"
 	"github.com/stmcginnis/gofish"
+)
+
+type (
+	rfContextKey int
+)
+
+const (
+	scrapeRequestCtxKey rfContextKey = iota
+	loggerCtxKey
 )
 
 var (
@@ -86,15 +94,34 @@ func registerMetaMetrics() {
 	prometheus.DefaultRegisterer.MustRegister(custom...)
 }
 
-// metricsHandler provides the client interface for the redfish_exporter.
-// Clients (like Prometheus) MUST provide a target (FQDN or IP)
-// and SHOULD provide a 'module' param.
-func metricsHandler(logger *slog.Logger) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		registry := prometheus.NewRegistry()
+type scrapeRequest struct {
+	Target     string
+	Modules    []string
+	HostConfig *config.HostConfig
+}
+
+func withLogger(next http.Handler, logger *slog.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), loggerCtxKey, logger)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func getContextLogger(r *http.Request) (*slog.Logger, bool) {
+	logger, ok := r.Context().Value(loggerCtxKey).(*slog.Logger)
+	return logger, ok
+}
+
+func mustScrapeRequest(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctxLogger, loggerOk := getContextLogger(r)
+		if !loggerOk {
+			ctxLogger = slog.Default()
+		}
+
 		urlQuery, urlErr := url.ParseQuery(r.URL.RawQuery)
 		if urlErr != nil {
-			logger.Error("request query was not parsed", slog.Any("error", urlErr))
+			ctxLogger.Error("request query was not parsed", slog.Any("error", urlErr))
 			http.Error(w, "failed to successfully parse incoming query", 400)
 			return
 		}
@@ -105,11 +132,11 @@ func metricsHandler(logger *slog.Logger) http.HandlerFunc {
 		}
 		modules, modulesDefined := urlQuery["module"]
 		if !modulesDefined || len(modules) == 0 {
-			logger.Debug("incoming request included no modules. using default modules, and a future release will result in failed collection without one or more modules configured and provided")
+			ctxLogger.Debug("incoming request included no modules. using default modules, and a future release will result in failed collection without one or more modules configured and provided")
 			modules = []string{"rf_exporter_default"}
 		}
 
-		logger.Debug("Scraping target host", slog.String("target", target))
+		ctxLogger.Debug("Scraping target host", slog.String("target", target))
 
 		var (
 			hostConfig *config.HostConfig
@@ -119,34 +146,68 @@ func metricsHandler(logger *slog.Logger) http.HandlerFunc {
 		)
 
 		group, ok = urlQuery["group"]
-
 		if ok && len(group[0]) >= 1 {
 			// Trying to get hostConfig from group.
 			if hostConfig, err = safeConfig.HostConfigForGroup(group[0]); err != nil {
-				logger.Error("error getting credentials", slog.Any("error", err))
+				ctxLogger.Error("error getting credentials", slog.Any("error", err))
 				return
 			}
 		}
-
 		// Always falling back to single host config when group config failed.
 		if hostConfig == nil {
 			if hostConfig, err = safeConfig.HostConfigForTarget(target); err != nil {
-				logger.Error("error getting credentials", slog.Any("error", err))
+				ctxLogger.Error("error getting credentials", slog.Any("error", err))
 				return
 			}
 		}
+		sr := &scrapeRequest{
+			Target:     target,
+			Modules:    modules,
+			HostConfig: hostConfig,
+		}
+		ctx := context.WithValue(r.Context(), scrapeRequestCtxKey, sr)
+		ctx = context.WithValue(ctx, loggerCtxKey, ctxLogger)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
 
-		aggregateCollector, err := collector.NewRedfishCollector(target,
-			hostConfig.Username,
-			hostConfig.Password)
+func getScrapeRequest(r *http.Request) (*scrapeRequest, bool) {
+	sr, ok := r.Context().Value(scrapeRequestCtxKey).(*scrapeRequest)
+	return sr, ok
+}
 
-		if err != nil {
-			logger.Error("unable to create redfish client, bailing", slog.Any("error", err))
-			http.Error(w, "unable to construct redfish client", 500)
+// metricsHandler provides the client interface for the redfish_exporter.
+// Clients (like Prometheus) MUST provide a target (FQDN or IP)
+// and SHOULD provide a 'module' param.
+func metricsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		registry := prometheus.NewRegistry()
+
+		ctxLogger, loggerOk := getContextLogger(r)
+		if !loggerOk {
+			ctxLogger = slog.Default()
+		}
+
+		sr, ok := getScrapeRequest(r)
+		if !ok {
+			http.Error(w, "scrape request not found in context", 500)
 			return
 		}
 
-		collectors := buildCollectorsFor(modules, safeConfig.GetModules(), aggregateCollector.Client(), logger)
+		scrapeLogger := ctxLogger.With("scrape_host", sr.Target)
+		rfClientConfig := safeConfig.RedfishClientConfig()
+		aggregateCollector, err := collector.NewRedfishCollector(r.Context(), scrapeLogger, sr.Target,
+			sr.HostConfig.Username,
+			sr.HostConfig.Password,
+			rfClientConfig)
+
+		if err != nil {
+			scrapeLogger.With("error", err).Error("unable to create redfish aggregate collector, bailing")
+			http.Error(w, "unable to construct aggregate collector", 500)
+			return
+		}
+
+		collectors := buildCollectorsFor(sr.Modules, safeConfig.GetModules(), aggregateCollector.Client(), scrapeLogger)
 		aggregateCollector.WithCollectors(collectors)
 		registry.MustRegister(aggregateCollector)
 		gatherers := prometheus.Gatherers{
@@ -164,7 +225,7 @@ func metricsHandler(logger *slog.Logger) http.HandlerFunc {
 // For ease onboarding from existing redfish_exporter deployments,
 // a modules[0] == "rf_exporter_default" will yield a []prometheus.Collector defined
 // in this function. Future relases will remove this behavior and require user input.
-func buildCollectorsFor(modules []string, moduleConfig map[string]config.Module, rfClient *gofish.APIClient, logger *slog.Logger) []prometheus.Collector {
+func buildCollectorsFor(modules []string, moduleConfig map[string]config.Module, rfClient *gofish.APIClient, logger *slog.Logger) []collector.ContextAwareCollector {
 	if modules[0] == "rf_exporter_default" {
 		logger.Warn("Using default collector bundle. In a future release, the exporter will require configuration of one or more modules.")
 		return buildCollectorsFor([]string{
@@ -175,7 +236,7 @@ func buildCollectorsFor(modules []string, moduleConfig map[string]config.Module,
 			"telemetry_collector",
 		}, config.DefaultModuleConfig, rfClient, logger)
 	}
-	c := []prometheus.Collector{}
+	c := []collector.ContextAwareCollector{}
 	for _, module := range modules {
 		if modConfig, found := moduleConfig[module]; found {
 			collector, err := collector.NewCollectorFromModule(module, &modConfig, rfClient, logger)
@@ -260,8 +321,8 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/redfish", metricsHandler(logger)) // Regular metrics endpoint for local Redfish metrics.
-	mux.Handle("/-/reload", reloadHandler())       // HTTP endpoint for triggering configuration reload
+	mux.Handle("/redfish", withLogger(mustScrapeRequest(metricsHandler()), logger)) // Regular metrics endpoint for local Redfish metrics.
+	mux.Handle("/-/reload", reloadHandler())                                        // HTTP endpoint for triggering configuration reload
 	mux.Handle("/metrics", promhttp.Handler())
 
 	if *pprofEnabled {
@@ -309,6 +370,7 @@ func main() {
 	}
 	err := web.ListenAndServe(srv, &exporterToolkitConf, logger)
 	if err != nil {
-		log.Fatal(err)
+		slog.With("error", err).Error("exiting on ListenAndServe error")
+		os.Exit(1)
 	}
 }

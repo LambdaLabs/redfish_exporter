@@ -2,6 +2,7 @@ package collector
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -63,13 +64,13 @@ const (
 )
 
 var (
-	telemetryBaseLabels     = []string{"hostname", "system_id", "gpu_id"}
-	telemetryMemoryLabels   = []string{"hostname", "system_id", "gpu_id", "memory_id"}
-	telemetryPortLabels     = []string{"hostname", "system_id", "gpu_id", "port_id"}
-	telemetryInstanceLabels = []string{"hostname", "system_id", "gpu_id", "instance_id"}
-	telemetryCPULabels      = []string{"hostname", "system_id", "cpu_id"}
-	telemetryAmbientLabels  = []string{"hostname", "system_id", "location_id", "sensor_id"}
-	telemetryBMCLabels      = []string{"hostname", "system_id"}
+	telemetryBaseLabels     = []string{"system_id", "gpu_id"}
+	telemetryMemoryLabels   = []string{"system_id", "gpu_id", "memory_id"}
+	telemetryPortLabels     = []string{"system_id", "gpu_id", "port_id"}
+	telemetryInstanceLabels = []string{"system_id", "gpu_id", "instance_id"}
+	telemetryCPULabels      = []string{"system_id", "cpu_id"}
+	telemetryAmbientLabels  = []string{"system_id", "location_id", "sensor_id"}
+	telemetryBMCLabels      = []string{"system_id"}
 	telemetryMetrics        = createTelemetryMetricMap()
 
 	// GPM instance metrics - these are the only metrics that have per-instance values
@@ -196,8 +197,8 @@ func createTelemetryMetricMap() map[string]Metric {
 	// Platform Environment metrics from HGX_PlatformEnvironmentMetrics_0
 	// Backward-compatible metrics (maintain exact names from GPU/Chassis collectors)
 	// These use the same label structure as the original collectors for dashboard compatibility
-	addToMetricMap(metrics, GPUSubsystem, "memory_power_watts", "GPU memory (DRAM) power consumption in watts", []string{"hostname", "system_id", "gpu_id", "memory_id"})
-	addToMetricMap(metrics, GPUSubsystem, "temperature_tlimit_celsius", "GPU TLIMIT temperature headroom in Celsius", []string{"hostname", "system_id", "gpu_id"})
+	addToMetricMap(metrics, GPUSubsystem, "memory_power_watts", "GPU memory (DRAM) power consumption in watts", []string{"system_id", "gpu_id", "memory_id"})
+	addToMetricMap(metrics, GPUSubsystem, "temperature_tlimit_celsius", "GPU TLIMIT temperature headroom in Celsius", []string{"system_id", "gpu_id"})
 	addToMetricMap(metrics, ChassisSubsystem, "gpu_total_power_watts", "Total GPU power consumption for all GPUs in chassis in watts", []string{"resource", "chassis_id"})
 
 	// New telemetry_ prefixed GPU environment metrics
@@ -232,14 +233,14 @@ func createTelemetryMetricMap() map[string]Metric {
 // TelemetryCollector collects metrics from Redfish TelemetryService
 type TelemetryCollector struct {
 	redfishClient         *gofish.APIClient
-	config                *config.TelemetryCollectorConfig
+	config                config.TelemetryCollectorConfig
 	metrics               map[string]Metric
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
 }
 
 // NewTelemetryCollector creates a new TelemetryService collector
-func NewTelemetryCollector(moduleName string, redfishClient *gofish.APIClient, logger *slog.Logger, config *config.TelemetryCollectorConfig) (*TelemetryCollector, error) {
+func NewTelemetryCollector(moduleName string, redfishClient *gofish.APIClient, logger *slog.Logger, config config.TelemetryCollectorConfig) (*TelemetryCollector, error) {
 	return &TelemetryCollector{
 		redfishClient: redfishClient,
 		config:        config,
@@ -256,6 +257,10 @@ func NewTelemetryCollector(moduleName string, redfishClient *gofish.APIClient, l
 	}, nil
 }
 
+func (t *TelemetryCollector) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
+	t.collect(ctx, ch)
+}
+
 // Describe implements prometheus.Collector
 func (t *TelemetryCollector) Describe(ch chan<- *prometheus.Desc) {
 	for _, metric := range t.metrics {
@@ -266,6 +271,14 @@ func (t *TelemetryCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect implements prometheus.Collector
 func (t *TelemetryCollector) Collect(ch chan<- prometheus.Metric) {
+	t.collect(context.TODO(), ch)
+}
+
+func (t *TelemetryCollector) collect(ctx context.Context, ch chan<- prometheus.Metric) {
+	if ctx.Err() != nil {
+		t.logger.With("error", ctx.Err(), "collector", "telemetry").Debug("skipping collection")
+		return
+	}
 	t.collectorScrapeStatus.WithLabelValues("telemetry").Set(float64(0))
 
 	service := t.redfishClient.Service
@@ -316,6 +329,10 @@ func (t *TelemetryCollector) Collect(ch chan<- prometheus.Metric) {
 	// Process each metric report
 	wg := &sync.WaitGroup{}
 	for _, report := range metricReports {
+		if ctx.Err() != nil {
+			t.logger.With("error", ctx.Err(), "collector", "telemetry").Debug("skipping further collection")
+			continue
+		}
 		if strings.Contains(report.ID, reportIDProcessorGPMMetrics) {
 			wg.Add(1)
 			go t.collectGPMMetrics(ch, report, systemMap, wg)
@@ -381,14 +398,10 @@ func (t *TelemetryCollector) collectProcessorMetrics(ch chan<- prometheus.Metric
 
 	// Extract system ID from metric properties (all should be same system)
 	systemID := extractSystemIDFromReport(report)
-	systemName := systemMap[systemID]
-	if systemName == "" {
-		systemName = systemID
-	}
 
 	// Emit metrics for each GPU
 	for gpuID, metrics := range metricsByGPU {
-		labels := []string{systemName, systemID, gpuID}
+		labels := []string{systemID, gpuID}
 		t.emitGPUMetrics(ch, labels, metrics)
 	}
 }
@@ -634,15 +647,10 @@ func (t *TelemetryCollector) collectMemoryMetrics(ch chan<- prometheus.Metric, r
 
 	// Emit metrics for each memory module
 	for systemID, memoryMap := range metricsByMemory {
-		systemName := systemMap[systemID]
-		if systemName == "" {
-			systemName = systemID
-		}
-
 		for memoryID, metrics := range memoryMap {
 			// Extract GPU ID from memory ID (e.g., "GPU_SXM_1_DRAM_0" -> "GPU_SXM_1")
 			gpuID := extractGPUIDFromMemoryID(memoryID)
-			labels := []string{systemName, systemID, gpuID, memoryID}
+			labels := []string{systemID, gpuID, memoryID}
 			t.emitMemoryMetrics(ch, labels, metrics)
 		}
 	}
@@ -792,14 +800,10 @@ func (t *TelemetryCollector) collectResetMetrics(ch chan<- prometheus.Metric, re
 
 	// Extract system ID from metric properties (all should be same system)
 	systemID := extractSystemIDFromReport(report)
-	systemName := systemMap[systemID]
-	if systemName == "" {
-		systemName = systemID
-	}
 
 	// Emit metrics for each GPU
 	for gpuID, metrics := range metricsByGPU {
-		labels := []string{systemName, systemID, gpuID}
+		labels := []string{systemID, gpuID}
 		t.emitResetMetrics(ch, labels, metrics)
 	}
 }
@@ -977,15 +981,11 @@ func (t *TelemetryCollector) collectPortMetrics(ch chan<- prometheus.Metric, rep
 
 	// Extract system ID from metric properties (all should be same system)
 	systemID := extractSystemIDFromReport(report)
-	systemName := systemMap[systemID]
-	if systemName == "" {
-		systemName = systemID
-	}
 
 	// Emit metrics for each port
 	for gpuID, ports := range metricsByPort {
 		for portID, metrics := range ports {
-			labels := []string{systemName, systemID, gpuID, portID}
+			labels := []string{systemID, gpuID, portID}
 			t.emitPortMetrics(ch, labels, metrics)
 		}
 	}
@@ -1309,21 +1309,17 @@ func (t *TelemetryCollector) collectGPMMetrics(ch chan<- prometheus.Metric, repo
 
 	// Extract system ID from metric properties (all should be same system)
 	systemID := extractSystemIDFromReport(report)
-	systemName := systemMap[systemID]
-	if systemName == "" {
-		systemName = systemID
-	}
 
 	// Emit regular metrics for each GPU
 	for gpuID, metrics := range metricsByGPU {
-		labels := []string{systemName, systemID, gpuID}
+		labels := []string{systemID, gpuID}
 		t.emitGPMMetrics(ch, labels, metrics)
 	}
 
 	// Emit instance metrics
 	for gpuID, instances := range instanceMetricsByGPU {
 		for instanceID, metrics := range instances {
-			labels := []string{systemName, systemID, gpuID, instanceID}
+			labels := []string{systemID, gpuID, instanceID}
 			t.emitGPMInstanceMetrics(ch, labels, metrics)
 		}
 	}
@@ -1624,23 +1620,19 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 
 	// Map chassis ID to system ID for consistent labeling across metrics
 	systemID := extractSystemIDFromChassis(chassisID)
-	systemName := systemMap[systemID]
-	if systemName == "" {
-		systemName = systemID
-	}
 
 	// Emit grouped metrics for each component
 	for gpuID, metrics := range gpuMetrics {
-		t.emitPlatformGPUMetrics(ch, systemName, systemID, gpuID, metrics)
+		t.emitPlatformGPUMetrics(ch, systemID, gpuID, metrics)
 	}
 
 	for cpuID, metrics := range cpuMetrics {
-		t.emitPlatformCPUMetrics(ch, systemName, systemID, cpuID, metrics)
+		t.emitPlatformCPUMetrics(ch, systemID, cpuID, metrics)
 	}
 
 	for locationID, sensors := range ambientMetrics {
 		for sensorID, metrics := range sensors {
-			t.emitPlatformAmbientMetrics(ch, systemName, systemID, locationID, sensorID, metrics)
+			t.emitPlatformAmbientMetrics(ch, systemID, locationID, sensorID, metrics)
 		}
 	}
 
@@ -1649,7 +1641,7 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 			t.metrics["telemetry_bmc_temperature_celsius"].desc,
 			prometheus.GaugeValue,
 			bmcTemp,
-			systemName, systemID,
+			systemID,
 		)
 	}
 
@@ -1928,8 +1920,8 @@ func (t *TelemetryCollector) parseAmbientSensorMetric(sensorID string, value flo
 }
 
 // emitPlatformGPUMetrics emits GPU environment metrics
-func (t *TelemetryCollector) emitPlatformGPUMetrics(ch chan<- prometheus.Metric, systemName, systemID, gpuID string, metrics map[string]float64) {
-	baseLabels := []string{systemName, systemID, gpuID}
+func (t *TelemetryCollector) emitPlatformGPUMetrics(ch chan<- prometheus.Metric, systemID, gpuID string, metrics map[string]float64) {
+	baseLabels := []string{systemID, gpuID}
 
 	// Energy (telemetry_ prefixed)
 	if val, ok := metrics["energy"]; ok {
@@ -1980,7 +1972,7 @@ func (t *TelemetryCollector) emitPlatformGPUMetrics(ch chan<- prometheus.Metric,
 
 		if strings.HasPrefix(metricName, "memory_power_") {
 			memoryID := strings.TrimPrefix(metricName, "memory_power_")
-			memoryLabels := []string{systemName, systemID, gpuID, memoryID}
+			memoryLabels := []string{systemID, gpuID, memoryID}
 
 			ch <- prometheus.MustNewConstMetric(
 				t.metrics["gpu_memory_power_watts"].desc,
@@ -1990,7 +1982,7 @@ func (t *TelemetryCollector) emitPlatformGPUMetrics(ch chan<- prometheus.Metric,
 			)
 		} else if strings.HasPrefix(metricName, "memory_temp_") {
 			memoryID := strings.TrimPrefix(metricName, "memory_temp_")
-			memoryLabels := []string{systemName, systemID, gpuID, memoryID}
+			memoryLabels := []string{systemID, gpuID, memoryID}
 
 			ch <- prometheus.MustNewConstMetric(
 				t.metrics["telemetry_gpu_memory_temperature_celsius"].desc,
@@ -2003,8 +1995,8 @@ func (t *TelemetryCollector) emitPlatformGPUMetrics(ch chan<- prometheus.Metric,
 }
 
 // emitPlatformCPUMetrics emits CPU environment metrics
-func (t *TelemetryCollector) emitPlatformCPUMetrics(ch chan<- prometheus.Metric, systemName, systemID, cpuID string, metrics map[string]float64) {
-	labels := []string{systemName, systemID, cpuID}
+func (t *TelemetryCollector) emitPlatformCPUMetrics(ch chan<- prometheus.Metric, systemID, cpuID string, metrics map[string]float64) {
+	labels := []string{systemID, cpuID}
 
 	if val, ok := metrics["energy"]; ok {
 		ch <- prometheus.MustNewConstMetric(
@@ -2080,8 +2072,8 @@ func (t *TelemetryCollector) emitPlatformCPUMetrics(ch chan<- prometheus.Metric,
 }
 
 // emitPlatformAmbientMetrics emits ambient environment metrics
-func (t *TelemetryCollector) emitPlatformAmbientMetrics(ch chan<- prometheus.Metric, systemName, systemID, locationID, sensorID string, metrics map[string]float64) {
-	labels := []string{systemName, systemID, locationID, sensorID}
+func (t *TelemetryCollector) emitPlatformAmbientMetrics(ch chan<- prometheus.Metric, systemID, locationID, sensorID string, metrics map[string]float64) {
+	labels := []string{systemID, locationID, sensorID}
 
 	if val, ok := metrics["inlet_temp"]; ok {
 		ch <- prometheus.MustNewConstMetric(

@@ -37,7 +37,7 @@ type JSONYieldedMetric struct {
 type JSONCollector struct {
 	moduleName        string
 	redfishClient     *gofish.APIClient
-	config            *config.JSONCollectorConfig
+	config            config.JSONCollectorConfig
 	jqQuery           *gojq.Query
 	logger            *slog.Logger
 	once              *sync.Once
@@ -47,7 +47,7 @@ type JSONCollector struct {
 }
 
 // NewJSONCollector yields a JSON collector.
-func NewJSONCollector(modName string, redfishClient *gofish.APIClient, logger *slog.Logger, config *config.JSONCollectorConfig) (*JSONCollector, error) {
+func NewJSONCollector(modName string, redfishClient *gofish.APIClient, logger *slog.Logger, config config.JSONCollectorConfig) (*JSONCollector, error) {
 	query, err := gojq.Parse(config.JQFilter)
 	if err != nil {
 		return nil, fmt.Errorf("jq parse error in collector creation: %w", err)
@@ -126,6 +126,10 @@ func (j *JSONCollector) Describe(ch chan<- *prometheus.Desc) {
 	}
 }
 
+func (j *JSONCollector) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
+	j.collect(ctx, ch)
+}
+
 // Collect implements prometheus.Collector.
 // Collect should generally be called after j.Describe, but in the chance
 // that this changes in the future, Collect will first check for cached Redfish response
@@ -133,8 +137,17 @@ func (j *JSONCollector) Describe(ch chan<- *prometheus.Desc) {
 // If no cache is populated, Collect will fetch and cache the Redfish API data before
 // processing and emitting timeseries.
 func (j *JSONCollector) Collect(ch chan<- prometheus.Metric) {
-	ctx, cancel := context.WithTimeout(context.Background(), j.config.Timeout)
+	j.collect(context.TODO(), ch)
+}
+
+func (j *JSONCollector) collect(ctx context.Context, ch chan<- prometheus.Metric) {
+	ctx, cancel := context.WithTimeout(ctx, j.config.Timeout)
 	defer cancel()
+	if ctx.Err() != nil {
+		j.logger.With("error", ctx.Err(), "collector", "chassis").Debug("skipping collection")
+		return
+	}
+
 	body, err := j.redfishResponse()
 	if err != nil {
 		j.logger.Warn("skipping Collect() as Redfish data was unavailable")

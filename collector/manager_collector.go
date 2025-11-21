@@ -1,9 +1,9 @@
 package collector
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
-	"sync"
 
 	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
@@ -23,7 +23,7 @@ var (
 // ManagerCollector implements the prometheus.Collector.
 type ManagerCollector struct {
 	redfishClient         *gofish.APIClient
-	config                *config.ManagerCollectorConfig
+	config                config.ManagerCollectorConfig
 	metrics               map[string]Metric
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
@@ -42,7 +42,7 @@ func createManagerMetricMap() map[string]Metric {
 }
 
 // NewManagerCollector returns a collector that collecting memory statistics
-func NewManagerCollector(moduleName string, redfishClient *gofish.APIClient, logger *slog.Logger, config *config.ManagerCollectorConfig) (*ManagerCollector, error) {
+func NewManagerCollector(moduleName string, redfishClient *gofish.APIClient, logger *slog.Logger, config config.ManagerCollectorConfig) (*ManagerCollector, error) {
 	return &ManagerCollector{
 		redfishClient: redfishClient,
 		config:        config,
@@ -68,9 +68,20 @@ func (m *ManagerCollector) Describe(ch chan<- *prometheus.Desc) {
 
 }
 
+func (m *ManagerCollector) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
+	m.collect(ctx, ch)
+}
+
 // Collect implemented prometheus.Collector
 func (m *ManagerCollector) Collect(ch chan<- prometheus.Metric) {
+	m.collect(context.TODO(), ch)
+}
 
+func (m *ManagerCollector) collect(ctx context.Context, ch chan<- prometheus.Metric) {
+	if ctx.Err() != nil {
+		m.logger.With("error", ctx.Err(), "collector", "manager").Debug("skipping collection")
+		return
+	}
 	logger := m.logger.With(slog.String("collector", "ManagerCollector"))
 	service := m.redfishClient.Service
 
@@ -79,6 +90,10 @@ func (m *ManagerCollector) Collect(ch chan<- prometheus.Metric) {
 		logger.Error("error getting managers from service", slog.String("operation", "service.Managers()"), slog.Any("error", err))
 	} else {
 		for _, manager := range managers {
+			if ctx.Err() != nil {
+				m.logger.With("error", ctx.Err(), "collector", "manager").Debug("skipping further collection")
+				return
+			}
 			managerLogger := logger.With(slog.String("manager", manager.ID))
 			managerLogger.Info("collector scrape started")
 
@@ -103,22 +118,6 @@ func (m *ManagerCollector) Collect(ch chan<- prometheus.Metric) {
 				ch <- prometheus.MustNewConstMetric(m.metrics["manager_power_state"].desc, prometheus.GaugeValue, managerPowerStateValue, ManagerLabelValues...)
 			}
 
-			// process log services
-			logServices, err := manager.LogServices()
-			if err != nil {
-				managerLogger.Error("error getting log services from manager", slog.Any("error", err), slog.String("operation", "manager.LogServices()"))
-			} else if logServices == nil {
-				managerLogger.Info("no log services found", slog.String("operation", "manager.LogServices()"))
-			} else {
-				wg := &sync.WaitGroup{}
-				wg.Add(len(logServices))
-
-				for _, logService := range logServices {
-					if err = parseLogService(ch, managerMetrics, ManagerSubmanager, ManagerID, logService, wg); err != nil {
-						managerLogger.Error("error getting log entries from log service", slog.String("operation", "manager.LogServices()"))
-					}
-				}
-			}
 			managerLogger.Info("collector scrape completed")
 		}
 		m.collectorScrapeStatus.WithLabelValues("manager").Set(float64(1))

@@ -1,11 +1,12 @@
 package collector
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"strings"
-	"sync"
 
 	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
@@ -17,17 +18,16 @@ import (
 // GPUSubsystem is the GPU subsystem name
 const GPUSubsystem = "gpu"
 
-// GPU metric label names
 var (
-	// Base labels using the main branch pattern but with system_id instead of system
-	gpuBaseLabels      = []string{"hostname", "system_id", "gpu_id"}
-	gpuMemoryLabels    = baseWithExtraLabels([]string{"memory_id"})
-	gpuProcessorLabels = baseWithExtraLabels([]string{"processor_name"})
-	gpuPortLabels      = baseWithExtraLabels([]string{"port_id", "port_type", "port_protocol"})
-	gpuInfoLabels      = baseWithExtraLabels([]string{"serial_number", "uuid"})
-
-	gpuMetrics     = createGPUMetricMap()
-	gpuMemoryTypes = createGPUMemoryTypeSet()
+	// gpuBaseLabels are labels expected on all series emitted by this collector
+	gpuBaseLabels = []string{"system_id", "gpu_id"}
+	// gpuMemoryLabels appends memory_id to gpuBaseLabels, as an expected label for memory-related series
+	gpuMemoryLabels = baseWithExtraLabels([]string{"memory_id"})
+	// gpuPortLabels appends NVLink labels gpuBaseLabels for NVLink-related series
+	gpuPortLabels = baseWithExtraLabels([]string{"port_id", "port_type", "port_protocol"})
+	// gpuInfoLabels appends a S/N and UUID to gpuBaseLabels for the redfish_gpu_info series
+	gpuInfoLabels = baseWithExtraLabels([]string{"serial_number", "uuid"})
+	gpuMetrics    = createGPUMetricMap()
 )
 
 func baseWithExtraLabels(extra []string) []string {
@@ -36,50 +36,28 @@ func baseWithExtraLabels(extra []string) []string {
 	return append(gpuBaseLabelsCopy, extra...)
 }
 
-// createGPUMemoryTypeSet creates a set of GPU memory types for efficient lookup
-func createGPUMemoryTypeSet() map[redfish.MemoryDeviceType]bool {
-	return map[redfish.MemoryDeviceType]bool{
-		redfish.HBMMemoryDeviceType:    true,
-		redfish.HBM2MemoryDeviceType:   true,
-		redfish.HBM2EMemoryDeviceType:  true,
-		redfish.HBM3MemoryDeviceType:   true,
-		redfish.GDDRMemoryDeviceType:   true,
-		redfish.GDDR2MemoryDeviceType:  true,
-		redfish.GDDR3MemoryDeviceType:  true,
-		redfish.GDDR4MemoryDeviceType:  true,
-		redfish.GDDR5MemoryDeviceType:  true,
-		redfish.GDDR5XMemoryDeviceType: true,
-		redfish.GDDR6MemoryDeviceType:  true,
-	}
+// SystemGPU is a type embedding [*redfish.Processor], with support for
+// extra fields related to the owning system: System Name and System ID
+type SystemGPU struct {
+	*redfish.Processor
+	SystemName string
+	SystemID   string
 }
 
-// isGPUMemory checks if the memory device type indicates GPU memory
-func isGPUMemory(deviceType redfish.MemoryDeviceType) bool {
-	return gpuMemoryTypes[deviceType]
-}
-
-// GPUCollector collects GPU-specific metrics including Nvidia OEM fields
+// GPUCollector is responsible for collecting Nvidia GPU telemetry
 type GPUCollector struct {
 	redfishClient         *gofish.APIClient
-	config                *config.GPUCollectorConfig
+	config                config.GPUCollectorConfig
 	metrics               map[string]Metric
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
 	oemClient             *NvidiaOEMClient
 }
 
-// systemGPUInfo holds GPU information for a system
-type systemGPUInfo struct {
-	systemName string
-	systemID   string
-	gpus       []*redfish.Processor
-}
-
 func createGPUMetricMap() map[string]Metric {
 	gpuMetrics := make(map[string]Metric)
 
 	// Basic GPU metrics from main branch
-	addToMetricMap(gpuMetrics, GPUSubsystem, "health", "health of gpu reported by system,1(OK),2(Warning),3(Critical)", gpuBaseLabels)
 	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_ecc_correctable", "current correctable memory ecc errors reported on the gpu", gpuMemoryLabels)
 	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_ecc_uncorrectable", "current uncorrectable memory ecc errors reported on the gpu", gpuMemoryLabels)
 
@@ -103,15 +81,13 @@ func createGPUMetricMap() map[string]Metric {
 	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_max_availability_bank_count", "GPU memory max availability bank count", gpuMemoryLabels)
 
 	// GPU Processor metrics
-	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_state", fmt.Sprintf("GPU processor state,%s", CommonStateHelp), gpuProcessorLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_health", fmt.Sprintf("GPU processor health,%s", CommonHealthHelp), gpuProcessorLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_total_cores", "GPU processor total cores", gpuProcessorLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "processor_total_threads", "GPU processor total threads", gpuProcessorLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "state", fmt.Sprintf("GPU processor state,%s", CommonStateHelp), gpuBaseLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "health", fmt.Sprintf("GPU processor health,%s", CommonHealthHelp), gpuBaseLabels)
 
 	// Nvidia GPU Processor OEM metrics
 	// Note: SM utilization, activity, occupancy, tensor/FP activity, and PCIe bandwidth metrics
 	// are now collected via TelemetryService (HGX_ProcessorGPMMetrics_0) for better performance
-	addToMetricMap(gpuMetrics, GPUSubsystem, "sram_ecc_error_threshold_exceeded", "GPU SRAM ECC error threshold exceeded (1 if exceeded)", gpuProcessorLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "sram_ecc_error_threshold_exceeded", "GPU SRAM ECC error threshold exceeded (1 if exceeded)", gpuBaseLabels)
 
 	// NVLink Port metrics
 	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_state", fmt.Sprintf("NVLink port state,%s", CommonStateHelp), gpuPortLabels)
@@ -131,7 +107,7 @@ func createGPUMetricMap() map[string]Metric {
 }
 
 // NewGPUCollector creates a new GPU collector
-func NewGPUCollector(collectorName string, redfishClient *gofish.APIClient, logger *slog.Logger, config *config.GPUCollectorConfig) (*GPUCollector, error) {
+func NewGPUCollector(collectorName string, redfishClient *gofish.APIClient, logger *slog.Logger, config config.GPUCollectorConfig) (*GPUCollector, error) {
 	return &GPUCollector{
 		redfishClient: redfishClient,
 		metrics:       gpuMetrics,
@@ -149,6 +125,16 @@ func NewGPUCollector(collectorName string, redfishClient *gofish.APIClient, logg
 	}, nil
 }
 
+func (g *GPUCollector) whileContextAllows(ctx context.Context, fns ...func()) {
+	for _, fn := range fns {
+		if ctx.Err() != nil {
+			g.logger.With("error", ctx.Err()).Warn("unable to run function as context is done")
+			return
+		}
+		fn()
+	}
+}
+
 // Describe implements prometheus.Collector
 func (g *GPUCollector) Describe(ch chan<- *prometheus.Desc) {
 	for _, metric := range g.metrics {
@@ -157,615 +143,85 @@ func (g *GPUCollector) Describe(ch chan<- *prometheus.Desc) {
 	g.collectorScrapeStatus.Describe(ch)
 }
 
-// Collect implements prometheus.Collector
+// CollectWithContext operates much like Collect, but propagates the provided [context.Context] down
+func (g *GPUCollector) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
+	g.collect(ctx, ch)
+}
+
+// Collect implements prometheus.Collector. It uses a [context.TODO], and care should be
+// taken such that concurrent scrape requests do not pile up.
 func (g *GPUCollector) Collect(ch chan<- prometheus.Metric) {
+	g.collect(context.TODO(), ch)
+}
+
+// collect supports context-aware metrics collection for a GPU Collector.
+// Context done-ness is checked immediately as well as at the start of per-GPU collection.
+// GPU collection encompasses the following areas:
+// 1) Health/state of the GPU itself
+// 2) Memory metrics (including health/state)
+// 3) Nvidia OEM
+func (g *GPUCollector) collect(ctx context.Context, ch chan<- prometheus.Metric) {
+	if ctx.Err() != nil {
+		g.logger.With("error", ctx.Err().Error()).Debug("skipping gpu collection")
+		return
+	}
 	g.collectorScrapeStatus.WithLabelValues("gpu").Set(float64(0))
 
-	service := g.redfishClient.Service
-	systems, err := service.Systems()
+	gpus, err := g.gatherGPUs(ctx)
 	if err != nil {
-		g.logger.Error("failed getting systems",
-			slog.Any("error", err),
-			slog.String("operation", "service.Systems()"),
-		)
+		g.logger.With("error", err, "operation", "gatherGPUs").Error("unable to gather gpus")
 		return
 	}
 
-	// Channel to collect GPU info from each system
-	gpuInfoChan := make(chan systemGPUInfo, len(systems))
-	wg := &sync.WaitGroup{}
-
-	// Track UUIDs to detect duplicates
-	uuidTracker := &sync.Map{} // map[uuid]gpuID
-
-	for _, system := range systems {
-		wg.Add(1)
-		go g.collectSystemGPUs(ch, system, wg, gpuInfoChan, uuidTracker)
-	}
-
-	// Close channel after all systems are processed
-	go func() {
-		wg.Wait()
-		close(gpuInfoChan)
-	}()
-
-	// Gather all GPU info while systems are being processed
-	var allSystemGPUs []systemGPUInfo
-	for info := range gpuInfoChan {
-		if len(info.gpus) > 0 {
-			allSystemGPUs = append(allSystemGPUs, info)
-			g.logger.Debug("Collected GPU info",
-				slog.String("system", info.systemName),
-				slog.Int("gpu_count", len(info.gpus)))
+	for _, gpu := range gpus {
+		if ctx.Err() != nil {
+			g.logger.With("error", ctx.Err().Error()).Debug("skipping further gpu collection")
+			return
 		}
+		procBaseLabels := []string{gpu.SystemName, gpu.ID}
+		g.whileContextAllows(ctx,
+			func() { g.emitGPUMemoryMetrics(ch, gpu, []string{gpu.SystemID, gpu.ID}) },
+			func() { g.emitHealthInfo(ch, gpu, procBaseLabels) },
+			func() { g.emitGPUOem(ch, gpu, procBaseLabels) },
+			func() { g.emitNVLinkTelemetry(ctx, ch, gpu) },
+		)
 	}
-
-	// Collect GPU context utilization metrics
-	// Note: GPU temperature and memory power are now collected via TelemetryService (HGX_PlatformEnvironmentMetrics_0)
-	g.collectGPUContextUtilization(ch, allSystemGPUs)
 
 	g.collectorScrapeStatus.WithLabelValues("gpu").Set(float64(1))
 }
 
-// collectSystemGPUs collects all GPU-related metrics for a system
-func (g *GPUCollector) collectSystemGPUs(ch chan<- prometheus.Metric, system *redfish.ComputerSystem, wg *sync.WaitGroup, gpuInfoChan chan<- systemGPUInfo, uuidTracker *sync.Map) {
-	defer wg.Done()
-
-	systemID := system.ID
-	systemName := system.Name
-	if systemName == "" {
-		systemName = systemID
+// gatherGPUs traverses all Redfish Systems, looking for Processors
+// which are reportedly GPUs.
+// To ease complexity on actual processing logic, gatherGPUs
+// returns a [SystemGPU] containing the GPU and system name and ID.
+func (g *GPUCollector) gatherGPUs(ctx context.Context) ([]SystemGPU, error) {
+	var ret []SystemGPU
+	if ctx.Err() != nil {
+		return ret, ctx.Err()
 	}
-
-	// Get processors first for GPU-specific metrics
-	processors, err := system.Processors()
+	systems, err := g.redfishClient.Service.Systems()
 	if err != nil {
-		g.logger.Error("failed to get processors for system",
-			slog.String("system_id", systemID),
-			slog.Any("error", err),
-		)
-		return
+		return ret, fmt.Errorf("unable to obtain systems data: %w", err)
 	}
 
-	// Filter for GPU processors and collect basic metrics (from main branch)
-	gpus := filterGPUs(processors)
-
-	// Send GPU info back through channel
-	if len(gpus) > 0 {
-		gpuInfoChan <- systemGPUInfo{
-			systemName: systemName,
-			systemID:   systemID,
-			gpus:       gpus,
-		}
-	}
-
-	for _, gpu := range gpus {
-		if gpu.Name == "" {
-			gpu.Name = gpu.ID
-		}
-		commonGPULabels := []string{gpu.Name, systemName, gpu.ID}
-		emitGPUHealth(ch, gpu, commonGPULabels, g.metrics)
-
-		// Get GPU-specific memory for ECC metrics
-		gpuMem, err := gpu.Memory()
-		if err != nil {
-			g.logger.Error("error getting gpu memory", slog.Any("error", err))
-			continue
-		}
-		memWithMetrics := make([]MemoryWithMetrics, len(gpuMem))
-		for i, mem := range gpuMem {
-			memWithMetrics[i] = &redfishMemoryAdapter{Memory: mem}
-		}
-		emitGPUECCMetrics(ch, memWithMetrics, g.logger, commonGPULabels, g.metrics)
-	}
-
-	// Collect detailed OEM metrics
-	// Note: TelemetryService provides aggregated memory statistics (ECC totals, bandwidth, etc.)
-	// while this collects structural health indicators (remapping, banks, state, capacity).
-	// These are complementary, not overlapping, so we always collect both.
-	wgMemory := &sync.WaitGroup{}
-	semMemory := make(chan struct{}, 5)
-
-	if memories, err := system.Memory(); err != nil {
-		g.logger.Error("failed to get memory for system",
-			slog.String("system_id", systemID),
-			slog.Any("error", err),
-		)
-	} else {
-		for _, memory := range memories {
-			// Collect metrics for GPU memory (HBM and GDDR types)
-			if isGPUMemory(memory.MemoryDeviceType) {
-				wgMemory.Add(1)
-				mem := memory // Capture loop variable
-				go func() {
-					semMemory <- struct{}{}        // Acquire semaphore
-					defer func() { <-semMemory }() // Release semaphore
-					g.collectGPUMemory(ch, systemName, systemID, mem, wgMemory)
-				}()
+	for _, sys := range systems {
+		if strings.Contains(sys.Name, "HGX_") {
+			procs, err := sys.Processors()
+			if err != nil {
+				g.logger.With("error", err, "system", sys.ODataID).Debug("unable to obtain system processors")
+				continue
+			}
+			for _, gpu := range filterGPUs(procs) {
+				ret = append(ret, SystemGPU{
+					SystemName: sys.Name,
+					SystemID:   sys.ID,
+					Processor:  gpu,
+				})
 			}
 		}
 	}
 
-	// Collect GPU processor metrics (reusing processors)
-	wgProcessor := &sync.WaitGroup{}
-	// Use semaphore to limit concurrent goroutines
-	semProcessor := make(chan struct{}, 5)
-
-	for _, processor := range processors {
-		// Collect metrics for any GPU processor
-		if processor.ProcessorType == redfish.GPUProcessorType {
-			wgProcessor.Add(1)
-			proc := processor // Capture loop variable
-			go func() {
-				semProcessor <- struct{}{}        // Acquire semaphore
-				defer func() { <-semProcessor }() // Release semaphore
-				g.collectGPUProcessor(ch, systemName, systemID, proc, wgProcessor, uuidTracker)
-			}()
-		}
-	}
-
-	// Wait for both memory and processor collection to complete
-	// This allows them to run in parallel for maximum efficiency
-	wgMemory.Wait()
-	wgProcessor.Wait()
-}
-
-// collectGPUMemory collects GPU memory metrics including OEM fields
-func (g *GPUCollector) collectGPUMemory(ch chan<- prometheus.Metric, systemName, systemID string, memory *redfish.Memory, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	memoryID := memory.ID
-	// Extract GPU ID from memory ID (e.g., "GPU_0_DRAM_0" -> "GPU_0")
-	gpuID := extractGPUID(memoryID)
-
-	labels := []string{systemName, systemID, gpuID, memoryID}
-
-	// Basic memory metrics
-	ch <- prometheus.MustNewConstMetric(
-		g.metrics["gpu_memory_capacity_mib"].desc,
-		prometheus.GaugeValue,
-		float64(memory.CapacityMiB),
-		labels...,
-	)
-
-	if stateValue, ok := parseCommonStatusState(memory.Status.State); ok {
-		ch <- prometheus.MustNewConstMetric(
-			g.metrics["gpu_memory_state"].desc,
-			prometheus.GaugeValue,
-			stateValue,
-			labels...,
-		)
-	}
-
-	if healthValue, ok := parseCommonStatusHealth(memory.Status.Health); ok {
-		ch <- prometheus.MustNewConstMetric(
-			g.metrics["gpu_memory_health"].desc,
-			prometheus.GaugeValue,
-			healthValue,
-			labels...,
-		)
-	}
-
-	// Get Memory OEM metrics
-	if memOEM, err := g.oemClient.GetMemoryOEMMetrics(memory.ODataID); err == nil {
-		ch <- prometheus.MustNewConstMetric(
-			g.metrics["gpu_memory_row_remapping_failed"].desc,
-			prometheus.GaugeValue,
-			boolToFloat64(memOEM.RowRemappingFailed),
-			labels...,
-		)
-		ch <- prometheus.MustNewConstMetric(
-			g.metrics["gpu_memory_row_remapping_pending"].desc,
-			prometheus.GaugeValue,
-			boolToFloat64(memOEM.RowRemappingPending),
-			labels...,
-		)
-	} else {
-		g.logger.Error("failed to get Memory OEM metrics",
-			slog.String("memory_id", memoryID),
-			slog.Any("error", err),
-		)
-	}
-
-	// Get MemoryMetrics OEM data
-	if metrics, err := memory.Metrics(); err == nil && metrics != nil {
-		if metricsOEM, err := g.oemClient.GetMemoryMetricsOEMData(metrics.ODataID); err == nil {
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_memory_correctable_row_remapping_count"].desc,
-				prometheus.GaugeValue,
-				float64(metricsOEM.CorrectableRowRemappingCount),
-				labels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_memory_uncorrectable_row_remapping_count"].desc,
-				prometheus.GaugeValue,
-				float64(metricsOEM.UncorrectableRowRemappingCount),
-				labels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_memory_high_availability_bank_count"].desc,
-				prometheus.GaugeValue,
-				float64(metricsOEM.HighAvailabilityBankCount),
-				labels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_memory_low_availability_bank_count"].desc,
-				prometheus.GaugeValue,
-				float64(metricsOEM.LowAvailabilityBankCount),
-				labels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_memory_no_availability_bank_count"].desc,
-				prometheus.GaugeValue,
-				float64(metricsOEM.NoAvailabilityBankCount),
-				labels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_memory_partial_availability_bank_count"].desc,
-				prometheus.GaugeValue,
-				float64(metricsOEM.PartialAvailabilityBankCount),
-				labels...,
-			)
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_memory_max_availability_bank_count"].desc,
-				prometheus.GaugeValue,
-				float64(metricsOEM.MaxAvailabilityBankCount),
-				labels...,
-			)
-		} else {
-			g.logger.Error("failed to get MemoryMetrics OEM data",
-				slog.String("memory_id", memoryID),
-				slog.Any("error", err),
-			)
-		}
-	}
-}
-
-// collectGPUProcessor collects GPU processor metrics including OEM fields
-func (g *GPUCollector) collectGPUProcessor(ch chan<- prometheus.Metric, systemName, systemID string, processor *redfish.Processor, wg *sync.WaitGroup, uuidTracker *sync.Map) {
-	defer wg.Done()
-
-	processorID := processor.ID
-	processorName := processor.Name
-	if processorName == "" {
-		processorName = processorID
-	}
-
-	labels := []string{systemName, systemID, processorID, processorName}
-
-	// Basic processor metrics
-	if stateValue, ok := parseCommonStatusState(processor.Status.State); ok {
-		ch <- prometheus.MustNewConstMetric(
-			g.metrics["gpu_processor_state"].desc,
-			prometheus.GaugeValue,
-			stateValue,
-			labels...,
-		)
-	}
-
-	if healthValue, ok := parseCommonStatusHealth(processor.Status.Health); ok {
-		ch <- prometheus.MustNewConstMetric(
-			g.metrics["gpu_processor_health"].desc,
-			prometheus.GaugeValue,
-			healthValue,
-			labels...,
-		)
-	}
-
-	ch <- prometheus.MustNewConstMetric(
-		g.metrics["gpu_processor_total_cores"].desc,
-		prometheus.GaugeValue,
-		float64(processor.TotalCores),
-		labels...,
-	)
-
-	ch <- prometheus.MustNewConstMetric(
-		g.metrics["gpu_processor_total_threads"].desc,
-		prometheus.GaugeValue,
-		float64(processor.TotalThreads),
-		labels...,
-	)
-
-	// Collect GPU info metric with serial number and UUID
-	serialNumber := processor.SerialNumber
-	uuid := processor.UUID
-
-	// Log if either is missing
-	if serialNumber == "" {
-		g.logger.Debug("GPU has no serial number",
-			slog.String("processor_id", processorID),
-			slog.String("system_id", systemID))
-	}
-	if uuid == "" {
-		g.logger.Warn("GPU has no UUID",
-			slog.String("processor_id", processorID),
-			slog.String("system_id", systemID))
-	}
-
-	// Only emit metric if at least one identifier is present
-	if serialNumber != "" || uuid != "" {
-		// Check for UUID uniqueness - UUIDs must always be unique
-		if uuid != "" {
-			if existingGPUID, exists := uuidTracker.LoadOrStore(uuid, processorID); exists {
-				g.logger.Error("duplicate GPU UUID detected - UUIDs must be unique",
-					slog.String("uuid", uuid),
-					slog.String("processor_id", processorID),
-					slog.String("duplicate_processor_id", existingGPUID.(string)),
-					slog.String("system_id", systemID))
-			}
-		}
-
-		infoLabels := []string{systemName, systemID, processorID, serialNumber, uuid}
-		ch <- prometheus.MustNewConstMetric(
-			g.metrics["gpu_info"].desc,
-			prometheus.GaugeValue,
-			1, // Info metrics always have value 1
-			infoLabels...,
-		)
-	}
-
-	// Get ProcessorMetrics OEM data
-	// Note: Most GPU performance metrics (SM activity, tensor cores, FP operations, PCIe bandwidth)
-	// are now collected via TelemetryService (HGX_ProcessorGPMMetrics_0) for better performance.
-	// We only collect SRAM ECC threshold here as it's a health indicator not in GPM.
-	if metrics, err := processor.Metrics(); err == nil && metrics != nil {
-		if metricsOEM, err := g.oemClient.GetProcessorMetricsOEMData(metrics.ODataID); err == nil {
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_sram_ecc_error_threshold_exceeded"].desc,
-				prometheus.GaugeValue,
-				boolToFloat64(metricsOEM.SRAMECCErrorThresholdExceeded),
-				labels...,
-			)
-		} else {
-			g.logger.Debug("failed to get ProcessorMetrics OEM data",
-				slog.String("processor_id", processorID),
-				slog.Any("error", err),
-			)
-		}
-	}
-
-	// Collect NVLink port metrics
-	g.collectNVLinkPorts(ch, systemName, systemID, processorID, processor)
-}
-
-// collectNVLinkPorts collects NVLink port metrics for a GPU processor
-func (g *GPUCollector) collectNVLinkPorts(ch chan<- prometheus.Metric, systemName, systemID, gpuID string, processor *redfish.Processor) {
-	// Note: processor.Ports() won't return GPU ports per gofish code, and
-	// processor.GraphicsController().Ports() doesn't work on current hardware.
-	// Using direct URL construction as a workaround.
-	portsURL := processor.ODataID + "/Ports"
-	ports, err := redfish.ListReferencedPorts(processor.GetClient(), portsURL)
-	if err != nil {
-		g.logger.Error("failed to get ports",
-			slog.String("gpu_id", gpuID),
-			slog.String("system_id", systemID),
-			slog.String("ports_url", portsURL),
-			slog.Any("error", err))
-		return
-	}
-
-	for _, port := range ports {
-		if port.PortProtocol != redfish.NVLinkPortProtocol && !strings.Contains(port.ID, "NVLink_") {
-			continue
-		}
-
-		portID := port.ID
-		portType := string(port.PortType)
-		portProtocol := string(port.PortProtocol)
-		labels := []string{systemName, systemID, gpuID, portID, portType, portProtocol}
-
-		// Basic port metrics
-		if stateValue, ok := parseCommonStatusState(port.Status.State); ok {
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_nvlink_state"].desc,
-				prometheus.GaugeValue,
-				stateValue,
-				labels...,
-			)
-		}
-
-		if healthValue, ok := parseCommonStatusHealth(port.Status.Health); ok {
-			ch <- prometheus.MustNewConstMetric(
-				g.metrics["gpu_nvlink_health"].desc,
-				prometheus.GaugeValue,
-				healthValue,
-				labels...,
-			)
-		}
-
-		// Get PortMetrics OEM data
-		if metrics, err := port.Metrics(); err == nil && metrics != nil {
-			if metricsOEM, err := g.oemClient.GetPortMetricsOEMData(metrics.ODataID); err == nil {
-				ch <- prometheus.MustNewConstMetric(
-					g.metrics["gpu_nvlink_runtime_error"].desc,
-					prometheus.GaugeValue,
-					boolToFloat64(metricsOEM.NVLinkErrors.RuntimeError),
-					labels...,
-				)
-				ch <- prometheus.MustNewConstMetric(
-					g.metrics["gpu_nvlink_training_error"].desc,
-					prometheus.GaugeValue,
-					boolToFloat64(metricsOEM.NVLinkErrors.TrainingError),
-					labels...,
-				)
-				ch <- prometheus.MustNewConstMetric(
-					g.metrics["gpu_nvlink_link_error_recovery_count"].desc,
-					prometheus.GaugeValue,
-					float64(metricsOEM.LinkErrorRecoveryCount),
-					labels...,
-				)
-				ch <- prometheus.MustNewConstMetric(
-					g.metrics["gpu_nvlink_link_downed_count"].desc,
-					prometheus.GaugeValue,
-					float64(metricsOEM.LinkDownedCount),
-					labels...,
-				)
-				ch <- prometheus.MustNewConstMetric(
-					g.metrics["gpu_nvlink_symbol_errors"].desc,
-					prometheus.GaugeValue,
-					float64(metricsOEM.SymbolErrors),
-					labels...,
-				)
-				ch <- prometheus.MustNewConstMetric(
-					g.metrics["gpu_nvlink_bit_error_rate"].desc,
-					prometheus.GaugeValue,
-					metricsOEM.BitErrorRate,
-					labels...,
-				)
-			} else {
-				g.logger.Error("failed to get PortMetrics OEM data",
-					slog.String("port_id", portID),
-					slog.Any("error", err),
-				)
-			}
-		}
-	}
-}
-
-// collectGPUContextUtilization collects accumulated GPU context utilization duration from ProcessorMetrics
-func (g *GPUCollector) collectGPUContextUtilization(ch chan<- prometheus.Metric, allSystemGPUs []systemGPUInfo) {
-	wg := &sync.WaitGroup{}
-	// Limit concurrent requests
-	sem := make(chan struct{}, 5)
-
-	for _, sysInfo := range allSystemGPUs {
-		for _, gpu := range sysInfo.gpus {
-			wg.Add(1)
-			go func(gpuProcessor *redfish.Processor, systemName, systemID string) {
-				defer wg.Done()
-				sem <- struct{}{}        // Acquire semaphore
-				defer func() { <-sem }() // Release semaphore
-
-				g.collectSingleGPUContextUtilization(ch, gpuProcessor, systemName, systemID)
-			}(gpu, sysInfo.systemName, sysInfo.systemID)
-		}
-	}
-
-	wg.Wait()
-}
-
-// collectSingleGPUContextUtilization collects context utilization for a single GPU
-func (g *GPUCollector) collectSingleGPUContextUtilization(ch chan<- prometheus.Metric, gpuProcessor *redfish.Processor, systemName, systemID string) {
-	// Use gofish's built-in method to get ProcessorMetrics
-	metrics, err := gpuProcessor.Metrics()
-	if err != nil {
-		g.logger.Debug("failed to fetch GPU processor metrics",
-			slog.String("gpu_id", gpuProcessor.ID),
-			slog.Any("error", err),
-		)
-		return
-	}
-
-	if metrics == nil {
-		g.logger.Debug("no processor metrics available",
-			slog.String("gpu_id", gpuProcessor.ID),
-		)
-		return
-	}
-
-	// Parse the OEM field to look for NVIDIA-specific data
-	if len(metrics.OEM) == 0 {
-		g.logger.Debug("no OEM data in processor metrics",
-			slog.String("gpu_id", gpuProcessor.ID),
-		)
-		return
-	}
-
-	var oemData map[string]interface{}
-	if err := json.Unmarshal(metrics.OEM, &oemData); err != nil {
-		g.logger.Warn("failed to parse OEM data",
-			slog.String("gpu_id", gpuProcessor.ID),
-			slog.Any("error", err),
-		)
-		return
-	}
-
-	// Look for AccumulatedGPUContextUtilizationDuration
-	// It could be at top level of OEM or under a vendor key like "Nvidia"
-	var durationStr string
-
-	// Check if it's directly in OEM
-	if val, ok := oemData["AccumulatedGPUContextUtilizationDuration"].(string); ok {
-		durationStr = val
-	} else {
-		// Check under vendor keys (e.g., "Nvidia", "NVIDIA", etc.)
-		for vendorKey, vendorData := range oemData {
-			if vendorMap, ok := vendorData.(map[string]interface{}); ok {
-				if val, ok := vendorMap["AccumulatedGPUContextUtilizationDuration"].(string); ok {
-					durationStr = val
-					g.logger.Debug("found GPU context utilization in OEM vendor section",
-						slog.String("vendor", vendorKey),
-						slog.String("gpu_id", gpuProcessor.ID),
-					)
-					break
-				}
-			}
-		}
-	}
-
-	if durationStr == "" {
-		g.logger.Debug("AccumulatedGPUContextUtilizationDuration not found in OEM data",
-			slog.String("gpu_id", gpuProcessor.ID),
-		)
-		return
-	}
-
-	// Parse ISO 8601 duration using sosodev/duration library
-	duration, err := isoDuration.Parse(durationStr)
-	if err != nil {
-		g.logger.Warn("failed to parse GPU context utilization duration",
-			slog.String("gpu_id", gpuProcessor.ID),
-			slog.String("duration", durationStr),
-			slog.Any("error", err),
-		)
-		return
-	}
-
-	// Convert to seconds (as float64 for Prometheus)
-	seconds := duration.ToTimeDuration().Seconds()
-
-	g.logger.Debug("collected GPU context utilization",
-		slog.String("gpu_id", gpuProcessor.ID),
-		slog.String("duration_str", durationStr),
-		slog.Float64("seconds", seconds),
-	)
-
-	// Emit the metric as a counter (since it's accumulated time)
-	labels := []string{systemName, systemID, gpuProcessor.ID}
-
-	ch <- prometheus.MustNewConstMetric(
-		g.metrics["gpu_context_utilization_seconds_total"].desc,
-		prometheus.CounterValue,
-		seconds,
-		labels...,
-	)
-}
-
-// extractGPUID extracts the GPU ID from a memory or other component ID
-// e.g., "GPU_0_DRAM_0" -> "GPU_0"
-func extractGPUID(componentID string) string {
-	parts := strings.Split(componentID, "_")
-	if len(parts) >= 2 && parts[0] == "GPU" {
-		return fmt.Sprintf("GPU_%s", parts[1])
-	}
-	return componentID
-}
-
-// Helper types and functions from main branch
-
-// MemoryWithMetrics interface for accessing memory metrics
-type MemoryWithMetrics interface {
-	Metrics() (*redfish.MemoryMetrics, error)
-	GetID() string
-}
-
-// redfishMemoryAdapter adapts redfish.Memory to MemoryWithMetrics interface
-type redfishMemoryAdapter struct {
-	*redfish.Memory
-}
-
-func (r *redfishMemoryAdapter) GetID() string {
-	return r.ID
+	return ret, nil
 }
 
 // filterGPUs filters processors to return only GPU processors
@@ -779,36 +235,273 @@ func filterGPUs(cpus []*redfish.Processor) []*redfish.Processor {
 	return gpus
 }
 
-// emitGPUHealth emits GPU health metrics
-func emitGPUHealth(ch chan<- prometheus.Metric, gpu *redfish.Processor, commonLabels []string, metrics map[string]Metric) {
-	if gpuStatusHealthValue, ok := parseCommonStatusHealth(gpu.Status.Health); ok {
+// emitGPUMemoryMetrics iterates a slice of [*redfish.Memory] belonging to the provided [SystemGPU],
+// performing a network request to the Redfish device to gather memory metrics.
+// Collected metrics are emitted onto the provided channel.
+func (g *GPUCollector) emitGPUMemoryMetrics(ch chan<- prometheus.Metric, gpu SystemGPU, commonLabels []string) {
+	gpuMems, err := gpu.Memory()
+	if err != nil {
+		g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("failed obtaining gpu memory, skipping")
+		return
+	}
+	for _, mem := range gpuMems {
+		memMetric, err := mem.Metrics()
+		if err != nil {
+			g.logger.With("error", err, "gpu_id", gpu.ID, "memory_id", mem.ID, "system_name", gpu.SystemName).Error("failed obtaining gpu memory metrics, skipping")
+			continue
+		}
+		memLabels := make([]string, len(commonLabels))
+		copy(memLabels, commonLabels)
+		memLabels = append(memLabels, mem.ID)
+
 		ch <- prometheus.MustNewConstMetric(
-			metrics["gpu_health"].desc,
+			g.metrics["gpu_memory_ecc_correctable"].desc,
+			prometheus.CounterValue,
+			float64(memMetric.LifeTime.CorrectableECCErrorCount),
+			memLabels...)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_ecc_uncorrectable"].desc,
+			prometheus.CounterValue,
+			float64(memMetric.LifeTime.UncorrectableECCErrorCount),
+			memLabels...)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_capacity_mib"].desc,
 			prometheus.GaugeValue,
-			gpuStatusHealthValue,
-			commonLabels...)
+			float64(mem.CapacityMiB),
+			[]string{gpu.SystemName, gpu.ID, mem.ID}...,
+		)
+		if stateValue, ok := parseCommonStatusState(mem.Status.State); ok {
+			ch <- prometheus.MustNewConstMetric(
+				g.metrics["gpu_memory_state"].desc,
+				prometheus.GaugeValue,
+				stateValue,
+				memLabels...,
+			)
+		}
+		if healthValue, ok := parseCommonStatusHealth(mem.Status.Health); ok {
+			ch <- prometheus.MustNewConstMetric(
+				g.metrics["gpu_memory_health"].desc,
+				prometheus.GaugeValue,
+				healthValue,
+				memLabels...,
+			)
+		}
+
+		// Get Memory OEM metrics
+		if memOEM, err := g.oemClient.GetMemoryOEMMetrics(mem.ODataID); err == nil {
+			ch <- prometheus.MustNewConstMetric(
+				g.metrics["gpu_memory_row_remapping_failed"].desc,
+				prometheus.GaugeValue,
+				boolToFloat64(memOEM.RowRemappingFailed),
+				memLabels...,
+			)
+			ch <- prometheus.MustNewConstMetric(
+				g.metrics["gpu_memory_row_remapping_pending"].desc,
+				prometheus.GaugeValue,
+				boolToFloat64(memOEM.RowRemappingPending),
+				memLabels...,
+			)
+		} else {
+			g.logger.Error("failed to get Memory OEM metrics",
+				slog.String("memory_id", mem.ID),
+				slog.Any("error", err),
+			)
+		}
+
+		var oemMem MemoryMetricsResponse
+		if err := json.Unmarshal(memMetric.OEM, &oemMem); err != nil {
+			g.logger.With("error", err).Debug("unable to unmarshal OEM memory")
+			continue
+		}
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_correctable_row_remapping_count"].desc,
+			prometheus.GaugeValue,
+			float64(oemMem.Nvidia.RowRemapping.CorrectableRowRemappingCount),
+			memLabels...,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_uncorrectable_row_remapping_count"].desc,
+			prometheus.GaugeValue,
+			float64(oemMem.Nvidia.RowRemapping.UncorrectableRowRemappingCount),
+			memLabels...,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_high_availability_bank_count"].desc,
+			prometheus.GaugeValue,
+			float64(oemMem.Nvidia.RowRemapping.HighAvailabilityBankCount),
+			memLabels...,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_low_availability_bank_count"].desc,
+			prometheus.GaugeValue,
+			float64(oemMem.Nvidia.RowRemapping.LowAvailabilityBankCount),
+			memLabels...,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_no_availability_bank_count"].desc,
+			prometheus.GaugeValue,
+			float64(oemMem.Nvidia.RowRemapping.NoAvailabilityBankCount),
+			memLabels...,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_partial_availability_bank_count"].desc,
+			prometheus.GaugeValue,
+			float64(oemMem.Nvidia.RowRemapping.PartialAvailabilityBankCount),
+			memLabels...,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_memory_max_availability_bank_count"].desc,
+			prometheus.GaugeValue,
+			float64(oemMem.Nvidia.RowRemapping.MaxAvailabilityBankCount),
+			memLabels...,
+		)
 	}
 }
 
-// emitGPUECCMetrics emits GPU ECC memory error metrics
-func emitGPUECCMetrics(ch chan<- prometheus.Metric, mem []MemoryWithMetrics, logger *slog.Logger, commonLabels []string, metrics map[string]Metric) {
-	for _, m := range mem {
-		memMetric, err := m.Metrics()
+func (g *GPUCollector) emitHealthInfo(ch chan<- prometheus.Metric, gpu SystemGPU, procBaseLabels []string) {
+	if stateValue, ok := parseCommonStatusState(gpu.Status.State); ok {
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_state"].desc,
+			prometheus.GaugeValue,
+			stateValue,
+			procBaseLabels...,
+		)
+	}
+	if healthValue, ok := parseCommonStatusHealth(gpu.Status.Health); ok {
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_health"].desc,
+			prometheus.GaugeValue,
+			healthValue,
+			procBaseLabels...,
+		)
+	}
+	var gpuSerial, gpuUUID string
+	if gpuSerial = gpu.SerialNumber; gpuSerial == "" {
+		gpuSerial = "unknown"
+	}
+	if gpuUUID = gpu.UUID; gpuUUID == "" {
+		gpuUUID = "unknown"
+	}
+	infoLabels := []string{gpu.SystemName, gpu.ID, gpuSerial, gpuUUID}
+	ch <- prometheus.MustNewConstMetric(
+		g.metrics["gpu_info"].desc,
+		prometheus.GaugeValue,
+		1,
+		infoLabels...,
+	)
+}
+
+func (g *GPUCollector) emitGPUOem(ch chan<- prometheus.Metric, gpu SystemGPU, procBaseLabels []string) {
+	gpuOEMMetrics, err := gpu.Metrics()
+	if err != nil {
+		g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("failed obtaining gpu processor metrics, skipping")
+		return
+	}
+	var gpuOEM ProcessorMetricsOEMResponse
+	if err := json.Unmarshal(gpuOEMMetrics.OEM, &gpuOEM); err != nil {
+		g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("failed unmarshaling gpu processor metrics, skipping")
+		return
+	}
+	ch <- prometheus.MustNewConstMetric(
+		g.metrics["gpu_sram_ecc_error_threshold_exceeded"].desc,
+		prometheus.GaugeValue,
+		boolToFloat64(gpuOEM.Nvidia.SRAMECCErrorThresholdExceeded),
+		procBaseLabels...,
+	)
+	if gpuOEM.Nvidia.AccumulatedGPUContextUtilizationDuration != "" {
+		duration, err := isoDuration.Parse(gpuOEM.Nvidia.AccumulatedGPUContextUtilizationDuration)
 		if err != nil {
-			logger.Error("error getting gpu memory metrics", slog.Any("error", err))
+			g.logger.With("error", err, "gpu_id", gpu.ID, "raw_duration", duration).Warn("unable to parse gpu context duration, setting to zero")
+			duration = &isoDuration.Duration{
+				Seconds: 0,
+			}
+		}
+		labels := []string{gpu.SystemName, gpu.ID}
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_context_utilization_seconds_total"].desc,
+			prometheus.CounterValue,
+			duration.ToTimeDuration().Seconds(),
+			labels...,
+		)
+	}
+}
+
+func (g *GPUCollector) emitNVLinkTelemetry(ctx context.Context, ch chan<- prometheus.Metric, gpu SystemGPU) {
+	rfClient := g.redfishClient.WithContext(ctx)
+	rfPath := fmt.Sprintf(`%s/Ports?$expand=.($levels=2)`, gpu.ODataID)
+	response, err := rfClient.Get(rfPath)
+	if err != nil {
+		g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("unable to gather NVLink data, skipping")
+		return
+	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("unable to read in NVLink data, skipping")
+		return
+	}
+	var agg GPUNVLinkCollection
+	if err := json.Unmarshal(body, &agg); err != nil {
+		g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("unable to unmarshal NVLink data, skipping")
+		return
+	}
+	for _, port := range agg.Members {
+		if port.PortProtocol != redfish.NVLinkPortProtocol ||
+			!strings.Contains(port.ID, "NVLink_") {
 			continue
 		}
-		metricLabels := append(commonLabels, m.GetID())
-
+		strProto := string(port.PortProtocol)
+		portLabels := []string{gpu.SystemName, gpu.ID, port.ID, port.PortType, strProto}
+		if stateValue, ok := parseCommonStatusState(port.Status.State); ok {
+			ch <- prometheus.MustNewConstMetric(
+				g.metrics["gpu_nvlink_state"].desc,
+				prometheus.GaugeValue,
+				stateValue,
+				portLabels...,
+			)
+		}
+		if healthValue, ok := parseCommonStatusHealth(port.Status.Health); ok {
+			ch <- prometheus.MustNewConstMetric(
+				g.metrics["gpu_nvlink_health"].desc,
+				prometheus.GaugeValue,
+				healthValue,
+				portLabels...,
+			)
+		}
 		ch <- prometheus.MustNewConstMetric(
-			metrics["gpu_memory_ecc_correctable"].desc,
-			prometheus.CounterValue,
-			float64(memMetric.CurrentPeriod.CorrectableECCErrorCount),
-			metricLabels...)
+			g.metrics["gpu_nvlink_runtime_error"].desc,
+			prometheus.GaugeValue,
+			boolToFloat64(port.Metrics.Oem.NVidiaOEM.NVLinkErrors.RuntimeError),
+			portLabels...,
+		)
 		ch <- prometheus.MustNewConstMetric(
-			metrics["gpu_memory_ecc_uncorrectable"].desc,
-			prometheus.CounterValue,
-			float64(memMetric.CurrentPeriod.UncorrectableECCErrorCount),
-			metricLabels...)
+			g.metrics["gpu_nvlink_training_error"].desc,
+			prometheus.GaugeValue,
+			boolToFloat64(port.Metrics.Oem.NVidiaOEM.NVLinkErrors.TrainingError),
+			portLabels...,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_nvlink_link_error_recovery_count"].desc,
+			prometheus.GaugeValue,
+			float64(port.Metrics.Oem.NVidiaOEM.LinkErrorRecoveryCount),
+			portLabels...,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_nvlink_link_downed_count"].desc,
+			prometheus.GaugeValue,
+			float64(port.Metrics.Oem.NVidiaOEM.LinkDownedCount),
+			portLabels...,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_nvlink_symbol_errors"].desc,
+			prometheus.GaugeValue,
+			float64(port.Metrics.Oem.NVidiaOEM.SymbolErrors),
+			portLabels...,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			g.metrics["gpu_nvlink_bit_error_rate"].desc,
+			prometheus.GaugeValue,
+			port.Metrics.Oem.NVidiaOEM.BitErrorRate,
+			portLabels...,
+		)
 	}
 }

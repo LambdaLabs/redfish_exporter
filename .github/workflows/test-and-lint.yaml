@@ -18,5 +18,5 @@ jobs:
       with:
         version: latest
         args: ./...
-    - name: Run unit tests
-      run: make unit-test
+    - name: Invoke CI Makefile target
+      run: make ci

@@ -1,0 +1,225 @@
+{
+  "@Redfish.Settings": {
+    "@odata.type": "#Settings.v1_3_3.Settings",
+    "SettingsObject": {
+      "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_2/Settings"
+    }
+  },
+  "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_2",
+  "@odata.type": "#Processor.v1_20_0.Processor",
+  "Actions": {
+    "#Processor.Reset": {
+      "ResetType@Redfish.AllowableValues": [
+        "ForceRestart"
+      ],
+      "target": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_2/Actions/Processor.Reset"
+    }
+  },
+  "BaseSpeedMHz": 1155,
+  "EnvironmentMetrics": {
+    "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_2/EnvironmentMetrics"
+  },
+  "FirmwareVersion": "97.00.7F.00.04",
+  "Id": "GPU_SXM_2",
+  "Links": {
+    "Chassis": {
+      "@odata.id": "/redfish/v1/Chassis/HGX_GPU_SXM_2"
+    },
+    "Memory": [
+      {
+        "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Memory/GPU_SXM_2_DRAM_0"
+      }
+    ],
+    "PCIeDevice": {
+      "@odata.id": "/redfish/v1/Chassis/HGX_GPU_SXM_2/PCIeDevices/GPU_SXM_2"
+    },
+    "PCIeFunctions": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/HGX_GPU_SXM_2/PCIeDevices/GPU_SXM_2/PCIeFunctions/0"
+      }
+    ]
+  },
+  "Location": {
+    "PartLocation": {
+      "LocationType": "Embedded",
+      "ServiceLabel": "SXM2"
+    }
+  },
+  "Manufacturer": "NVIDIA",
+  "MaxSpeedMHz": 1965,
+  "MemorySummary": {
+    "ECCModeEnabled": true,
+    "Metrics": {
+      "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_2/MemorySummary/MemoryMetrics"
+    },
+    "TotalMemorySizeMiB": 183359
+  },
+  "Metrics": {
+    "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_2/ProcessorMetrics"
+  },
+  "MinSpeedMHz": 120,
+  "Model": "B200 180GB HBM3e",
+  "Name": "Processor",
+  "Oem": {
+    "Nvidia": {
+      "@odata.type": "#NvidiaProcessor.v1_4_0.NvidiaGPU",
+      "CCDevModeEnabled": false,
+      "CCModeEnabled": false,
+      "DefaultBoostClockSpeedMHz": 1965,
+      "ErrorInjection": {
+        "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_2/Oem/Nvidia/ErrorInjection"
+      },
+      "InbandReconfigPermissions": {
+        "BAR0Firewall": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": false,
+          "AllowPersistentConfig": true
+        },
+        "BAR0TypeConfig": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": false,
+          "AllowPersistentConfig": false
+        },
+        "CCDevMode": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": false,
+          "AllowPersistentConfig": true
+        },
+        "CCMode": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": false,
+          "AllowPersistentConfig": true
+        },
+        "ClockLimit": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": false,
+          "AllowPersistentConfig": true
+        },
+        "ECCEnable": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": true,
+          "AllowPersistentConfig": true
+        },
+        "EDPpScalingFactor": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": false,
+          "AllowPersistentConfig": false
+        },
+        "ForceTestCoupling": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": false,
+          "AllowPersistentConfig": true
+        },
+        "FusingMode": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": false,
+          "AllowPersistentConfig": false
+        },
+        "HBMFrequencyChange": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": false,
+          "AllowPersistentConfig": true
+        },
+        "HULKLicenseUpdate": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": false,
+          "AllowPersistentConfig": true
+        },
+        "InSystemTest": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": true,
+          "AllowPersistentConfig": false
+        },
+        "NVLinkDisable": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": true,
+          "AllowPersistentConfig": true
+        },
+        "PCIeVFConfiguration": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": true,
+          "AllowPersistentConfig": false
+        },
+        "PowerSmoothingPrivilegeLevel1": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": false,
+          "AllowPersistentConfig": false
+        },
+        "PowerSmoothingPrivilegeLevel2": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": false,
+          "AllowPersistentConfig": false
+        },
+        "RowRemappingAllowed": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": false,
+          "AllowPersistentConfig": true
+        },
+        "RowRemappingFeature": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": true,
+          "AllowPersistentConfig": false
+        },
+        "TGPCurrentLimit": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": false,
+          "AllowPersistentConfig": true
+        },
+        "TGPMaxLimit": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": false,
+          "AllowPersistentConfig": true
+        },
+        "TGPMinLimit": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": false,
+          "AllowPersistentConfig": true
+        },
+        "TGPRatedLimit": {
+          "AllowFLRPersistentConfig": false,
+          "AllowOneShotConfig": false,
+          "AllowPersistentConfig": true
+        }
+      },
+      "MIGModeEnabled": false,
+      "PowerSmoothing": {
+        "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_2/Oem/Nvidia/PowerSmoothing"
+      },
+      "TotalNumberNVLinks": 18,
+      "WorkloadPowerProfile": {
+        "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_2/Oem/Nvidia/WorkloadPowerProfile"
+      }
+    }
+  },
+  "OperatingSpeedMHz": 1965,
+  "OperatingSpeedRangeMHz": {
+    "AllowableMax": 1965,
+    "AllowableMin": 120,
+    "DataSourceUri": "/redfish/v1/Chassis/HGX_GPU_SXM_2/Controls/ClockLimit_0",
+    "SettingMax": 4294967295,
+    "SettingMin": 4294967295
+  },
+  "PartNumber": "2901-886-A1",
+  "Ports": {
+    "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_2/Ports"
+  },
+  "ProcessorType": "GPU",
+  "SpeedLimitMHz": 1965,
+  "SpeedLocked": true,
+  "Status": {
+    "Conditions": [],
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Enabled"
+  },
+  "SystemInterface": {
+    "InterfaceType": "PCIe",
+    "PCIe": {
+      "LanesInUse": 16,
+      "MaxLanes": 16,
+      "MaxPCIeType": "Gen5",
+      "PCIeType": "Gen5"
+    }
+  },
+  "Version": "2901-886-A1"
+}

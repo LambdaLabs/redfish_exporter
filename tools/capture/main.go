@@ -16,18 +16,18 @@ import (
 )
 
 type Capture struct {
-	client      *http.Client
-	baseURL     string
-	outputPath  string
-	visited     map[string]bool
-	visitedMu   sync.Mutex
-	stack       []string
-	maxDocs     int
-	sleepMs     int
-	skipPaths   []string
-	outputFile  *os.File
-	count       int
-	startTime   time.Time
+	client     *http.Client
+	baseURL    string
+	outputPath string
+	visited    map[string]bool
+	visitedMu  sync.Mutex
+	stack      []string
+	maxDocs    int
+	sleepMs    int
+	skipPaths  []string
+	outputFile *os.File
+	count      int
+	startTime  time.Time
 }
 
 func main() {
@@ -202,11 +202,11 @@ func (c *Capture) crawl() {
 		links := c.extractODataLinks(doc)
 		for _, link := range links {
 			absURL := c.normalizeLink(link, url)
-			
+
 			c.visitedMu.Lock()
 			alreadyVisited := c.visited[absURL]
 			c.visitedMu.Unlock()
-			
+
 			if !alreadyVisited && c.sameHost(absURL) && !c.shouldSkipURL(absURL) {
 				c.stack = append(c.stack, absURL)
 			}
@@ -294,12 +294,12 @@ func (c *Capture) sameHost(urlStr string) bool {
 	if err != nil {
 		return false
 	}
-	
+
 	checkURL, err := url.Parse(urlStr)
 	if err != nil {
 		return false
 	}
-	
+
 	return baseURL.Host == checkURL.Host
 }
 

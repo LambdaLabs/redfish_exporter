@@ -93,11 +93,14 @@ The GPU Collector primarily exposes a wealth of Nvidia GPU-related data using a 
 
 Against a Lambda lab system, the collector yields the following timeseries:
 
-```
+```text
+# HELP redfish_exporter_collector_duration_seconds Collector time duration.
+# TYPE redfish_exporter_collector_duration_seconds gauge
+
 # HELP redfish_gpu_context_utilization_seconds_total Accumulated GPU context utilization duration in seconds
 # TYPE redfish_gpu_context_utilization_seconds_total counter
 
-# HELP redfish_gpu_health health of gpu reported by system,1(OK),2(Warning),3(Critical)
+# HELP redfish_gpu_health GPU processor health,1(OK),2(Warning),3(Critical)
 # TYPE redfish_gpu_health gauge
 
 # HELP redfish_gpu_info GPU information with serial number and UUID
@@ -169,20 +172,14 @@ Against a Lambda lab system, the collector yields the following timeseries:
 # HELP redfish_gpu_nvlink_training_error NVLink training error status (1 if error)
 # TYPE redfish_gpu_nvlink_training_error gauge
 
-# HELP redfish_gpu_processor_health GPU processor health,1(OK),2(Warning),3(Critical)
-# TYPE redfish_gpu_processor_health gauge
-
-# HELP redfish_gpu_processor_state GPU processor state,1(Enabled),2(Disabled),3(StandbyOffinline),4(StandbySpare),5(InTest),6(Starting),7(Absent),8(UnavailableOffline),9(Deferring),10(Quiesced),11(Updating)
-# TYPE redfish_gpu_processor_state gauge
-
-# HELP redfish_gpu_processor_total_cores GPU processor total cores
-# TYPE redfish_gpu_processor_total_cores gauge
-
-# HELP redfish_gpu_processor_total_threads GPU processor total threads
-# TYPE redfish_gpu_processor_total_threads gauge
-
 # HELP redfish_gpu_sram_ecc_error_threshold_exceeded GPU SRAM ECC error threshold exceeded (1 if exceeded)
 # TYPE redfish_gpu_sram_ecc_error_threshold_exceeded gauge
+
+# HELP redfish_gpu_state GPU processor state,1(Enabled),2(Disabled),3(StandbyOffinline),4(StandbySpare),5(InTest),6(Starting),7(Absent),8(UnavailableOffline),9(Deferring),10(Quiesced),11(Updating)
+# TYPE redfish_gpu_state gauge
+
+# HELP redfish_up redfish up
+# TYPE redfish_up gauge
 ```
 
 Exposes no user configuration.
@@ -592,3 +589,13 @@ Against a Lambda lab system, the collector yields the following timeseries:
 ```
 
 Exposes no user configuration.
+
+# Extra
+
+## Regenerating the above metrics HELP/TYPE
+
+Maybe a good automation target? Until then, for a given `${TARGET}` representing expected output and given a specific `${MODULE}`, GNU AWK will save the day for wholesale replacing of the above examples:
+
+```shell
+curl -s "http://localhost:9610/redfish?target=${TARGET}&module=${MODULE}" | awk '/^# (TYPE|HELP)/ { if (/^# TYPE/) {print; print ""} else {print} }'
+``` 

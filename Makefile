@@ -1,4 +1,4 @@
-.PHONY: build test mock-test capture clean help lint fmt fmt-check unit-test integration-test coverage check ci perf-mock perf-live perf-help
+.PHONY: benchmark build test mock-test capture clean help lint fmt fmt-check gotests unit-test integration-test coverage check ci perf-mock perf-live perf-help
 
 # Default target
 help:
@@ -31,9 +31,10 @@ help:
 build:
 	go build -o redfish_exporter
 
-# Run tests
-test:
-	go test -v ./...
+# Run tests and benchmarks
+test: gotests benchmark
+
+gotests: unit-test
 
 # Run mock server and exporter for testing
 mock-test:
@@ -85,7 +86,7 @@ clean:
 
 # Run unit tests only (exclude integration)
 unit-test:
-	go test -v -race -short ./...
+	go test -v -race -count=1 ./...
 
 # Run integration tests
 integration-test:
@@ -238,3 +239,7 @@ perf-compare:
 	@if [ ! -z "$$MOCK_PID" ]; then \
 		kill $$MOCK_PID 2>/dev/null || true; \
 	fi
+
+benchmark:
+	@cd collector ; \
+	go test -bench=.

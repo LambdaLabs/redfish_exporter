@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -14,16 +15,16 @@ import (
 // SystemSubsystem is the system subsystem
 var (
 	SystemSubsystem                   = "system"
-	SystemLabelNames                  = []string{"hostname", "resource", "system_id"}
-	SystemMemoryLabelNames            = []string{"hostname", "resource", "memory", "memory_id"}
-	SystemProcessorLabelNames         = []string{"hostname", "resource", "processor", "processor_id"}
-	SystemVolumeLabelNames            = []string{"hostname", "resource", "volume", "volume_id"}
-	SystemDriveLabelNames             = []string{"hostname", "resource", "drive", "drive_id", "storage_controller_id"}
-	SystemStorageControllerLabelNames = []string{"hostname", "resource", "storage_controller", "storage_controller_id"}
-	SystemPCIeDeviceLabelNames        = []string{"hostname", "resource", "pcie_device", "pcie_device_id", "pcie_device_partnumber", "pcie_device_type", "pcie_serial_number"}
-	SystemNetworkInterfaceLabelNames  = []string{"hostname", "resource", "network_interface", "network_interface_id"}
-	SystemEthernetInterfaceLabelNames = []string{"hostname", "resource", "ethernet_interface", "ethernet_interface_id", "ethernet_interface_speed"}
-	SystemPCIeFunctionLabelNames      = []string{"hostname", "resource", "pcie_function_name", "pcie_function_id", "pci_function_deviceclass", "pci_function_type"}
+	SystemLabelNames                  = []string{"resource", "system_id"}
+	SystemMemoryLabelNames            = []string{"resource", "memory", "memory_id"}
+	SystemProcessorLabelNames         = []string{"resource", "processor", "processor_id"}
+	SystemVolumeLabelNames            = []string{"resource", "volume", "volume_id"}
+	SystemDriveLabelNames             = []string{"resource", "drive", "drive_id", "storage_controller_id"}
+	SystemStorageControllerLabelNames = []string{"resource", "storage_controller", "storage_controller_id"}
+	SystemPCIeDeviceLabelNames        = []string{"resource", "pcie_device", "pcie_device_id", "pcie_device_partnumber", "pcie_device_type", "pcie_serial_number"}
+	SystemNetworkInterfaceLabelNames  = []string{"resource", "network_interface", "network_interface_id"}
+	SystemEthernetInterfaceLabelNames = []string{"resource", "ethernet_interface", "ethernet_interface_id", "ethernet_interface_speed"}
+	SystemPCIeFunctionLabelNames      = []string{"resource", "pcie_function_name", "pcie_function_id", "pci_function_deviceclass", "pci_function_type"}
 
 	SystemLogServiceLabelNames = []string{"system_id", "log_service", "log_service_id", "log_service_enabled", "log_service_overwrite_policy"}
 
@@ -33,7 +34,7 @@ var (
 // SystemCollector implements the prometheus.Collector.
 type SystemCollector struct {
 	redfishClient *gofish.APIClient
-	config        *config.SystemCollectorConfig
+	config        config.SystemCollectorConfig
 	metrics       map[string]Metric
 	logger        *slog.Logger
 	prometheus.Collector
@@ -111,7 +112,7 @@ func createSystemMetricMap() map[string]Metric {
 }
 
 // NewSystemCollector returns a collector that collecting memory statistics
-func NewSystemCollector(moduleName string, redfishClient *gofish.APIClient, logger *slog.Logger, config *config.SystemCollectorConfig) (*SystemCollector, error) {
+func NewSystemCollector(moduleName string, redfishClient *gofish.APIClient, logger *slog.Logger, config config.SystemCollectorConfig) (*SystemCollector, error) {
 	return &SystemCollector{
 		redfishClient: redfishClient,
 		config:        config,
@@ -136,9 +137,20 @@ func (s *SystemCollector) Describe(ch chan<- *prometheus.Desc) {
 	s.collectorScrapeStatus.Describe(ch)
 }
 
-// Collect implements prometheus.Collector.
-func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocyclo // Complex but necessary for complete system collection
+func (s *SystemCollector) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
+	s.collect(ctx, ch)
+}
 
+// Collect implements prometheus.Collector.
+func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) {
+	s.collect(context.TODO(), ch)
+}
+
+func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metric) { //nolint:gocyclo // Complex but necessary for complete system collection
+	if ctx.Err() != nil {
+		s.logger.With("error", ctx.Err(), "collector", "system").Debug("skipping collection")
+		return
+	}
 	logger := s.logger.With(slog.String("collector", "SystemCollector"))
 	service := s.redfishClient.Service
 
@@ -147,12 +159,15 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 		logger.Error("error getting systems from service", slog.String("operation", "service.Systems()"), slog.Any("error", err))
 	} else {
 		for _, system := range systems {
+			if ctx.Err() != nil {
+				s.logger.With("error", ctx.Err(), "collector", "system").Debug("skipping further collection")
+				continue
+			}
 			systemLogger := logger.With(slog.String("System", system.ID))
 			systemLogger.Info("collector scrape started")
 
 			// overall system metrics
 			SystemID := system.ID
-			systemHostName := system.HostName
 			systemPowerState := system.PowerState
 			systemState := system.Status.State
 			systemHealthState := system.Status.Health
@@ -163,7 +178,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 			systemTotalMemoryHealthState := system.MemorySummary.Status.Health
 			systemTotalMemoryAmount := system.MemorySummary.TotalSystemMemoryGiB
 
-			systemLabelValues := []string{systemHostName, "system", SystemID}
+			systemLabelValues := []string{"system", SystemID}
 			if systemHealthStateValue, ok := parseCommonStatusHealth(systemHealthState); ok {
 				ch <- prometheus.MustNewConstMetric(s.metrics["system_health_state"].desc, prometheus.GaugeValue, systemHealthStateValue, systemLabelValues...)
 			}
@@ -197,7 +212,6 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 			wg7 := &sync.WaitGroup{}
 			wg8 := &sync.WaitGroup{}
 			wg9 := &sync.WaitGroup{}
-			wg10 := &sync.WaitGroup{}
 
 			// process memory metrics
 			memories, err := system.Memory()
@@ -208,7 +222,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 			} else {
 				wg1.Add(len(memories))
 				for _, memory := range memories {
-					go parseMemory(ch, systemHostName, memory, wg1, systemLogger)
+					go parseMemory(ch, memory, wg1, systemLogger)
 				}
 			}
 
@@ -221,7 +235,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 			} else {
 				wg2.Add(len(processors))
 				for _, processor := range processors {
-					go parseProcessor(ch, systemHostName, processor, wg2, systemLogger)
+					go parseProcessor(ch, processor, wg2, systemLogger)
 				}
 			}
 
@@ -240,7 +254,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 					} else {
 						wg3.Add(len(volumes))
 						for _, volume := range volumes {
-							go parseVolume(ch, systemHostName, volume, wg3)
+							go parseVolume(ch, volume, wg3)
 						}
 					}
 
@@ -252,7 +266,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 					} else {
 						wg4.Add(len(drives))
 						for _, drive := range drives {
-							go parseDrive(ch, systemHostName, drive, storageID, wg4)
+							go parseDrive(ch, drive, storageID, wg4)
 						}
 					}
 				}
@@ -266,7 +280,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 			} else {
 				wg5.Add(len(pcieDevices))
 				for _, pcieDevice := range pcieDevices {
-					go parsePcieDevice(ch, systemHostName, pcieDevice, wg5)
+					go parsePcieDevice(ch, pcieDevice, wg5)
 				}
 			}
 
@@ -279,7 +293,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 			} else {
 				wg6.Add(len(networkInterfaces))
 				for _, networkInterface := range networkInterfaces {
-					go parseNetworkInterface(ch, systemHostName, networkInterface, wg6)
+					go parseNetworkInterface(ch, networkInterface, wg6)
 				}
 			}
 
@@ -292,7 +306,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 			} else {
 				wg7.Add(len(ethernetInterfaces))
 				for _, ethernetInterface := range ethernetInterfaces {
-					go parseEthernetInterface(ch, systemHostName, ethernetInterface, wg7)
+					go parseEthernetInterface(ch, ethernetInterface, wg7)
 				}
 			}
 
@@ -305,23 +319,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 			} else {
 				wg9.Add(len(pcieFunctions))
 				for _, pcieFunction := range pcieFunctions {
-					go parsePcieFunction(ch, systemHostName, pcieFunction, wg9)
-				}
-			}
-
-			// process log services
-			logServices, err := system.LogServices()
-			if err != nil {
-				systemLogger.Error("error getting log services from system", slog.String("operation", "system.LogServices()"), slog.Any("error", err))
-			} else if logServices == nil {
-				systemLogger.Info("no log services found", slog.String("operation", "system.LogServices()"))
-			} else {
-				wg10.Add(len(logServices))
-
-				for _, logService := range logServices {
-					if err = parseLogService(ch, systemMetrics, SystemSubsystem, SystemID, logService, wg10); err != nil {
-						systemLogger.Error("error getting log entries from log service", slog.String("operation", "system.LogServices()"), slog.Any("error", err))
-					}
+					go parsePcieFunction(ch, pcieFunction, wg9)
 				}
 			}
 
@@ -334,7 +332,6 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 			wg7.Wait()
 			wg8.Wait()
 			wg9.Wait()
-			wg10.Wait()
 
 			systemLogger.Info("collector scrape completed")
 		}
@@ -342,7 +339,7 @@ func (s *SystemCollector) Collect(ch chan<- prometheus.Metric) { //nolint:gocycl
 	}
 }
 
-func parseMemory(ch chan<- prometheus.Metric, systemHostName string, memory *redfish.Memory, wg *sync.WaitGroup, logger *slog.Logger) {
+func parseMemory(ch chan<- prometheus.Metric, memory *redfish.Memory, wg *sync.WaitGroup, logger *slog.Logger) {
 	defer wg.Done()
 	memoryName := memory.Name
 	memoryID := memory.ID
@@ -350,7 +347,7 @@ func parseMemory(ch chan<- prometheus.Metric, systemHostName string, memory *red
 	memoryState := memory.Status.State
 	memoryHealthState := memory.Status.Health
 
-	systemMemoryLabelValues := []string{systemHostName, "memory", memoryName, memoryID}
+	systemMemoryLabelValues := []string{"memory", memoryName, memoryID}
 	if memoryStateValue, ok := parseCommonStatusState(memoryState); ok {
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_memory_state"].desc, prometheus.GaugeValue, memoryStateValue, systemMemoryLabelValues...)
 	}
@@ -361,7 +358,7 @@ func parseMemory(ch chan<- prometheus.Metric, systemHostName string, memory *red
 
 }
 
-func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processor *redfish.Processor, wg *sync.WaitGroup, logger *slog.Logger) {
+func parseProcessor(ch chan<- prometheus.Metric, processor *redfish.Processor, wg *sync.WaitGroup, logger *slog.Logger) {
 	defer wg.Done()
 	processorName := processor.Name
 	processorID := processor.ID
@@ -371,7 +368,7 @@ func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processo
 	processorHelathState := processor.Status.Health
 	processorHealthRollup := processor.Status.HealthRollup
 
-	systemProcessorLabelValues := []string{systemHostName, "processor", processorName, processorID}
+	systemProcessorLabelValues := []string{"processor", processorName, processorID}
 
 	if processorStateValue, ok := parseCommonStatusState(processorState); ok {
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_state"].desc, prometheus.GaugeValue, processorStateValue, systemProcessorLabelValues...)
@@ -406,14 +403,14 @@ func parseProcessor(ch chan<- prometheus.Metric, systemHostName string, processo
 	}
 }
 
-func parseVolume(ch chan<- prometheus.Metric, systemHostName string, volume *redfish.Volume, wg *sync.WaitGroup) {
+func parseVolume(ch chan<- prometheus.Metric, volume *redfish.Volume, wg *sync.WaitGroup) {
 	defer wg.Done()
 	volumeName := volume.Name
 	volumeID := volume.ID
 	volumeCapacityBytes := volume.CapacityBytes
 	volumeState := volume.Status.State
 	volumeHealthState := volume.Status.Health
-	systemVolumeLabelValues := []string{systemHostName, "volume", volumeName, volumeID}
+	systemVolumeLabelValues := []string{"volume", volumeName, volumeID}
 	if volumeStateValue, ok := parseCommonStatusState(volumeState); ok {
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_volume_state"].desc, prometheus.GaugeValue, volumeStateValue, systemVolumeLabelValues...)
 	}
@@ -423,14 +420,14 @@ func parseVolume(ch chan<- prometheus.Metric, systemHostName string, volume *red
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_volume_capacity"].desc, prometheus.GaugeValue, float64(volumeCapacityBytes), systemVolumeLabelValues...)
 }
 
-func parseDrive(ch chan<- prometheus.Metric, systemHostName string, drive *redfish.Drive, storageControllerID string, wg *sync.WaitGroup) {
+func parseDrive(ch chan<- prometheus.Metric, drive *redfish.Drive, storageControllerID string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	driveName := drive.Name
 	driveID := drive.ID
 	driveCapacityBytes := drive.CapacityBytes
 	driveState := drive.Status.State
 	driveHealthState := drive.Status.Health
-	systemdriveLabelValues := []string{systemHostName, "drive", driveName, driveID, storageControllerID}
+	systemdriveLabelValues := []string{"drive", driveName, driveID, storageControllerID}
 	if driveStateValue, ok := parseCommonStatusState(driveState); ok {
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_drive_state"].desc, prometheus.GaugeValue, driveStateValue, systemdriveLabelValues...)
 	}
@@ -440,7 +437,7 @@ func parseDrive(ch chan<- prometheus.Metric, systemHostName string, drive *redfi
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_drive_capacity"].desc, prometheus.GaugeValue, float64(driveCapacityBytes), systemdriveLabelValues...)
 }
 
-func parsePcieDevice(ch chan<- prometheus.Metric, systemHostName string, pcieDevice *redfish.PCIeDevice, wg *sync.WaitGroup) {
+func parsePcieDevice(ch chan<- prometheus.Metric, pcieDevice *redfish.PCIeDevice, wg *sync.WaitGroup) {
 	defer wg.Done()
 	pcieDeviceName := pcieDevice.Name
 	pcieDeviceID := pcieDevice.ID
@@ -449,7 +446,7 @@ func parsePcieDevice(ch chan<- prometheus.Metric, systemHostName string, pcieDev
 	pcieDevicePartNumber := pcieDevice.PartNumber
 	pcieDeviceType := fmt.Sprint(pcieDevice.DeviceType)
 	pcieSerialNumber := pcieDevice.SerialNumber
-	systemPCIeDeviceLabelValues := []string{systemHostName, "pcie_device", pcieDeviceName, pcieDeviceID, pcieDevicePartNumber, pcieDeviceType, pcieSerialNumber}
+	systemPCIeDeviceLabelValues := []string{"pcie_device", pcieDeviceName, pcieDeviceID, pcieDevicePartNumber, pcieDeviceType, pcieSerialNumber}
 
 	if pcieStateVaule, ok := parseCommonStatusState(pcieDeviceState); ok {
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_pcie_device_state"].desc, prometheus.GaugeValue, pcieStateVaule, systemPCIeDeviceLabelValues...)
@@ -459,13 +456,13 @@ func parsePcieDevice(ch chan<- prometheus.Metric, systemHostName string, pcieDev
 	}
 }
 
-func parseNetworkInterface(ch chan<- prometheus.Metric, systemHostName string, networkInterface *redfish.NetworkInterface, wg *sync.WaitGroup) {
+func parseNetworkInterface(ch chan<- prometheus.Metric, networkInterface *redfish.NetworkInterface, wg *sync.WaitGroup) {
 	defer wg.Done()
 	networkInterfaceName := networkInterface.Name
 	networkInterfaceID := networkInterface.ID
 	networkInterfaceState := networkInterface.Status.State
 	networkInterfaceHealthState := networkInterface.Status.Health
-	systemNetworkInterfaceLabelValues := []string{systemHostName, "network_interface", networkInterfaceName, networkInterfaceID}
+	systemNetworkInterfaceLabelValues := []string{"network_interface", networkInterfaceName, networkInterfaceID}
 
 	if networknetworkInterfaceStateVaule, ok := parseCommonStatusState(networkInterfaceState); ok {
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_network_interface_state"].desc, prometheus.GaugeValue, networknetworkInterfaceStateVaule, systemNetworkInterfaceLabelValues...)
@@ -475,7 +472,7 @@ func parseNetworkInterface(ch chan<- prometheus.Metric, systemHostName string, n
 	}
 }
 
-func parseEthernetInterface(ch chan<- prometheus.Metric, systemHostName string, ethernetInterface *redfish.EthernetInterface, wg *sync.WaitGroup) {
+func parseEthernetInterface(ch chan<- prometheus.Metric, ethernetInterface *redfish.EthernetInterface, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	ethernetInterfaceName := ethernetInterface.Name
@@ -485,7 +482,7 @@ func parseEthernetInterface(ch chan<- prometheus.Metric, systemHostName string, 
 	ethernetInterfaceSpeed := fmt.Sprintf("%d Mbps", ethernetInterface.SpeedMbps)
 	ethernetInterfaceState := ethernetInterface.Status.State
 	ethernetInterfaceHealthState := ethernetInterface.Status.Health
-	systemEthernetInterfaceLabelValues := []string{systemHostName, "ethernet_interface", ethernetInterfaceName, ethernetInterfaceID, ethernetInterfaceSpeed}
+	systemEthernetInterfaceLabelValues := []string{"ethernet_interface", ethernetInterfaceName, ethernetInterfaceID, ethernetInterfaceSpeed}
 	if ethernetInterfaceStateValue, ok := parseCommonStatusState(ethernetInterfaceState); ok {
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_ethernet_interface_state"].desc, prometheus.GaugeValue, ethernetInterfaceStateValue, systemEthernetInterfaceLabelValues...)
 	}
@@ -499,7 +496,7 @@ func parseEthernetInterface(ch chan<- prometheus.Metric, systemHostName string, 
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_ethernet_interface_link_enabled"].desc, prometheus.GaugeValue, boolToFloat64(ethernetInterfaceEnabled), systemEthernetInterfaceLabelValues...)
 }
 
-func parsePcieFunction(ch chan<- prometheus.Metric, systemHostName string, pcieFunction *redfish.PCIeFunction, wg *sync.WaitGroup) {
+func parsePcieFunction(ch chan<- prometheus.Metric, pcieFunction *redfish.PCIeFunction, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	pcieFunctionName := pcieFunction.Name
@@ -509,7 +506,7 @@ func parsePcieFunction(ch chan<- prometheus.Metric, systemHostName string, pcieF
 	pciFunctionState := pcieFunction.Status.State
 	pciFunctionHealthState := pcieFunction.Status.Health
 
-	systemPCIeFunctionLabelLabelValues := []string{systemHostName, "pcie_function", pcieFunctionName, pcieFunctionID, pciFunctionDeviceclass, pciFunctionType}
+	systemPCIeFunctionLabelLabelValues := []string{"pcie_function", pcieFunctionName, pcieFunctionID, pciFunctionDeviceclass, pciFunctionType}
 
 	if pciFunctionStateValue, ok := parseCommonStatusState(pciFunctionState); ok {
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_pcie_function_state"].desc, prometheus.GaugeValue, pciFunctionStateValue, systemPCIeFunctionLabelLabelValues...)
