@@ -13,28 +13,18 @@ import (
 )
 
 func TestManagerCollectorFirmwareVersionLabel(t *testing.T) {
-	server := newTestRedfishServer(t)
-	server.addRouteFromFixture("/redfish/v1/Managers", "manager_collection.json")
-	server.addRouteFromFixture("/redfish/v1/Managers/BMC", "manager.json")
-
-	client := connectToTestServer(t, server.Server)
-	t.Cleanup(func() {
-		client.Logout()
-		server.Close()
-	})
+	_, client := setupTestServerClient(t, "testdata/manager_happypath")
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	collector, err := NewManagerCollector(t.Name(), client, logger, config.DefaultManagerCollector)
 	require.NoError(t, err)
 
-	// Collect metrics
 	ch := make(chan prometheus.Metric, 100)
 	go func() {
 		collector.Collect(ch)
 		close(ch)
 	}()
 
-	// Check for manager metrics with firmware_version label
 	foundManagerMetric := false
 	var firmwareVersion string
 
@@ -50,22 +40,21 @@ func TestManagerCollectorFirmwareVersionLabel(t *testing.T) {
 			strings.Contains(descString, "manager_power_state") {
 			foundManagerMetric = true
 
-			// Check labels
 			labelMap := make(map[string]string)
 			for _, label := range dto.Label {
 				labelMap[label.GetName()] = label.GetValue()
 			}
 
-			require.Equal(t, "BMC", labelMap["manager_id"], "Expected manager_id label")
-			require.Equal(t, "Manager", labelMap["name"], "Expected name label")
-			require.Equal(t, "Lenovo XClarity Controller", labelMap["model"], "Expected model label")
-			require.Equal(t, "BMC", labelMap["type"], "Expected type label")
-			require.Contains(t, labelMap, "firmware_version", "Expected firmware_version label")
+			require.Equal(t, "BMC", labelMap["manager_id"])
+			require.Equal(t, "Manager", labelMap["name"])
+			require.Equal(t, "Lenovo XClarity Controller", labelMap["model"])
+			require.Equal(t, "BMC", labelMap["type"])
+			require.Contains(t, labelMap, "firmware_version")
 			firmwareVersion = labelMap["firmware_version"]
 			break
 		}
 	}
 
 	require.True(t, foundManagerMetric, "Expected to find manager metric")
-	require.Equal(t, "2.10.0", firmwareVersion, "Expected firmware_version to be '2.10.0'")
+	require.Equal(t, "2.10.0", firmwareVersion)
 }
