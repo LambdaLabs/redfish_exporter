@@ -1,0 +1,14 @@
+{
+  "@odata.type": "#Manager.v1_3_1.Manager",
+  "@odata.id": "/redfish/v1/Managers/BMC",
+  "Id": "BMC",
+  "Name": "Manager",
+  "ManagerType": "BMC",
+  "Model": "Lenovo XClarity Controller",
+  "FirmwareVersion": "2.10.0",
+  "PowerState": "On",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  }
+}
