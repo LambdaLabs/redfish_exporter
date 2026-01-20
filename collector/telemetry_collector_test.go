@@ -548,6 +548,44 @@ func TestParseGPUSensorMetric(t *testing.T) {
 			expectedType:   "memory_temp",
 			expectedMemory: "GPU_5_DRAM_1",
 		},
+		{
+			name:         "gpu_sxm_power",
+			sensorID:     "HGX_GPU_SXM_0_Power_0",
+			expectedGPU:  "GPU_0",
+			expectedType: "power",
+		},
+		{
+			name:         "gpu_sxm_energy",
+			sensorID:     "HGX_GPU_SXM_3_Energy_0",
+			expectedGPU:  "GPU_3",
+			expectedType: "energy",
+		},
+		{
+			name:         "gpu_sxm_temp_0",
+			sensorID:     "HGX_GPU_SXM_1_TEMP_0",
+			expectedGPU:  "GPU_1",
+			expectedType: "temp0",
+		},
+		{
+			name:         "gpu_sxm_temp_1",
+			sensorID:     "HGX_GPU_SXM_2_TEMP_1",
+			expectedGPU:  "GPU_2",
+			expectedType: "temp1",
+		},
+		{
+			name:           "gpu_sxm_memory_power",
+			sensorID:       "HGX_GPU_SXM_0_DRAM_0_Power_0",
+			expectedGPU:    "GPU_0",
+			expectedType:   "memory_power",
+			expectedMemory: "GPU_0_DRAM_0",
+		},
+		{
+			name:           "gpu_sxm_memory_temp",
+			sensorID:       "HGX_GPU_SXM_5_DRAM_1_Temp_0",
+			expectedGPU:    "GPU_5",
+			expectedType:   "memory_temp",
+			expectedMemory: "GPU_5_DRAM_1",
+		},
 	}
 
 	for _, tt := range tests {
