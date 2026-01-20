@@ -13,7 +13,7 @@ import (
 // ManagerSubmanager is the manager subsystem
 var (
 	ManagerSubmanager = "manager"
-	ManagerLabelNames = []string{"manager_id", "name", "model", "type"}
+	ManagerLabelNames = []string{"manager_id", "name", "model", "type", "firmware_version"}
 
 	ManagerLogServiceLabelNames = []string{"manager_id", "log_service", "log_service_id", "log_service_enabled", "log_service_overwrite_policy"}
 
@@ -102,11 +102,12 @@ func (m *ManagerCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 			managerName := manager.Name
 			managerModel := manager.Model
 			managerType := fmt.Sprint(manager.ManagerType)
+			managerFirmwareVersion := manager.FirmwareVersion
 			managerPowerState := manager.PowerState
 			managerState := manager.Status.State
 			managerHealthState := manager.Status.Health
 
-			ManagerLabelValues := []string{ManagerID, managerName, managerModel, managerType}
+			ManagerLabelValues := []string{ManagerID, managerName, managerModel, managerType, managerFirmwareVersion}
 
 			if managerHealthStateValue, ok := parseCommonStatusHealth(managerHealthState); ok {
 				ch <- prometheus.MustNewConstMetric(m.metrics["manager_health_state"].desc, prometheus.GaugeValue, managerHealthStateValue, ManagerLabelValues...)
