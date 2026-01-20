@@ -22,6 +22,7 @@ const TelemetrySubsystem = "telemetry"
 const (
 	// Sensor ID prefixes
 	sensorPrefixHGXGPU             = "HGX_GPU_"
+	sensorPrefixHGXGPUSXM          = "HGX_GPU_SXM_"
 	sensorPrefixHGXChassis         = "HGX_Chassis_"
 	sensorPrefixProcessorModule    = "ProcessorModule_"
 	sensorPrefixHGXProcessorModule = "HGX_ProcessorModule_"
@@ -1688,7 +1689,15 @@ func parseGPUSensorMetric(sensorID string) (string, string, string) {
 		return "", "", ""
 	}
 
-	gpuID := fmt.Sprintf("%s_%s", parts[1], parts[2]) // GPU_0
+	gpuID := ""
+
+	if strings.HasPrefix(sensorID, sensorPrefixHGXGPUSXM) {
+		// HGX_GPU_SXM_0_DRAM_0_Power_0 -> //GPU_0
+		gpuID = fmt.Sprintf("%s_%s", parts[1], parts[3]) // GPU_0
+	} else {
+		// HGX_GPU_0_DRAM_0_Power_0 -> GPU_0
+		gpuID = fmt.Sprintf("%s_%s", parts[1], parts[2]) // GPU_0
+	}
 
 	if strings.Contains(sensorID, sensorInfixDRAM) {
 		memoryID := extractMemoryIDFromSensor(sensorID)
@@ -1823,6 +1832,10 @@ func (t *TelemetryCollector) parseGPUSensorMetric(sensorID string, value float64
 func extractMemoryIDFromSensor(sensorID string) string {
 	parts := strings.Split(sensorID, "_")
 	if len(parts) >= 5 {
+		if strings.HasPrefix(sensorID, sensorPrefixHGXGPUSXM) {
+			// HGX_GPU_SXM_0_DRAM_0_... -> GPU_0_DRAM_0
+			return fmt.Sprintf("%s_%s_%s_%s", parts[1], parts[3], parts[4], parts[5])
+		}
 		// HGX_GPU_0_DRAM_0_... -> GPU_0_DRAM_0
 		return fmt.Sprintf("%s_%s_%s_%s", parts[1], parts[2], parts[3], parts[4])
 	}
