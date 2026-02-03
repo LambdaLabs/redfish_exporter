@@ -5,18 +5,17 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/stmcginnis/gofish/common"
-	"github.com/stmcginnis/gofish/redfish"
+	"github.com/stmcginnis/gofish/schemas"
 )
 
 // NvidiaOEMClient provides methods to extract Nvidia OEM fields from Redfish responses
 type NvidiaOEMClient struct {
-	client common.Client
+	client schemas.Client
 	logger *slog.Logger
 }
 
 // NewNvidiaOEMClient creates a new client for extracting Nvidia OEM fields
-func NewNvidiaOEMClient(client common.Client, logger *slog.Logger) *NvidiaOEMClient {
+func NewNvidiaOEMClient(client schemas.Client, logger *slog.Logger) *NvidiaOEMClient {
 	return &NvidiaOEMClient{
 		client: client,
 		logger: logger.With(slog.String("component", "nvidia_oem")),
@@ -151,8 +150,8 @@ type GPUNVLinkCollection struct {
 				} `json:"Nvidia,omitempty"`
 			} `json:"Oem"`
 		} `json:"Metrics"`
-		PortType     string               `json:"PortType"`
-		PortProtocol redfish.PortProtocol `json:"PortProtocol"`
-		Status       common.Status        `json:"Status"`
+		PortType     string           `json:"PortType"`
+		PortProtocol schemas.Protocol `json:"PortProtocol"`
+		Status       schemas.Status   `json:"Status"`
 	} `json:"Members"`
 }

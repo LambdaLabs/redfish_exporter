@@ -8,10 +8,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
-	"github.com/stmcginnis/gofish/redfish"
+	"github.com/stmcginnis/gofish/schemas"
+
+	"github.com/LambdaLabs/redfish_exporter/config"
 )
 
 // ChassisSubsystem is the chassis subsystem
@@ -265,9 +266,9 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 			}
 
 			physicalSecurity := chassis.PhysicalSecurity
-			if physicalSecurity != (redfish.PhysicalSecurity{}) {
+			if physicalSecurity != (schemas.PhysicalSecurity{}) {
 				physicalSecurityIntrusionSensor := physicalSecurity.IntrusionSensor
-				physicalSecurityIntrusionSensorNumber := fmt.Sprint(physicalSecurity.IntrusionSensorNumber)
+				physicalSecurityIntrusionSensorNumber := fmt.Sprint(physicalSecurity.IntrusionSensorNumber) //nolint:staticcheck
 				physicalSecurityIntrusionSensorReArmMethod := string(physicalSecurity.IntrusionSensorReArm)
 
 				if phySecIntrusionSensor, ok := parsePhySecIntrusionSensor(physicalSecurityIntrusionSensor); ok {
@@ -294,8 +295,8 @@ func (c *ChassisCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // getLeakDetectors works around an unfortunate fact that the LeakDetection schema is not yet standard, and some OEMs return
 // a single LeakDetection object from their ThermalSubsystem, instead of a gofish-expected collection.
-func (c *ChassisCollector) getLeakDetectors(thermalSubsystem *redfish.ThermalSubsystem, logger *slog.Logger) []*redfish.LeakDetector {
-	var allDetectors []*redfish.LeakDetector
+func (c *ChassisCollector) getLeakDetectors(thermalSubsystem *schemas.ThermalSubsystem, logger *slog.Logger) []*schemas.LeakDetector {
+	var allDetectors []*schemas.LeakDetector
 
 	// Standard gofish approach, for starters
 	leakDetectionCollection, err := thermalSubsystem.LeakDetection()
@@ -314,7 +315,7 @@ func (c *ChassisCollector) getLeakDetectors(thermalSubsystem *redfish.ThermalSub
 
 	// ...otherwise, try a fallback to handle buggy OEM implementations.
 	leakDetectionURL := thermalSubsystem.ODataID + "/LeakDetection"
-	leakDetection, err := redfish.GetLeakDetection(c.redfishClient.Service.GetClient(), leakDetectionURL)
+	leakDetection, err := schemas.GetLeakDetection(c.redfishClient.Service.GetClient(), leakDetectionURL)
 	if err != nil {
 		logger.Debug("fallback GetLeakDetection failed", slog.Any("error", err))
 		return allDetectors
@@ -334,7 +335,7 @@ func (c *ChassisCollector) getLeakDetectors(thermalSubsystem *redfish.ThermalSub
 	return allDetectors
 }
 
-func parseChassisTemperature(ch chan<- prometheus.Metric, chassisID string, chassisTemperature redfish.Temperature, wg *sync.WaitGroup) {
+func parseChassisTemperature(ch chan<- prometheus.Metric, chassisID string, chassisTemperature schemas.Temperature, wg *sync.WaitGroup) {
 	defer wg.Done()
 	chassisTemperatureSensorName := chassisTemperature.Name
 	chassisTemperatureSensorID := chassisTemperature.MemberID
@@ -353,11 +354,10 @@ func parseChassisTemperature(ch chan<- prometheus.Metric, chassisID string, chas
 		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_temperature_sensor_state"].desc, prometheus.GaugeValue, chassisTemperatureStatusStateValue, chassisTemperatureLabelvalues...)
 	}
 
-	chassisTemperatureReadingCelsius := chassisTemperature.ReadingCelsius
-	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_temperature_celsius"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisTemperatureReadingCelsius), chassisTemperatureLabelvalues...)
+	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_temperature_celsius"].desc, prometheus.GaugeValue, gofish.Deref(chassisTemperature.ReadingCelsius), chassisTemperatureLabelvalues...)
 }
 
-func parseChassisFan(ch chan<- prometheus.Metric, chassisID string, chassisFan redfish.ThermalFan, wg *sync.WaitGroup) {
+func parseChassisFan(ch chan<- prometheus.Metric, chassisID string, chassisFan schemas.ThermalFan, wg *sync.WaitGroup) {
 	defer wg.Done()
 	chassisFanID := chassisFan.MemberID
 	chassisFanName := chassisFan.Name
@@ -374,7 +374,7 @@ func parseChassisFan(ch chan<- prometheus.Metric, chassisID string, chassisFan r
 	chassisFanRPMMax := intPtrToFloat64(chassisFan.MaxReadingRange)
 
 	chassisFanPercentage := chassisFanRPM
-	if chassisFanUnit != redfish.PercentReadingUnits {
+	if chassisFanUnit != schemas.PercentReadingUnits {
 		// Some vendors (e.g. PowerEdge C6420) report null RPMs for Min/Max, as well as Lower/UpperFatal,
 		// but provide Lower/UpperCritical, so use largest non-null for max. However, we can't know if
 		// min is null (reported as zero by gofish) or just zero, so we'll have to assume a min of zero
@@ -407,7 +407,7 @@ func parseChassisFan(ch chan<- prometheus.Metric, chassisID string, chassisFan r
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_upper_threshold_fatal"].desc, prometheus.GaugeValue, chassisFanRPMUpperFatalThreshold, chassisFanLabelvalues...)
 }
 
-func parseLeakDetector(ch chan<- prometheus.Metric, chassisID string, ld *redfish.LeakDetector, wg *sync.WaitGroup) {
+func parseLeakDetector(ch chan<- prometheus.Metric, chassisID string, ld *schemas.LeakDetector, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	ldID := ld.ID
@@ -418,7 +418,7 @@ func parseLeakDetector(ch chan<- prometheus.Metric, chassisID string, ld *redfis
 	}
 }
 
-func parseChassisPowerInfoVoltage(ch chan<- prometheus.Metric, chassisID string, chassisPowerInfoVoltage redfish.Voltage, wg *sync.WaitGroup) {
+func parseChassisPowerInfoVoltage(ch chan<- prometheus.Metric, chassisID string, chassisPowerInfoVoltage schemas.Voltage, wg *sync.WaitGroup) {
 	defer wg.Done()
 	chassisPowerInfoVoltageName := chassisPowerInfoVoltage.Name
 	chassisPowerInfoVoltageID := chassisPowerInfoVoltage.MemberID
@@ -431,7 +431,7 @@ func parseChassisPowerInfoVoltage(ch chan<- prometheus.Metric, chassisID string,
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_voltage_volts"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisPowerInfoVoltageNameReadingVolts), chassisPowerVoltageLabelvalues...)
 }
 
-func parseChassisPowerInfoPowerControl(ch chan<- prometheus.Metric, chassisID string, chassisPowerInfoPowerControl redfish.PowerControl, wg *sync.WaitGroup) {
+func parseChassisPowerInfoPowerControl(ch chan<- prometheus.Metric, chassisID string, chassisPowerInfoPowerControl schemas.PowerControl, wg *sync.WaitGroup) {
 	defer wg.Done()
 	name := chassisPowerInfoPowerControl.Name
 	id := chassisPowerInfoPowerControl.MemberID
@@ -440,7 +440,7 @@ func parseChassisPowerInfoPowerControl(ch chan<- prometheus.Metric, chassisID st
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_average_consumed_watts"].desc, prometheus.GaugeValue, float32PtrToFloat64(pm.AverageConsumedWatts), chassisPowerVoltageLabelvalues...)
 }
 
-func parseChassisPowerInfoPowerSupply(ch chan<- prometheus.Metric, chassisID string, chassisPowerInfoPowerSupply redfish.PowerSupply, wg *sync.WaitGroup) {
+func parseChassisPowerInfoPowerSupply(ch chan<- prometheus.Metric, chassisID string, chassisPowerInfoPowerSupply schemas.PowerSupply, wg *sync.WaitGroup) {
 	defer wg.Done()
 	chassisPowerInfoPowerSupplyName := chassisPowerInfoPowerSupply.Name
 	// This is optional in some devices causing duplicate metrics
@@ -453,7 +453,7 @@ func parseChassisPowerInfoPowerSupply(ch chan<- prometheus.Metric, chassisID str
 			return
 		}
 	}
-	chassisPowerInfoPowerSupplyEfficiencyPercent := chassisPowerInfoPowerSupply.EfficiencyPercent
+	chassisPowerInfoPowerSupplyEfficiencyPercent := gofish.Deref(chassisPowerInfoPowerSupply.EfficiencyPercent)
 	chassisPowerInfoPowerSupplyPowerCapacityWatts := chassisPowerInfoPowerSupply.PowerCapacityWatts
 	chassisPowerInfoPowerSupplyPowerInputWatts := chassisPowerInfoPowerSupply.PowerInputWatts
 	chassisPowerInfoPowerSupplyPowerOutputWatts := chassisPowerInfoPowerSupply.PowerOutputWatts
@@ -468,14 +468,14 @@ func parseChassisPowerInfoPowerSupply(ch chan<- prometheus.Metric, chassisID str
 	if chassisPowerInfoPowerSupplyHealthValue, ok := parseCommonStatusHealth(chassisPowerInfoPowerSupplyHealth); ok {
 		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_health"].desc, prometheus.GaugeValue, chassisPowerInfoPowerSupplyHealthValue, chassisPowerSupplyLabelvalues...)
 	}
-	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_efficiency_percentage"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisPowerInfoPowerSupplyEfficiencyPercent), chassisPowerSupplyLabelvalues...)
+	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_efficiency_percentage"].desc, prometheus.GaugeValue, chassisPowerInfoPowerSupplyEfficiencyPercent, chassisPowerSupplyLabelvalues...)
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_last_power_output_watts"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisPowerInfoPowerSupplyLastPowerOutputWatts), chassisPowerSupplyLabelvalues...)
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_capacity_watts"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisPowerInfoPowerSupplyPowerCapacityWatts), chassisPowerSupplyLabelvalues...)
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_input_watts"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisPowerInfoPowerSupplyPowerInputWatts), chassisPowerSupplyLabelvalues...)
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_output_watts"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisPowerInfoPowerSupplyPowerOutputWatts), chassisPowerSupplyLabelvalues...)
 }
 
-func parseNetworkAdapter(ch chan<- prometheus.Metric, chassisID string, networkAdapter *redfish.NetworkAdapter, wg *sync.WaitGroup) error {
+func parseNetworkAdapter(ch chan<- prometheus.Metric, chassisID string, networkAdapter *schemas.NetworkAdapter, wg *sync.WaitGroup) error {
 	defer wg.Done()
 	networkAdapterName := networkAdapter.Name
 	networkAdapterID := networkAdapter.ID
@@ -502,7 +502,7 @@ func parseNetworkAdapter(ch chan<- prometheus.Metric, chassisID string, networkA
 	return nil
 }
 
-func parseNetworkPort(ch chan<- prometheus.Metric, chassisID string, networkPort *redfish.NetworkPort, networkAdapterName string, networkAdapterID string, wg *sync.WaitGroup) {
+func parseNetworkPort(ch chan<- prometheus.Metric, chassisID string, networkPort *schemas.NetworkPort, networkAdapterName string, networkAdapterID string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	networkPortName := networkPort.Name
 	networkPortID := networkPort.ID
@@ -515,7 +515,7 @@ func parseNetworkPort(ch chan<- prometheus.Metric, chassisID string, networkPort
 	networkPhysicalPortNumber := networkPort.PhysicalPortNumber
 	chassisNetworkPortLabelValues := []string{"network_port", chassisID, networkAdapterName, networkAdapterID, networkPortName, networkPortID, string(networkPortLinkType), networkPortLinkSpeed, string(networkPortConnectionType), networkPhysicalPortNumber}
 
-	if networkLinkStatusValue, ok := parsePortLinkStatus(redfish.PortLinkStatus(networkLinkStatus)); ok {
+	if networkLinkStatusValue, ok := parsePortLinkStatus(schemas.PortLinkStatus(networkLinkStatus)); ok {
 		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_network_port_link_state"].desc, prometheus.GaugeValue, networkLinkStatusValue, chassisNetworkPortLabelValues...)
 	}
 

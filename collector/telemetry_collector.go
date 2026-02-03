@@ -9,11 +9,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	isoDuration "github.com/sosodev/duration"
 	"github.com/stmcginnis/gofish"
-	"github.com/stmcginnis/gofish/redfish"
+	"github.com/stmcginnis/gofish/schemas"
+
+	"github.com/LambdaLabs/redfish_exporter/config"
 )
 
 const TelemetrySubsystem = "telemetry"
@@ -360,7 +361,7 @@ func (t *TelemetryCollector) collect(ctx context.Context, ch chan<- prometheus.M
 }
 
 // collectProcessorMetrics processes a single HGX_ProcessorMetrics report
-func (t *TelemetryCollector) collectProcessorMetrics(ch chan<- prometheus.Metric, report *redfish.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
+func (t *TelemetryCollector) collectProcessorMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	t.logger.Debug("processing metric report",
@@ -459,7 +460,7 @@ func parseMetricValue(value string) (float64, error) {
 }
 
 // extractSystemIDFromReport extracts the system ID from the first metric property in a report
-func extractSystemIDFromReport(report *redfish.MetricReport) string {
+func extractSystemIDFromReport(report *schemas.MetricReport) string {
 	if len(report.MetricValues) == 0 {
 		return ""
 	}
@@ -606,7 +607,7 @@ func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels 
 }
 
 // collectMemoryMetrics processes a single HGX_MemoryMetrics report
-func (t *TelemetryCollector) collectMemoryMetrics(ch chan<- prometheus.Metric, report *redfish.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
+func (t *TelemetryCollector) collectMemoryMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	t.logger.Debug("processing memory metric report",
@@ -753,7 +754,7 @@ func (t *TelemetryCollector) emitMemoryMetrics(ch chan<- prometheus.Metric, labe
 }
 
 // collectResetMetrics processes a single HGX_ProcessorResetMetrics report
-func (t *TelemetryCollector) collectResetMetrics(ch chan<- prometheus.Metric, report *redfish.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
+func (t *TelemetryCollector) collectResetMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	t.logger.Debug("processing reset metric report",
@@ -927,7 +928,7 @@ func (t *TelemetryCollector) emitResetMetrics(ch chan<- prometheus.Metric, label
 }
 
 // collectPortMetrics processes a single HGX_ProcessorPortMetrics report
-func (t *TelemetryCollector) collectPortMetrics(ch chan<- prometheus.Metric, report *redfish.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
+func (t *TelemetryCollector) collectPortMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	t.logger.Debug("processing port metric report",
@@ -1235,7 +1236,7 @@ func (t *TelemetryCollector) emitPortMetrics(ch chan<- prometheus.Metric, labels
 }
 
 // collectGPMMetrics processes a single HGX_ProcessorGPMMetrics report
-func (t *TelemetryCollector) collectGPMMetrics(ch chan<- prometheus.Metric, report *redfish.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
+func (t *TelemetryCollector) collectGPMMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	t.logger.Debug("processing GPM metric report",
@@ -1550,7 +1551,7 @@ func (t *TelemetryCollector) emitGPMInstanceMetrics(ch chan<- prometheus.Metric,
 
 // collectPlatformEnvironmentMetrics processes HGX_PlatformEnvironmentMetrics report
 // This collects GPU, CPU, and ambient environmental metrics (power, temperature, energy)
-func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometheus.Metric, report *redfish.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
+func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	t.logger.Debug("processing platform environment metric report",

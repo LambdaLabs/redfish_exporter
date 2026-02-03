@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
-	gofish "github.com/stmcginnis/gofish"
-	gofishcommon "github.com/stmcginnis/gofish/common"
-	redfish "github.com/stmcginnis/gofish/redfish"
+	"github.com/stmcginnis/gofish"
+	"github.com/stmcginnis/gofish/schemas"
+
+	"github.com/LambdaLabs/redfish_exporter/config"
 )
 
 // Metric name parts.
@@ -141,7 +141,7 @@ func newRedfishClient(ctx context.Context, host string, username string, passwor
 	return redfishClient, nil
 }
 
-func parseCommonStatusHealth(status gofishcommon.Health) (float64, bool) {
+func parseCommonStatusHealth(status schemas.Health) (float64, bool) {
 	if bytes.Equal([]byte(status), []byte("OK")) {
 		return float64(1), true
 	} else if bytes.Equal([]byte(status), []byte("Warning")) {
@@ -152,7 +152,7 @@ func parseCommonStatusHealth(status gofishcommon.Health) (float64, bool) {
 	return float64(0), false
 }
 
-func parseCommonStatusState(status gofishcommon.State) (float64, bool) {
+func parseCommonStatusState(status schemas.State) (float64, bool) {
 
 	if bytes.Equal([]byte(status), []byte("")) {
 		return float64(0), false
@@ -182,7 +182,7 @@ func parseCommonStatusState(status gofishcommon.State) (float64, bool) {
 	return float64(0), false
 }
 
-func parseCommonPowerState(status redfish.PowerState) (float64, bool) {
+func parseCommonPowerState(status schemas.PowerState) (float64, bool) {
 	if bytes.Equal([]byte(status), []byte("On")) {
 		return float64(1), true
 	} else if bytes.Equal([]byte(status), []byte("Off")) {
@@ -195,7 +195,7 @@ func parseCommonPowerState(status redfish.PowerState) (float64, bool) {
 	return float64(0), false
 }
 
-func parseLinkStatus(status redfish.LinkStatus) (float64, bool) {
+func parseLinkStatus(status schemas.LinkStatus) (float64, bool) {
 	if bytes.Equal([]byte(status), []byte("LinkUp")) {
 		return float64(1), true
 	} else if bytes.Equal([]byte(status), []byte("NoLink")) {
@@ -206,7 +206,7 @@ func parseLinkStatus(status redfish.LinkStatus) (float64, bool) {
 	return float64(0), false
 }
 
-func parsePortLinkStatus(status redfish.PortLinkStatus) (float64, bool) {
+func parsePortLinkStatus(status schemas.PortLinkStatus) (float64, bool) {
 	if bytes.Equal([]byte(status), []byte("Up")) {
 		return float64(1), true
 	}
@@ -221,7 +221,7 @@ func boolToFloat64(data bool) float64 {
 
 }
 
-func parsePhySecIntrusionSensor(method redfish.IntrusionSensor) (float64, bool) {
+func parsePhySecIntrusionSensor(method schemas.IntrusionSensor) (float64, bool) {
 	if bytes.Equal([]byte(method), []byte("Normal")) {
 		return float64(1), true
 	}

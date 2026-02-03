@@ -8,7 +8,7 @@ import (
 
 	"log/slog"
 
-	"github.com/stmcginnis/gofish/common"
+	"github.com/stmcginnis/gofish/schemas"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +19,7 @@ func TestGetMemoryOEMMetrics_EmptyOem(t *testing.T) {
 		"Oem": {}
 	}`
 
-	client := &common.TestClient{}
+	client := &schemas.TestClient{}
 	client.CustomReturnForActions = map[string][]interface{}{
 		http.MethodGet: {
 			&http.Response{
@@ -42,7 +42,7 @@ func TestGetMemoryOEMMetrics_EmptyOem(t *testing.T) {
 
 func TestGetMemoryOEMMetrics_ErrorHandling(t *testing.T) {
 	// Test with invalid JSON
-	client := &common.TestClient{}
+	client := &schemas.TestClient{}
 	client.CustomReturnForActions = map[string][]interface{}{
 		http.MethodGet: {
 			&http.Response{
