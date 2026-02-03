@@ -8,8 +8,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
-	"github.com/stmcginnis/gofish/common"
-	"github.com/stmcginnis/gofish/redfish"
+	"github.com/stmcginnis/gofish"
+	"github.com/stmcginnis/gofish/schemas"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -127,15 +127,15 @@ func TestDriveMetrics(t *testing.T) {
 
 			// Process all drive+controller combinations
 			for _, d := range tt.drives {
-				drive := &redfish.Drive{
-					Entity: common.Entity{
+				drive := &schemas.Drive{
+					Entity: schemas.Entity{
 						ID:   d.driveID,
 						Name: d.driveName,
 					},
-					CapacityBytes: d.capacity,
-					Status: common.Status{
-						State:  common.State(d.state),
-						Health: common.Health(d.health),
+					CapacityBytes: gofish.ToRef(int(d.capacity)),
+					Status: schemas.Status{
+						State:  schemas.State(d.state),
+						Health: schemas.Health(d.health),
 					},
 				}
 
@@ -209,14 +209,14 @@ func TestDriveMetrics(t *testing.T) {
 // TestProcessorWithoutMetrics tests that processor collection works when ProcessorMetrics is not available
 func TestProcessorWithoutMetrics(t *testing.T) {
 	// Mock processor without metrics (no metrics field means Metrics() returns nil)
-	mockProcessor := &redfish.Processor{
-		Entity: common.Entity{
+	mockProcessor := &schemas.Processor{
+		Entity: schemas.Entity{
 			ID:   "CPU_1",
 			Name: "CPU 1",
 		},
-		TotalCores:   8,
-		TotalThreads: 16,
-		Status: common.Status{
+		TotalCores:   gofish.ToRef(8),
+		TotalThreads: gofish.ToRef(16),
+		Status: schemas.Status{
 			State:        "Enabled",
 			Health:       "OK",
 			HealthRollup: "OK",

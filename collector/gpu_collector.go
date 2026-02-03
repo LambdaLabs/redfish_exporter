@@ -8,11 +8,12 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	isoDuration "github.com/sosodev/duration"
 	"github.com/stmcginnis/gofish"
-	"github.com/stmcginnis/gofish/redfish"
+	"github.com/stmcginnis/gofish/schemas"
+
+	"github.com/LambdaLabs/redfish_exporter/config"
 )
 
 // GPUSubsystem is the GPU subsystem name
@@ -36,10 +37,10 @@ func baseWithExtraLabels(extra []string) []string {
 	return append(gpuBaseLabelsCopy, extra...)
 }
 
-// SystemGPU is a type embedding [*redfish.Processor], with support for
+// SystemGPU is a type embedding [*schemas.Processor], with support for
 // extra fields related to the owning system: System Name and System ID
 type SystemGPU struct {
-	*redfish.Processor
+	*schemas.Processor
 	SystemName string
 	SystemID   string
 }
@@ -225,17 +226,17 @@ func (g *GPUCollector) gatherGPUs(ctx context.Context) ([]SystemGPU, error) {
 }
 
 // filterGPUs filters processors to return only GPU processors
-func filterGPUs(cpus []*redfish.Processor) []*redfish.Processor {
-	gpus := []*redfish.Processor{}
+func filterGPUs(cpus []*schemas.Processor) []*schemas.Processor {
+	gpus := []*schemas.Processor{}
 	for _, cpu := range cpus {
-		if cpu.ProcessorType == redfish.GPUProcessorType {
+		if cpu.ProcessorType == schemas.GPUProcessorType {
 			gpus = append(gpus, cpu)
 		}
 	}
 	return gpus
 }
 
-// emitGPUMemoryMetrics iterates a slice of [*redfish.Memory] belonging to the provided [SystemGPU],
+// emitGPUMemoryMetrics iterates a slice of [*schemas.Memory] belonging to the provided [SystemGPU],
 // performing a network request to the Redfish device to gather memory metrics.
 // Collected metrics are emitted onto the provided channel.
 func (g *GPUCollector) emitGPUMemoryMetrics(ch chan<- prometheus.Metric, gpu SystemGPU, commonLabels []string) {
@@ -257,17 +258,17 @@ func (g *GPUCollector) emitGPUMemoryMetrics(ch chan<- prometheus.Metric, gpu Sys
 		ch <- prometheus.MustNewConstMetric(
 			g.metrics["gpu_memory_ecc_correctable"].desc,
 			prometheus.CounterValue,
-			float64(memMetric.LifeTime.CorrectableECCErrorCount),
+			float64(gofish.Deref(memMetric.LifeTime.CorrectableECCErrorCount)),
 			memLabels...)
 		ch <- prometheus.MustNewConstMetric(
 			g.metrics["gpu_memory_ecc_uncorrectable"].desc,
 			prometheus.CounterValue,
-			float64(memMetric.LifeTime.UncorrectableECCErrorCount),
+			float64(gofish.Deref(memMetric.LifeTime.UncorrectableECCErrorCount)),
 			memLabels...)
 		ch <- prometheus.MustNewConstMetric(
 			g.metrics["gpu_memory_capacity_mib"].desc,
 			prometheus.GaugeValue,
-			float64(mem.CapacityMiB),
+			float64(gofish.Deref(mem.CapacityMiB)),
 			[]string{gpu.SystemName, gpu.ID, mem.ID}...,
 		)
 		if stateValue, ok := parseCommonStatusState(mem.Status.State); ok {
@@ -445,7 +446,7 @@ func (g *GPUCollector) emitNVLinkTelemetry(ctx context.Context, ch chan<- promet
 		return
 	}
 	for _, port := range agg.Members {
-		if port.PortProtocol != redfish.NVLinkPortProtocol ||
+		if port.PortProtocol != schemas.NVLinkProtocol ||
 			!strings.Contains(port.ID, "NVLink_") {
 			continue
 		}

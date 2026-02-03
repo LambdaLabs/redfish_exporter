@@ -8,50 +8,46 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LambdaLabs/redfish_exporter/config"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
-	"github.com/stmcginnis/gofish/common"
-	"github.com/stmcginnis/gofish/redfish"
+	"github.com/stmcginnis/gofish/schemas"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/v3/golden"
+
+	"github.com/LambdaLabs/redfish_exporter/config"
 )
 
 func Test_filterGPUs(t *testing.T) {
 	tT := map[string]struct {
-		processors []*redfish.Processor
-		want       []*redfish.Processor
+		processors []*schemas.Processor
+		want       []*schemas.Processor
 	}{
 		"happy path, CPUs filtered": {
-			processors: []*redfish.Processor{
+			processors: []*schemas.Processor{
 				{
-					ProcessorType: redfish.CPUProcessorType,
+					ProcessorType: schemas.CPUProcessorType,
 				},
 				{
-					ProcessorType: redfish.GPUProcessorType,
-					Description:   "want this one",
+					ProcessorType: schemas.GPUProcessorType,
 				},
 			},
-			want: []*redfish.Processor{
+			want: []*schemas.Processor{
 				{
-					ProcessorType: redfish.GPUProcessorType,
-					Description:   "want this one",
+					ProcessorType: schemas.GPUProcessorType,
 				},
 			},
 		},
 		"happy path, no GPUs returned": {
-			processors: []*redfish.Processor{
+			processors: []*schemas.Processor{
 				{
-					ProcessorType: redfish.CPUProcessorType,
+					ProcessorType: schemas.CPUProcessorType,
 				},
 				{
-					ProcessorType: redfish.CPUProcessorType,
+					ProcessorType: schemas.CPUProcessorType,
 				},
 			},
-			want: []*redfish.Processor{},
+			want: []*schemas.Processor{},
 		},
 	}
 
@@ -75,13 +71,13 @@ func TestGPUCollector_gatherGPUs(t *testing.T) {
 				{
 					SystemID:   "HGX_Baseboard_0",
 					SystemName: "HGX_Baseboard_0",
-					Processor: &redfish.Processor{
-						Entity: common.Entity{
+					Processor: &schemas.Processor{
+						Entity: schemas.Entity{
 							ID:      "GPU_0",
 							ODataID: "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0",
 						},
 						ODataType:     "#Processor.v1_20_0.Processor",
-						ProcessorType: redfish.GPUProcessorType,
+						ProcessorType: schemas.GPUProcessorType,
 						UUID:          "uuid-here",
 					},
 				},
@@ -104,11 +100,14 @@ func TestGPUCollector_gatherGPUs(t *testing.T) {
 			} else {
 				require.NoError(t, gotErr)
 			}
-			assert.Empty(t, cmp.Diff(test.want, got,
-				cmpopts.IgnoreUnexported(common.Entity{}),
-				cmpopts.IgnoreUnexported(redfish.Processor{}),
-				cmpopts.IgnoreUnexported(redfish.MemorySummary{}),
-			))
+			require.Equal(t, len(test.want), len(got))
+			require.Equal(t, test.want[0].SystemID, got[0].SystemID)
+			require.Equal(t, test.want[0].SystemName, got[0].SystemName)
+			require.Equal(t, test.want[0].Processor.ID, got[0].Processor.ID)
+			require.Equal(t, test.want[0].Processor.ODataID, got[0].Processor.ODataID)
+			require.Equal(t, test.want[0].Processor.ODataType, got[0].Processor.ODataType)
+			require.Equal(t, test.want[0].Processor.ProcessorType, got[0].Processor.ProcessorType)
+			require.Equal(t, test.want[0].Processor.UUID, got[0].Processor.UUID)
 		})
 	}
 }

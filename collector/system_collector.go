@@ -6,10 +6,11 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/LambdaLabs/redfish_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
-	"github.com/stmcginnis/gofish/redfish"
+	"github.com/stmcginnis/gofish/schemas"
+
+	"github.com/LambdaLabs/redfish_exporter/config"
 )
 
 // SystemSubsystem is the system subsystem
@@ -171,12 +172,12 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 			systemPowerState := system.PowerState
 			systemState := system.Status.State
 			systemHealthState := system.Status.Health
-			systemTotalProcessorCount := system.ProcessorSummary.Count
-			systemTotalProcessorsState := system.ProcessorSummary.Status.State
-			systemTotalProcessorsHealthState := system.ProcessorSummary.Status.Health
-			systemTotalMemoryState := system.MemorySummary.Status.State
-			systemTotalMemoryHealthState := system.MemorySummary.Status.Health
-			systemTotalMemoryAmount := system.MemorySummary.TotalSystemMemoryGiB
+			systemTotalProcessorCount := gofish.Deref(system.ProcessorSummary.Count)
+			systemTotalProcessorsState := system.ProcessorSummary.Status.State        //nolint:staticcheck
+			systemTotalProcessorsHealthState := system.ProcessorSummary.Status.Health //nolint:staticcheck
+			systemTotalMemoryState := system.MemorySummary.Status.State               //nolint:staticcheck
+			systemTotalMemoryHealthState := system.MemorySummary.Status.Health        //nolint:staticcheck
+			systemTotalMemoryAmount := gofish.Deref(system.MemorySummary.TotalSystemMemoryGiB)
 
 			systemLabelValues := []string{"system", SystemID}
 			if systemHealthStateValue, ok := parseCommonStatusHealth(systemHealthState); ok {
@@ -339,11 +340,11 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 	}
 }
 
-func parseMemory(ch chan<- prometheus.Metric, memory *redfish.Memory, wg *sync.WaitGroup, logger *slog.Logger) {
+func parseMemory(ch chan<- prometheus.Metric, memory *schemas.Memory, wg *sync.WaitGroup, logger *slog.Logger) {
 	defer wg.Done()
 	memoryName := memory.Name
 	memoryID := memory.ID
-	memoryCapacityMiB := memory.CapacityMiB
+	memoryCapacityMiB := gofish.Deref(memory.CapacityMiB)
 	memoryState := memory.Status.State
 	memoryHealthState := memory.Status.Health
 
@@ -358,12 +359,12 @@ func parseMemory(ch chan<- prometheus.Metric, memory *redfish.Memory, wg *sync.W
 
 }
 
-func parseProcessor(ch chan<- prometheus.Metric, processor *redfish.Processor, wg *sync.WaitGroup, logger *slog.Logger) {
+func parseProcessor(ch chan<- prometheus.Metric, processor *schemas.Processor, wg *sync.WaitGroup, logger *slog.Logger) {
 	defer wg.Done()
 	processorName := processor.Name
 	processorID := processor.ID
-	processorTotalCores := processor.TotalCores
-	processorTotalThreads := processor.TotalThreads
+	processorTotalCores := gofish.Deref(processor.TotalCores)
+	processorTotalThreads := gofish.Deref(processor.TotalThreads)
 	processorState := processor.Status.State
 	processorHelathState := processor.Status.Health
 	processorHealthRollup := processor.Status.HealthRollup
@@ -388,26 +389,26 @@ func parseProcessor(ch chan<- prometheus.Metric, processor *redfish.Processor, w
 		logger.Error("error getting processor metrics", slog.String("processor", processorID), slog.Any("error", err))
 	} else if processorMetrics != nil {
 		// Emit PCIe error metrics
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_l0_to_recovery_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.L0ToRecoveryCount), systemProcessorLabelValues...)
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_correctable_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.CorrectableErrorCount), systemProcessorLabelValues...)
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_fatal_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.FatalErrorCount), systemProcessorLabelValues...)
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_non_fatal_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.NonFatalErrorCount), systemProcessorLabelValues...)
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_nak_received_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.NAKReceivedCount), systemProcessorLabelValues...)
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_nak_sent_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.NAKSentCount), systemProcessorLabelValues...)
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_replay_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.ReplayCount), systemProcessorLabelValues...)
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_replay_rollover_count"].desc, prometheus.GaugeValue, float64(processorMetrics.PCIeErrors.ReplayRolloverCount), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_l0_to_recovery_count"].desc, prometheus.GaugeValue, float64(gofish.Deref(processorMetrics.PCIeErrors.L0ToRecoveryCount)), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_correctable_count"].desc, prometheus.GaugeValue, float64(gofish.Deref(processorMetrics.PCIeErrors.CorrectableErrorCount)), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_fatal_count"].desc, prometheus.GaugeValue, float64(gofish.Deref(processorMetrics.PCIeErrors.FatalErrorCount)), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_non_fatal_count"].desc, prometheus.GaugeValue, float64(gofish.Deref(processorMetrics.PCIeErrors.NonFatalErrorCount)), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_nak_received_count"].desc, prometheus.GaugeValue, float64(gofish.Deref(processorMetrics.PCIeErrors.NAKReceivedCount)), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_nak_sent_count"].desc, prometheus.GaugeValue, float64(gofish.Deref(processorMetrics.PCIeErrors.NAKSentCount)), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_replay_count"].desc, prometheus.GaugeValue, float64(gofish.Deref(processorMetrics.PCIeErrors.ReplayCount)), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_replay_rollover_count"].desc, prometheus.GaugeValue, float64(gofish.Deref(processorMetrics.PCIeErrors.ReplayRolloverCount)), systemProcessorLabelValues...)
 
 		// Emit cache metrics
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_cache_lifetime_uncorrectable_ecc_error_count"].desc, prometheus.GaugeValue, float64(processorMetrics.CacheMetricsTotal.LifeTime.UncorrectableECCErrorCount), systemProcessorLabelValues...)
-		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_cache_lifetime_correctable_ecc_error_count"].desc, prometheus.GaugeValue, float64(processorMetrics.CacheMetricsTotal.LifeTime.CorrectableECCErrorCount), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_cache_lifetime_uncorrectable_ecc_error_count"].desc, prometheus.GaugeValue, float64(gofish.Deref(processorMetrics.CacheMetricsTotal.LifeTime.UncorrectableECCErrorCount)), systemProcessorLabelValues...)
+		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_cache_lifetime_correctable_ecc_error_count"].desc, prometheus.GaugeValue, float64(gofish.Deref(processorMetrics.CacheMetricsTotal.LifeTime.CorrectableECCErrorCount)), systemProcessorLabelValues...)
 	}
 }
 
-func parseVolume(ch chan<- prometheus.Metric, volume *redfish.Volume, wg *sync.WaitGroup) {
+func parseVolume(ch chan<- prometheus.Metric, volume *schemas.Volume, wg *sync.WaitGroup) {
 	defer wg.Done()
 	volumeName := volume.Name
 	volumeID := volume.ID
-	volumeCapacityBytes := volume.CapacityBytes
+	volumeCapacityBytes := gofish.Deref(volume.CapacityBytes)
 	volumeState := volume.Status.State
 	volumeHealthState := volume.Status.Health
 	systemVolumeLabelValues := []string{"volume", volumeName, volumeID}
@@ -420,11 +421,11 @@ func parseVolume(ch chan<- prometheus.Metric, volume *redfish.Volume, wg *sync.W
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_volume_capacity"].desc, prometheus.GaugeValue, float64(volumeCapacityBytes), systemVolumeLabelValues...)
 }
 
-func parseDrive(ch chan<- prometheus.Metric, drive *redfish.Drive, storageControllerID string, wg *sync.WaitGroup) {
+func parseDrive(ch chan<- prometheus.Metric, drive *schemas.Drive, storageControllerID string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	driveName := drive.Name
 	driveID := drive.ID
-	driveCapacityBytes := drive.CapacityBytes
+	driveCapacityBytes := gofish.Deref(drive.CapacityBytes)
 	driveState := drive.Status.State
 	driveHealthState := drive.Status.Health
 	systemdriveLabelValues := []string{"drive", driveName, driveID, storageControllerID}
@@ -437,7 +438,7 @@ func parseDrive(ch chan<- prometheus.Metric, drive *redfish.Drive, storageContro
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_drive_capacity"].desc, prometheus.GaugeValue, float64(driveCapacityBytes), systemdriveLabelValues...)
 }
 
-func parsePcieDevice(ch chan<- prometheus.Metric, pcieDevice *redfish.PCIeDevice, wg *sync.WaitGroup) {
+func parsePcieDevice(ch chan<- prometheus.Metric, pcieDevice *schemas.PCIeDevice, wg *sync.WaitGroup) {
 	defer wg.Done()
 	pcieDeviceName := pcieDevice.Name
 	pcieDeviceID := pcieDevice.ID
@@ -456,7 +457,7 @@ func parsePcieDevice(ch chan<- prometheus.Metric, pcieDevice *redfish.PCIeDevice
 	}
 }
 
-func parseNetworkInterface(ch chan<- prometheus.Metric, networkInterface *redfish.NetworkInterface, wg *sync.WaitGroup) {
+func parseNetworkInterface(ch chan<- prometheus.Metric, networkInterface *schemas.NetworkInterface, wg *sync.WaitGroup) {
 	defer wg.Done()
 	networkInterfaceName := networkInterface.Name
 	networkInterfaceID := networkInterface.ID
@@ -472,7 +473,7 @@ func parseNetworkInterface(ch chan<- prometheus.Metric, networkInterface *redfis
 	}
 }
 
-func parseEthernetInterface(ch chan<- prometheus.Metric, ethernetInterface *redfish.EthernetInterface, wg *sync.WaitGroup) {
+func parseEthernetInterface(ch chan<- prometheus.Metric, ethernetInterface *schemas.EthernetInterface, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	ethernetInterfaceName := ethernetInterface.Name
@@ -496,7 +497,7 @@ func parseEthernetInterface(ch chan<- prometheus.Metric, ethernetInterface *redf
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_ethernet_interface_link_enabled"].desc, prometheus.GaugeValue, boolToFloat64(ethernetInterfaceEnabled), systemEthernetInterfaceLabelValues...)
 }
 
-func parsePcieFunction(ch chan<- prometheus.Metric, pcieFunction *redfish.PCIeFunction, wg *sync.WaitGroup) {
+func parsePcieFunction(ch chan<- prometheus.Metric, pcieFunction *schemas.PCIeFunction, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	pcieFunctionName := pcieFunction.Name

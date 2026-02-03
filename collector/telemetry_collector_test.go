@@ -9,14 +9,13 @@ import (
 	"sync"
 	"testing"
 
-	expConfig "github.com/LambdaLabs/redfish_exporter/config"
-
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stmcginnis/gofish"
-	"github.com/stmcginnis/gofish/common"
-	"github.com/stmcginnis/gofish/redfish"
+	"github.com/stmcginnis/gofish/schemas"
 	"github.com/stretchr/testify/require"
+
+	expConfig "github.com/LambdaLabs/redfish_exporter/config"
 )
 
 func TestTelemetryCollectorIntegration(t *testing.T) {
@@ -725,15 +724,15 @@ func TestParseAmbientSensorMetric(t *testing.T) {
 
 func TestTelemetryCollector_CollectPlatformGPUMetrics(t *testing.T) {
 	tT := map[string]struct {
-		report    *redfish.MetricReport
+		report    *schemas.MetricReport
 		systemMap map[string]string
 	}{
 		"stale reports should not be emitted": {
-			report: &redfish.MetricReport{
-				Entity: common.Entity{
+			report: &schemas.MetricReport{
+				Entity: schemas.Entity{
 					ID: "HGX_PlatformEnvironmentMetrics_0",
 				},
-				MetricValues: []redfish.MetricValue{
+				MetricValues: []schemas.MetricValue{
 					{
 						MetricProperty: "/redfish/v1/Chassis/HGX_GPU_1/Sensors/HGX_Chassis_0_TotalGPU_Power_0",
 						MetricValue:    "100",

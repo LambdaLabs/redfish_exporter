@@ -6,14 +6,13 @@ toolchain go1.24.1
 
 require (
 	github.com/golangci/golangci-lint v1.58.1
-	github.com/google/go-cmp v0.7.0
 	github.com/itchyny/gojq v0.12.17
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.66.1
 	github.com/prometheus/exporter-toolkit v0.15.0
 	github.com/sosodev/duration v1.3.1
-	github.com/stmcginnis/gofish v0.20.1-0.20251105161753-ad06182e453c
+	github.com/stmcginnis/gofish v0.20.1-0.20260203173523-22b2013b7c28
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -85,6 +84,7 @@ require (
 	github.com/golangci/plugin-module-register v0.1.1 // indirect
 	github.com/golangci/revgrep v0.5.3 // indirect
 	github.com/golangci/unconvert v0.0.0-20240309020433-c5143eacb3ed // indirect
+	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/gordonklaus/ineffassign v0.1.0 // indirect
 	github.com/gostaticanalysis/analysisutil v0.7.1 // indirect
 	github.com/gostaticanalysis/comment v1.4.2 // indirect
