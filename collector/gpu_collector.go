@@ -93,6 +93,7 @@ func createGPUMetricMap() map[string]Metric {
 	// NVLink Port metrics
 	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_state", fmt.Sprintf("NVLink port state,%s", CommonStateHelp), gpuPortLabels)
 	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_health", fmt.Sprintf("NVLink port health,%s", CommonHealthHelp), gpuPortLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_link_status", fmt.Sprintf("NVLink port link status,%s", CommonNVLinkPortLinkHelp), gpuPortLabels)
 	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_runtime_error", "NVLink runtime error status (1 if error)", gpuPortLabels)
 	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_training_error", "NVLink training error status (1 if error)", gpuPortLabels)
 	addToMetricMap(gpuMetrics, GPUSubsystem, "nvlink_link_error_recovery_count", "NVLink error recovery count", gpuPortLabels)
@@ -465,6 +466,14 @@ func (g *GPUCollector) emitNVLinkTelemetry(ctx context.Context, ch chan<- promet
 				g.metrics["gpu_nvlink_health"].desc,
 				prometheus.GaugeValue,
 				healthValue,
+				portLabels...,
+			)
+		}
+		if linkStatusValue, ok := parseNVLinkPortLinkStatus(port.LinkStatus); ok {
+			ch <- prometheus.MustNewConstMetric(
+				g.metrics["gpu_nvlink_link_status"].desc,
+				prometheus.GaugeValue,
+				linkStatusValue,
 				portLabels...,
 			)
 		}
