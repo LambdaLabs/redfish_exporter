@@ -15,7 +15,7 @@ import (
 	"github.com/stmcginnis/gofish/schemas"
 	"github.com/stretchr/testify/require"
 
-	expConfig "github.com/LambdaLabs/redfish_exporter/config"
+	expConfig "github.com/LambdaLabs/redfish_exporter/internal/config"
 )
 
 func TestTelemetryCollectorIntegration(t *testing.T) {

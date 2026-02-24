@@ -11,7 +11,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/LambdaLabs/redfish_exporter/config"
+	"github.com/LambdaLabs/redfish_exporter/internal/config"
 	"github.com/itchyny/gojq"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"

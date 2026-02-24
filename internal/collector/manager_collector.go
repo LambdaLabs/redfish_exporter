@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/LambdaLabs/redfish_exporter/config"
+	"github.com/LambdaLabs/redfish_exporter/internal/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
 )

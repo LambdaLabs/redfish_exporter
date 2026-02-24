@@ -12,8 +12,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/LambdaLabs/redfish_exporter/collector"
-	"github.com/LambdaLabs/redfish_exporter/config"
+	"github.com/LambdaLabs/redfish_exporter/internal/collector"
+	"github.com/LambdaLabs/redfish_exporter/internal/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/exporter-toolkit/web"

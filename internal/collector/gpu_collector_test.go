@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gotest.tools/v3/golden"
 
-	"github.com/LambdaLabs/redfish_exporter/config"
+	"github.com/LambdaLabs/redfish_exporter/internal/config"
 )
 
 func Test_filterGPUs(t *testing.T) {
@@ -103,11 +103,11 @@ func TestGPUCollector_gatherGPUs(t *testing.T) {
 			require.Equal(t, len(test.want), len(got))
 			require.Equal(t, test.want[0].SystemID, got[0].SystemID)
 			require.Equal(t, test.want[0].SystemName, got[0].SystemName)
-			require.Equal(t, test.want[0].Processor.ID, got[0].Processor.ID)
-			require.Equal(t, test.want[0].Processor.ODataID, got[0].Processor.ODataID)
-			require.Equal(t, test.want[0].Processor.ODataType, got[0].Processor.ODataType)
-			require.Equal(t, test.want[0].Processor.ProcessorType, got[0].Processor.ProcessorType)
-			require.Equal(t, test.want[0].Processor.UUID, got[0].Processor.UUID)
+			require.Equal(t, test.want[0].ID, got[0].ID)
+			require.Equal(t, test.want[0].ODataID, got[0].ODataID)
+			require.Equal(t, test.want[0].ODataType, got[0].ODataType)
+			require.Equal(t, test.want[0].ProcessorType, got[0].ProcessorType)
+			require.Equal(t, test.want[0].UUID, got[0].UUID)
 		})
 	}
 }
