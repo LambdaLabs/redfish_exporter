@@ -206,6 +206,21 @@ func parseLinkStatus(status schemas.LinkStatus) (float64, bool) {
 	return float64(0), false
 }
 
+func parseNVLinkPortLinkStatus(status schemas.PortLinkStatus) (float64, bool) {
+	if bytes.Equal([]byte(status), []byte("LinkUp")) {
+		return float64(1), true
+	} else if bytes.Equal([]byte(status), []byte("Starting")) {
+		return float64(2), true
+	} else if bytes.Equal([]byte(status), []byte("Training")) {
+		return float64(3), true
+	} else if bytes.Equal([]byte(status), []byte("LinkDown")) {
+		return float64(4), true
+	} else if bytes.Equal([]byte(status), []byte("NoLink")) {
+		return float64(5), true
+	}
+	return float64(0), false
+}
+
 func parsePortLinkStatus(status schemas.PortLinkStatus) (float64, bool) {
 	if bytes.Equal([]byte(status), []byte("Up")) {
 		return float64(1), true

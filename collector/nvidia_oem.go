@@ -150,8 +150,9 @@ type GPUNVLinkCollection struct {
 				} `json:"Nvidia,omitempty"`
 			} `json:"Oem"`
 		} `json:"Metrics"`
-		PortType     string           `json:"PortType"`
-		PortProtocol schemas.Protocol `json:"PortProtocol"`
-		Status       schemas.Status   `json:"Status"`
+		PortType     string                 `json:"PortType"`
+		PortProtocol schemas.Protocol       `json:"PortProtocol"`
+		LinkStatus   schemas.PortLinkStatus `json:"LinkStatus"`
+		Status       schemas.Status         `json:"Status"`
 	} `json:"Members"`
 }

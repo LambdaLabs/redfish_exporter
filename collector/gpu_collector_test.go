@@ -310,6 +310,7 @@ func TestGPUCollector_emitGPUNVLinkTelemetry(t *testing.T) {
 			testdataPath: "testdata/gb300_happypath",
 			seriesToCheck: []string{"redfish_gpu_nvlink_state",
 				"redfish_gpu_nvlink_health",
+				"redfish_gpu_nvlink_link_status",
 				"redfish_gpu_nvlink_runtime_error",
 				"redfish_gpu_nvlink_training_error",
 				"redfish_gpu_nvlink_link_error_recovery_count",
@@ -318,7 +319,7 @@ func TestGPUCollector_emitGPUNVLinkTelemetry(t *testing.T) {
 				"redfish_gpu_nvlink_bit_error_rate",
 			},
 			testLogLevel:         slog.LevelInfo,
-			wantSeriesCount:      576,
+			wantSeriesCount:      648,
 			wantSeriesGoldenPath: "golden/gb300_nvlink_happy.golden",
 		},
 	}
