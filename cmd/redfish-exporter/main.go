@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -277,11 +278,27 @@ func main() {
 	slog.Info("Starting redfish_exporter")
 	flag.Parse()
 
-	// load config first time
-	if err := safeConfig.ReloadConfig(*configFile); err != nil {
-		slog.Error("Error parsing config file", slog.Any("error", err))
+	if err := runMain(); err != nil {
+		slog.Error("Failed to run redfish_exporter", slog.Any("error", err))
 		os.Exit(1)
 	}
+}
+
+func runMain() error {
+	// load config first time
+	if err := safeConfig.ReloadConfig(*configFile); err != nil {
+		return fmt.Errorf("error parsing config file: %w", err)
+	}
+
+	mp, err := initOTelMeterProvider()
+	if err != nil {
+		return fmt.Errorf("failed to initialize OTel meter provider: %w", err)
+	}
+	defer func() {
+		if err := mp.Shutdown(context.Background()); err != nil {
+			slog.Error("Failed to shut down OTel meter provider", slog.Any("error", err))
+		}
+	}()
 
 	registerMetaMetrics()
 	// Setup dinal logger from config
@@ -368,9 +385,10 @@ func main() {
 	srv := &http.Server{
 		Handler: mux,
 	}
-	err := web.ListenAndServe(srv, &exporterToolkitConf, logger)
+	err = web.ListenAndServe(srv, &exporterToolkitConf, logger)
 	if err != nil {
-		slog.With("error", err).Error("exiting on ListenAndServe error")
-		os.Exit(1)
+		return fmt.Errorf("exiting on ListenAndServe error: %w", err)
 	}
+
+	return nil
 }
