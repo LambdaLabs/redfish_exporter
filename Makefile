@@ -29,7 +29,7 @@ help:
 
 # Build the exporter
 build:
-	go build -o redfish_exporter
+	go build -o redfish_exporter ./cmd/redfish-exporter
 
 # Run tests and benchmarks
 test: gotests benchmark
@@ -90,7 +90,7 @@ unit-test:
 
 # Run integration tests
 integration-test:
-	go test -v -run Integration ./collector
+	go test -v -run Integration ./internal/collector
 
 # Run linter
 lint:
@@ -241,5 +241,5 @@ perf-compare:
 	fi
 
 benchmark:
-	@cd collector ; \
+	@cd internal/collector ; \
 	go test -bench=.

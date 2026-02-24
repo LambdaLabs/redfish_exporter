@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gotest.tools/v3/golden"
 
-	"github.com/LambdaLabs/redfish_exporter/config"
+	"github.com/LambdaLabs/redfish_exporter/internal/config"
 )
 
 func Test_filterGPUs(t *testing.T) {

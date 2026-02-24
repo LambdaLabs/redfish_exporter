@@ -10,7 +10,7 @@ import (
 	"github.com/stmcginnis/gofish"
 	"github.com/stmcginnis/gofish/schemas"
 
-	"github.com/LambdaLabs/redfish_exporter/config"
+	"github.com/LambdaLabs/redfish_exporter/internal/config"
 )
 
 // SystemSubsystem is the system subsystem
