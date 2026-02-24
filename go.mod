@@ -14,6 +14,7 @@ require (
 	github.com/sosodev/duration v1.3.1
 	github.com/stmcginnis/gofish v0.20.1-0.20260203173523-22b2013b7c28
 	github.com/stretchr/testify v1.11.1
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.65.0
 	go.opentelemetry.io/otel v1.40.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.62.0
 	go.opentelemetry.io/otel/sdk/metric v1.40.0
@@ -64,6 +65,7 @@ require (
 	github.com/ettle/strcase v0.2.0 // indirect
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/fatih/structtag v1.2.0 // indirect
+	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/firefart/nonamedreturns v1.0.5 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/fzipp/gocyclo v0.6.0 // indirect

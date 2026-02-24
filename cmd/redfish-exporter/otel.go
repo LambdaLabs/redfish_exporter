@@ -13,7 +13,28 @@ func initOTelMeterProvider() (*sdkmetric.MeterProvider, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating prometheus exporter: %w", err)
 	}
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(promExporter))
+
+	durationView := sdkmetric.NewView(
+		sdkmetric.Instrument{Name: "http.client.request.duration"},
+		sdkmetric.Stream{
+			Aggregation: sdkmetric.AggregationExplicitBucketHistogram{
+				Boundaries: []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60},
+			},
+		},
+	)
+
+	dropRequestBodySizeView := sdkmetric.NewView(
+		sdkmetric.Instrument{Name: "http.client.request.body.size"},
+		sdkmetric.Stream{
+			Aggregation: sdkmetric.AggregationDrop{},
+		},
+	)
+
+	provider := sdkmetric.NewMeterProvider(
+		sdkmetric.WithReader(promExporter),
+		sdkmetric.WithView(durationView),
+		sdkmetric.WithView(dropRequestBodySizeView),
+	)
 	otel.SetMeterProvider(provider)
 	return provider, nil
 }

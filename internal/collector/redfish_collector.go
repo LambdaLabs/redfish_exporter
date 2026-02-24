@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
 	"github.com/stmcginnis/gofish/schemas"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"github.com/LambdaLabs/redfish_exporter/internal/config"
 )
@@ -138,6 +139,9 @@ func newRedfishClient(ctx context.Context, host string, username string, passwor
 	if err != nil {
 		return nil, err
 	}
+	// Wrap the transport with otelhttp for HTTP client metrics.
+	// This must happen after ConnectContext so gofish can configure TLS/keepalive on the bare transport.
+	redfishClient.HTTPClient.Transport = otelhttp.NewTransport(redfishClient.HTTPClient.Transport)
 	return redfishClient, nil
 }
 
