@@ -13,6 +13,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
 	"github.com/stmcginnis/gofish/schemas"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/LambdaLabs/redfish_exporter/internal/config"
 )
@@ -109,6 +111,19 @@ func (r *RedfishCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(totalScrapeDurationDesc, prometheus.GaugeValue, time.Since(scrapeTime).Seconds())
 }
 
+type collectorCtxKey struct{}
+
+func ContextWithCollector(ctx context.Context, name string) context.Context {
+	return context.WithValue(ctx, collectorCtxKey{}, name)
+}
+
+func CollectorFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(collectorCtxKey{}).(string); ok {
+		return v
+	}
+	return ""
+}
+
 func newRedfishClient(ctx context.Context, host string, username string, password string, rfConfig config.RedfishClientConfig) (*gofish.APIClient, error) {
 	url := fmt.Sprintf("https://%s", host)
 	dialer := &net.Dialer{
@@ -138,6 +153,15 @@ func newRedfishClient(ctx context.Context, host string, username string, passwor
 	if err != nil {
 		return nil, err
 	}
+	// Wrap the transport with otelhttp for HTTP client metrics.
+	// This must happen after ConnectContext so gofish can configure TLS/keepalive on the bare transport.
+	redfishClient.HTTPClient.Transport = otelhttp.NewTransport(redfishClient.HTTPClient.Transport,
+		otelhttp.WithMetricAttributesFn(func(r *http.Request) []attribute.KeyValue {
+			if name := CollectorFromContext(r.Context()); name != "" {
+				return []attribute.KeyValue{attribute.String("module", name)}
+			}
+			return nil
+		}))
 	return redfishClient, nil
 }
 

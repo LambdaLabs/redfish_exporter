@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -207,7 +208,7 @@ func metricsHandler() http.HandlerFunc {
 			return
 		}
 
-		collectors := buildCollectorsFor(sr.Modules, safeConfig.GetModules(), aggregateCollector.Client(), scrapeLogger)
+		collectors := buildCollectorsFor(r.Context(), sr.Modules, safeConfig.GetModules(), aggregateCollector.Client(), scrapeLogger)
 		aggregateCollector.WithCollectors(collectors)
 		registry.MustRegister(aggregateCollector)
 		gatherers := prometheus.Gatherers{
@@ -225,10 +226,10 @@ func metricsHandler() http.HandlerFunc {
 // For ease onboarding from existing redfish_exporter deployments,
 // a modules[0] == "rf_exporter_default" will yield a []prometheus.Collector defined
 // in this function. Future relases will remove this behavior and require user input.
-func buildCollectorsFor(modules []string, moduleConfig map[string]config.Module, rfClient *gofish.APIClient, logger *slog.Logger) []collector.ContextAwareCollector {
+func buildCollectorsFor(ctx context.Context, modules []string, moduleConfig map[string]config.Module, rfClient *gofish.APIClient, logger *slog.Logger) []collector.ContextAwareCollector {
 	if modules[0] == "rf_exporter_default" {
 		logger.Warn("Using default collector bundle. In a future release, the exporter will require configuration of one or more modules.")
-		return buildCollectorsFor([]string{
+		return buildCollectorsFor(ctx, []string{
 			"gpu_collector",
 			"chassis_collector",
 			"manager_collector",
@@ -239,7 +240,8 @@ func buildCollectorsFor(modules []string, moduleConfig map[string]config.Module,
 	c := []collector.ContextAwareCollector{}
 	for _, module := range modules {
 		if modConfig, found := moduleConfig[module]; found {
-			collector, err := collector.NewCollectorFromModule(module, &modConfig, rfClient, logger)
+			collectorClient := rfClient.WithContext(collector.ContextWithCollector(ctx, module))
+			collector, err := collector.NewCollectorFromModule(module, &modConfig, collectorClient, logger)
 			if err != nil {
 				logger.Error("unable to create collector", slog.Any("error", err))
 				collectorLastStatus.WithLabelValues(module).Set(0)
@@ -277,11 +279,27 @@ func main() {
 	slog.Info("Starting redfish_exporter")
 	flag.Parse()
 
-	// load config first time
-	if err := safeConfig.ReloadConfig(*configFile); err != nil {
-		slog.Error("Error parsing config file", slog.Any("error", err))
+	if err := runMain(); err != nil {
+		slog.Error("Failed to run redfish_exporter", slog.Any("error", err))
 		os.Exit(1)
 	}
+}
+
+func runMain() error {
+	// load config first time
+	if err := safeConfig.ReloadConfig(*configFile); err != nil {
+		return fmt.Errorf("error parsing config file: %w", err)
+	}
+
+	mp, err := initOTelMeterProvider()
+	if err != nil {
+		return fmt.Errorf("failed to initialize OTel meter provider: %w", err)
+	}
+	defer func() {
+		if err := mp.Shutdown(context.Background()); err != nil {
+			slog.Error("Failed to shut down OTel meter provider", slog.Any("error", err))
+		}
+	}()
 
 	registerMetaMetrics()
 	// Setup dinal logger from config
@@ -368,9 +386,9 @@ func main() {
 	srv := &http.Server{
 		Handler: mux,
 	}
-	err := web.ListenAndServe(srv, &exporterToolkitConf, logger)
-	if err != nil {
-		slog.With("error", err).Error("exiting on ListenAndServe error")
-		os.Exit(1)
+	if err := web.ListenAndServe(srv, &exporterToolkitConf, logger); err != nil {
+		return fmt.Errorf("exiting on ListenAndServe error: %w", err)
 	}
+
+	return nil
 }
