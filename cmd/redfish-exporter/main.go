@@ -386,8 +386,7 @@ func runMain() error {
 	srv := &http.Server{
 		Handler: mux,
 	}
-	err = web.ListenAndServe(srv, &exporterToolkitConf, logger)
-	if err != nil {
+	if err := web.ListenAndServe(srv, &exporterToolkitConf, logger); err != nil {
 		return fmt.Errorf("exiting on ListenAndServe error: %w", err)
 	}
 
