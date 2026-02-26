@@ -5,6 +5,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	promexporter "go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 )
 
@@ -20,6 +21,12 @@ func initOTelMeterProvider() (*sdkmetric.MeterProvider, error) {
 			Aggregation: sdkmetric.AggregationExplicitBucketHistogram{
 				Boundaries: []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60},
 			},
+			// server.address and server.port are high-cardinality (one value per BMC target IP)
+			// and must be excluded to keep the metric manageable.
+			AttributeFilter: attribute.NewDenyKeysFilter(
+				attribute.Key("server.address"),
+				attribute.Key("server.port"),
+			),
 		},
 	)
 
