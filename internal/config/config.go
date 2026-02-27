@@ -2,12 +2,11 @@ package config
 
 import (
 	"fmt"
-	"io"
-	"os"
+	"strings"
 	"sync"
 	"time"
 
-	yaml "gopkg.in/yaml.v3"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -25,15 +24,6 @@ var (
 	DefaultSystemCollector = SystemCollectorConfig{}
 	// DefaultTelemetryCollector is a default unless the user provides particular values.
 	DefaultTelemetryCollector = TelemetryCollectorConfig{}
-	// DefaultModule is a default Module
-	DefaultModule = Module{
-		ChassisCollector:   DefaultChassisCollector,
-		GPUCollector:       DefaultGPUCollector,
-		JSONCollector:      DefaultJSONCollector,
-		ManagerCollector:   DefaultManagerCollector,
-		SystemCollector:    DefaultSystemCollector,
-		TelemetryCollector: DefaultTelemetryCollector,
-	}
 	// DefaultModuleConfig is used as a default when building a collector slice.
 	// In a future release, this will be removed and users will be expected to
 	// define one or more modules in their config, and reference those as HTTP query params.
@@ -69,141 +59,78 @@ var (
 	}
 )
 
-// ChassisCollectorConfig is a prober configuration.
-type ChassisCollectorConfig struct{}
+// newViperInstance returns a Viper instance configured with AutomaticEnv.
+// If envPrefix is non-empty, it is set as the env prefix (e.g. "MYPREFIX"
+// causes MYPREFIX_LOGLEVEL to map to loglevel).
+// The key replacer maps "." → "_" so nested keys like
+// "redfish_client.dial_timeout" map to env var "REDFISH_CLIENT_DIAL_TIMEOUT".
+func newViperInstance(envPrefix string) *viper.Viper {
+	v := viper.New()
+	if envPrefix != "" {
+		v.SetEnvPrefix(envPrefix)
+	}
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
 
-// UnmarshalYAML implements the yaml.Unmarshaler interface
-func (c *ChassisCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
-	*c = DefaultChassisCollector
-	type plain ChassisCollectorConfig
+	v.SetDefault("loglevel", "")
+	v.SetDefault("redfish_client.max_concurrent_requests", DefaultRedfishConfig.MaxConcurrentRequests)
+	v.SetDefault("redfish_client.dial_timeout", DefaultRedfishConfig.DialTimeout)
 
-	if err := unmarshal((*plain)(c)); err != nil {
-		return err
+	return v
+}
+
+// unmarshalViperConfig decodes the viper instance into a Config, applying
+// defaults for zero values and running validation.
+func unmarshalViperConfig(v *viper.Viper) (*Config, error) {
+	config := &Config{}
+	if err := v.Unmarshal(config); err != nil {
+		return nil, err
 	}
 
-	return nil
+	// Apply defaults for JSONCollector timeout — cannot use SetDefault since
+	// module names are not known upfront.
+	for name, mod := range config.Modules {
+		if mod.JSONCollector.Timeout == 0 {
+			mod.JSONCollector.Timeout = DefaultJSONCollector.Timeout
+			config.Modules[name] = mod
+		}
+	}
+
+	return config, config.Validate()
 }
+
+// ChassisCollectorConfig is a prober configuration.
+type ChassisCollectorConfig struct{}
 
 // GPUCollectorConfig is a prober configuration.
 type GPUCollectorConfig struct{}
 
-// UnmarshalYAML implements the yaml.Unmarshaler interface
-func (g *GPUCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
-	*g = DefaultGPUCollector
-	type plain GPUCollectorConfig
-
-	if err := unmarshal((*plain)(g)); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 type JSONCollectorConfig struct {
-	Timeout     time.Duration `yaml:"context_timeout"`
-	RedfishRoot string        `yaml:"redfishRoot"`
-	JQFilter    string        `yaml:"jq"`
-}
-
-func (j *JSONCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
-	*j = DefaultJSONCollector
-	type plain JSONCollectorConfig
-
-	if err := unmarshal((*plain)(j)); err != nil {
-		return err
-	}
-
-	return nil
+	Timeout     time.Duration `mapstructure:"context_timeout"`
+	RedfishRoot string        `mapstructure:"redfishRoot"`
+	JQFilter    string        `mapstructure:"jq"`
 }
 
 // ManagerCollectorConfig is a prober configuration.
 type ManagerCollectorConfig struct{}
 
-// UnmarshalYAML implements the yaml.Unmarshaler interface
-func (m *ManagerCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
-	*m = DefaultManagerCollector
-	type plain ManagerCollectorConfig
-
-	if err := unmarshal((*plain)(m)); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // SystemCollectorConfig is a prober configuration.
 type SystemCollectorConfig struct{}
 
-// UnmarshalYAML implements the yaml.Unmarshaler interface
-func (s *SystemCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
-	*s = DefaultSystemCollector
-	type plain SystemCollectorConfig
-
-	if err := unmarshal((*plain)(s)); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // TelemetryCollectorConfig is a prober configuration.
 type TelemetryCollectorConfig struct{}
-
-// UnmarshalYAML implements the yaml.Unmarshaler interface
-func (t *TelemetryCollectorConfig) UnmarshalYAML(unmarshal func(any) error) error {
-	*t = DefaultTelemetryCollector
-	type plain TelemetryCollectorConfig
-
-	if err := unmarshal((*plain)(t)); err != nil {
-		return err
-	}
-
-	return nil
-}
 
 // Module is a struct which represents some particular behavior the redfish_exporter should have
 // when executed against a host.
 // Modules are expected to specify a 'prober', and then a particular collector.
 type Module struct {
-	Prober             string                   `yaml:"prober"`
-	ChassisCollector   ChassisCollectorConfig   `yaml:"chassis_collector"`
-	GPUCollector       GPUCollectorConfig       `yaml:"gpu_collector"`
-	JSONCollector      JSONCollectorConfig      `yaml:"json_collector"`
-	ManagerCollector   ManagerCollectorConfig   `yaml:"manager_collector"`
-	SystemCollector    SystemCollectorConfig    `yaml:"system_collector"`
-	TelemetryCollector TelemetryCollectorConfig `yaml:"telemetry_collector"`
-}
-
-// RedfishClient describes configuration passed to the gofish API client for Redfish
-type RedfishClientConfig struct {
-	// MaxConcurrentRequests sets the gofish client maximum permitted concurrent requests.
-	// If unset, gofish defaults to 1, which often leads to backpressure in redfish_exporter
-	// and failed scrape requests.
-	// To minimize surprise, if unset in the redfish_exporter config, defaults to 1
-	MaxConcurrentRequests int64 `yaml:"max_concurrent_requests"`
-	// DialTimeout sets the gofish client timeout when connecting to a host.
-	// If unset in the redfish_exporter config, defaults to 10s
-	DialTimeout time.Duration `yaml:"dial_timeout"`
-}
-
-func (r *RedfishClientConfig) UnmarshalYAML(unmarshal func(any) error) error {
-	type plain RedfishClientConfig
-	*r = DefaultRedfishConfig
-
-	if err := unmarshal((*plain)(r)); err != nil {
-		return err
-	}
-	return nil
-}
-
-// UnmarshalYAML implements the yaml.Unmarshaler interface
-func (m *Module) UnmarshalYAML(unmarshal func(any) error) error {
-	*m = DefaultModule
-	type plain Module
-	if err := unmarshal((*plain)(m)); err != nil {
-		return err
-	}
-	return nil
+	Prober             string                   `mapstructure:"prober"`
+	ChassisCollector   ChassisCollectorConfig   `mapstructure:"chassis_collector"`
+	GPUCollector       GPUCollectorConfig       `mapstructure:"gpu_collector"`
+	JSONCollector      JSONCollectorConfig      `mapstructure:"json_collector"`
+	ManagerCollector   ManagerCollectorConfig   `mapstructure:"manager_collector"`
+	SystemCollector    SystemCollectorConfig    `mapstructure:"system_collector"`
+	TelemetryCollector TelemetryCollectorConfig `mapstructure:"telemetry_collector"`
 }
 
 func (m *Module) Validate() error {
@@ -214,30 +141,20 @@ func (m *Module) Validate() error {
 	return nil
 }
 
-// Config represents the redfish_exporter config file
-type Config struct {
-	Hosts         map[string]HostConfig `yaml:"hosts"`
-	Groups        map[string]HostConfig `yaml:"groups"`
-	Loglevel      string                `yaml:"loglevel"`
-	Modules       map[string]Module     `yaml:"modules"`
-	RedfishClient RedfishClientConfig   `yaml:"redfish_client"`
+// RedfishClientConfig describes configuration passed to the gofish API client for Redfish
+type RedfishClientConfig struct {
+	// MaxConcurrentRequests sets the gofish client maximum permitted concurrent requests.
+	MaxConcurrentRequests int64         `mapstructure:"max_concurrent_requests"`
+	DialTimeout           time.Duration `mapstructure:"dial_timeout"`
 }
 
-// UnmarshalYAML is a custom YAML unmarshaler.
-// It is heavily inspired by blackbox_exporter.
-func (c *Config) UnmarshalYAML(unmarshal func(any) error) error {
-	type plain Config
-	if err := unmarshal((*plain)(c)); err != nil {
-		return err
-	}
-	if c.RedfishClient.DialTimeout == 0 {
-		c.RedfishClient.DialTimeout = DefaultRedfishConfig.DialTimeout
-	}
-	if c.RedfishClient.MaxConcurrentRequests == 0 {
-		c.RedfishClient.MaxConcurrentRequests = DefaultRedfishConfig.MaxConcurrentRequests
-	}
-
-	return c.Validate()
+// Config represents the redfish_exporter config file
+type Config struct {
+	Hosts         map[string]HostConfig `mapstructure:"hosts"`
+	Groups        map[string]HostConfig `mapstructure:"groups"`
+	Loglevel      string                `mapstructure:"loglevel"`
+	Modules       map[string]Module     `mapstructure:"modules"`
+	RedfishClient RedfishClientConfig   `mapstructure:"redfish_client"`
 }
 
 // Validate runs end-of-parsing validations against a Config.
@@ -254,6 +171,15 @@ func (c *Config) Validate() error {
 type SafeConfig struct {
 	sync.RWMutex
 	Config *Config
+	v      *viper.Viper
+}
+
+// NewSafeConfig creates a SafeConfig with a viper instance configured once.
+func NewSafeConfig(envPrefix string) *SafeConfig {
+	return &SafeConfig{
+		Config: &Config{},
+		v:      newViperInstance(envPrefix),
+	}
 }
 
 // GetModules exposes the modules map from this SafeConfig
@@ -263,41 +189,24 @@ func (sc *SafeConfig) GetModules() map[string]Module {
 
 // HostConfig holds the Redfish Username/Password for a host or group of hosts
 type HostConfig struct {
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
-}
-
-// Read exporter config from an input file path.
-func NewConfigFromFile(configFilePath string) (*Config, error) {
-	file, err := os.Open(configFilePath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close() //nolint:errcheck
-	return readConfigFrom(file)
-}
-
-func readConfigFrom(r io.Reader) (*Config, error) {
-	config := &Config{}
-	if err := yaml.NewDecoder(r).Decode(config); err != nil {
-		return config, err
-	}
-
-	return config, nil
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
 }
 
 // ReloadConfig reads a given configuration file.
 // If successfully read, the SafeConfig mutex is obtained and config structure rebuilt.
 func (sc *SafeConfig) ReloadConfig(configFile string) error {
-	var c, err = NewConfigFromFile(configFile)
+	sc.v.SetConfigFile(configFile)
+	if err := sc.v.ReadInConfig(); err != nil {
+		return err
+	}
+	c, err := unmarshalViperConfig(sc.v)
 	if err != nil {
 		return err
 	}
-
 	sc.Lock()
 	sc.Config = c
 	sc.Unlock()
-
 	return nil
 }
 
@@ -329,17 +238,6 @@ func (sc *SafeConfig) HostConfigForGroup(group string) (*HostConfig, error) {
 		return &hostConfig, nil
 	}
 	return &HostConfig{}, fmt.Errorf("no credentials found for group %s", group)
-}
-
-// AppLogLevel applies a log level to the application.
-func (sc *SafeConfig) AppLogLevel() string {
-	sc.Lock()
-	defer sc.Unlock()
-	logLevel := sc.Config.Loglevel
-	if logLevel != "" {
-		return logLevel
-	}
-	return "info"
 }
 
 func (sc *SafeConfig) RedfishClientConfig() RedfishClientConfig {
