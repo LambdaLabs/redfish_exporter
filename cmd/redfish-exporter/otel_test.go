@@ -10,51 +10,18 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
 
-// newTestMeterProvider creates a MeterProvider with a ManualReader and the same
-// view configurations as initOTelMeterProvider, but without touching the global
-// Prometheus registry or the global OTel meter provider.
-func newTestMeterProvider(t *testing.T) (*sdkmetric.MeterProvider, *sdkmetric.ManualReader) {
-	t.Helper()
-
-	reader := sdkmetric.NewManualReader()
-
-	durationView := sdkmetric.NewView(
-		sdkmetric.Instrument{Name: "http.client.request.duration"},
-		sdkmetric.Stream{
-			Aggregation: sdkmetric.AggregationExplicitBucketHistogram{
-				Boundaries: []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60},
-			},
-			AttributeFilter: attribute.NewDenyKeysFilter(
-				attribute.Key("server.address"),
-				attribute.Key("server.port"),
-			),
-		},
-	)
-
-	dropRequestBodySizeView := sdkmetric.NewView(
-		sdkmetric.Instrument{Name: "http.client.request.body.size"},
-		sdkmetric.Stream{
-			Aggregation: sdkmetric.AggregationDrop{},
-		},
-	)
-
-	provider := sdkmetric.NewMeterProvider(
-		sdkmetric.WithReader(reader),
-		sdkmetric.WithView(durationView),
-		sdkmetric.WithView(dropRequestBodySizeView),
-	)
-	t.Cleanup(func() {
-		_ = provider.Shutdown(context.Background())
-	})
-
-	return provider, reader
-}
-
 // TestOTelAttributeFilter verifies that the attribute filter drops server.address
 // and server.port from http.client.request.duration data points while keeping
 // other attributes such as module.
 func TestOTelAttributeFilter(t *testing.T) {
-	provider, reader := newTestMeterProvider(t)
+	reader := sdkmetric.NewManualReader()
+	provider, err := initOTelMeterProvider(reader)
+	if err != nil {
+		t.Fatalf("creating meter provider: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = provider.Shutdown(context.Background())
+	})
 
 	meter := provider.Meter("test")
 	histogram, err := meter.Float64Histogram("http.client.request.duration")
@@ -124,7 +91,14 @@ func TestOTelAttributeFilter(t *testing.T) {
 // TestOTelRequestBodySizeDropped verifies that http.client.request.body.size
 // measurements are completely dropped and produce no data points.
 func TestOTelRequestBodySizeDropped(t *testing.T) {
-	provider, reader := newTestMeterProvider(t)
+	reader := sdkmetric.NewManualReader()
+	provider, err := initOTelMeterProvider(reader)
+	if err != nil {
+		t.Fatalf("creating meter provider: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = provider.Shutdown(context.Background())
+	})
 
 	meter := provider.Meter("test")
 	histogram, err := meter.Int64Histogram("http.client.request.body.size")

@@ -9,10 +9,16 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 )
 
-func initOTelMeterProvider() (*sdkmetric.MeterProvider, error) {
-	promExporter, err := promexporter.New()
-	if err != nil {
-		return nil, fmt.Errorf("creating prometheus exporter: %w", err)
+func initOTelMeterProvider(readers ...sdkmetric.Reader) (*sdkmetric.MeterProvider, error) {
+	var reader sdkmetric.Reader
+	if len(readers) == 0 {
+		promExporter, err := promexporter.New()
+		if err != nil {
+			return nil, fmt.Errorf("creating prometheus exporter: %w", err)
+		}
+		reader = promExporter
+	} else {
+		reader = readers[0]
 	}
 
 	durationView := sdkmetric.NewView(
@@ -38,7 +44,7 @@ func initOTelMeterProvider() (*sdkmetric.MeterProvider, error) {
 	)
 
 	provider := sdkmetric.NewMeterProvider(
-		sdkmetric.WithReader(promExporter),
+		sdkmetric.WithReader(reader),
 		sdkmetric.WithView(durationView),
 		sdkmetric.WithView(dropRequestBodySizeView),
 	)
