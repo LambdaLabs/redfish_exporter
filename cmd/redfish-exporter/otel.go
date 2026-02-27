@@ -3,22 +3,38 @@ package main
 import (
 	"fmt"
 
-	"go.opentelemetry.io/otel"
 	promexporter "go.opentelemetry.io/otel/exporters/prometheus"
+
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 )
 
-func initOTelMeterProvider(readers ...sdkmetric.Reader) (*sdkmetric.MeterProvider, error) {
-	var reader sdkmetric.Reader
-	if len(readers) == 0 {
+type meterProviderOption func(*meterProviderConfig)
+
+type meterProviderConfig struct {
+	reader sdkmetric.Reader
+}
+
+func withReader(r sdkmetric.Reader) meterProviderOption {
+	return func(c *meterProviderConfig) {
+		c.reader = r
+	}
+}
+
+func initOTelMeterProvider(opts ...meterProviderOption) (*sdkmetric.MeterProvider, error) {
+	cfg := &meterProviderConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	reader := cfg.reader
+	if reader == nil {
 		promExporter, err := promexporter.New()
 		if err != nil {
 			return nil, fmt.Errorf("creating prometheus exporter: %w", err)
 		}
 		reader = promExporter
-	} else {
-		reader = readers[0]
 	}
 
 	durationView := sdkmetric.NewView(
