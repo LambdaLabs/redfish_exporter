@@ -39,10 +39,13 @@ var (
 		":9610",
 		"Address to listen on for web interface and telemetry.",
 	)
-	safeConfig = &config.SafeConfig{
-		Config: &config.Config{},
-	}
-	reloadCh chan chan error
+	envPrefix = flag.String(
+		"config.env-prefix",
+		"",
+		"Prefix for environment variables that override config values (e.g. REDFISH_EXPORTER). Empty means no prefix.",
+	)
+	safeConfig *config.SafeConfig
+	reloadCh   chan chan error
 )
 
 // 'meta' metrics, which the collector itself should emit
@@ -286,6 +289,7 @@ func main() {
 }
 
 func runMain() error {
+	safeConfig = config.NewSafeConfig(*envPrefix)
 	// load config first time
 	if err := safeConfig.ReloadConfig(*configFile); err != nil {
 		return fmt.Errorf("error parsing config file: %w", err)
