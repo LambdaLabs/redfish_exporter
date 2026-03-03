@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -99,6 +100,15 @@ func (r *RedfishCollector) Collect(ch chan<- prometheus.Metric) {
 			}
 			go func(collector ContextAwareCollector) {
 				defer wg.Done()
+				defer func() {
+					if rec := recover(); rec != nil {
+						r.logger.Error("panic in collector",
+							"collector", fmt.Sprintf("%T", collector),
+							"panic", rec,
+							"stack", string(debug.Stack()),
+						)
+					}
+				}()
 				collector.CollectWithContext(r.ctx, ch)
 			}(collector)
 		}
