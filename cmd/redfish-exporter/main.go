@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/LambdaLabs/redfish_exporter/internal/collector"
 	"github.com/LambdaLabs/redfish_exporter/internal/config"
@@ -295,16 +297,6 @@ func runMain() error {
 		return fmt.Errorf("error parsing config file: %w", err)
 	}
 
-	mp, err := initOTelMeterProvider()
-	if err != nil {
-		return fmt.Errorf("failed to initialize OTel meter provider: %w", err)
-	}
-	defer func() {
-		if err := mp.Shutdown(context.Background()); err != nil {
-			slog.Error("Failed to shut down OTel meter provider", slog.Any("error", err))
-		}
-	}()
-
 	registerMetaMetrics()
 	// Setup dinal logger from config
 	opts := &slog.HandlerOptions{
@@ -390,9 +382,58 @@ func runMain() error {
 	srv := &http.Server{
 		Handler: mux,
 	}
-	if err := web.ListenAndServe(srv, &exporterToolkitConf, logger); err != nil {
-		return fmt.Errorf("exiting on ListenAndServe error: %w", err)
+
+	mp, err := initOTelMeterProvider()
+	if err != nil {
+		return fmt.Errorf("failed to initialize OTel meter provider: %w", err)
 	}
 
+	shutdownFuncs := []func(ctx context.Context) error{
+		func(ctx context.Context) error {
+			return mp.Shutdown(ctx)
+		},
+		func(ctx context.Context) error {
+			return srv.Shutdown(ctx)
+		},
+	}
+	return runServer(func(ctx context.Context) error {
+		return web.ListenAndServe(srv, &exporterToolkitConf, logger)
+	}, shutdownFuncs, safeConfig.Config.ShutdownTimeout)
+}
+
+func runServer(f func(ctx context.Context) error, shutdownFuncs []func(ctx context.Context) error, shutdownTimeout time.Duration) error {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
+	serverErr := make(chan error, 1)
+	go func() {
+		serverErr <- f(ctx)
+	}()
+
+	select {
+	case err := <-serverErr:
+		if ctx.Err() != nil {
+			// Signal was received; web.ListenAndServe already shut down the HTTP server
+			// internally. Break to run remaining shutdown functions (e.g. OTel provider).
+			stop()
+			break
+		}
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("exiting on ListenAndServe error: %w", err)
+		}
+		return nil
+	case <-ctx.Done():
+		stop() // re-enable default signal behavior so a second signal kills immediately
+	}
+
+	slog.Info("Received shutdown signal, starting graceful shutdown", slog.String("timeout", shutdownTimeout.String()))
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	for _, shutdownFunc := range shutdownFuncs {
+		if err := shutdownFunc(shutdownCtx); err != nil {
+			slog.Error("error during graceful shutdown", slog.Any("error", err))
+		}
+	}
 	return nil
 }

@@ -73,6 +73,7 @@ func newViperInstance(envPrefix string) *viper.Viper {
 	v.AutomaticEnv()
 
 	v.SetDefault("loglevel", "")
+	v.SetDefault("shutdown_timeout", 60*time.Second)
 	v.SetDefault("redfish_client.max_concurrent_requests", DefaultRedfishConfig.MaxConcurrentRequests)
 	v.SetDefault("redfish_client.dial_timeout", DefaultRedfishConfig.DialTimeout)
 
@@ -150,11 +151,12 @@ type RedfishClientConfig struct {
 
 // Config represents the redfish_exporter config file
 type Config struct {
-	Hosts         map[string]HostConfig `mapstructure:"hosts"`
-	Groups        map[string]HostConfig `mapstructure:"groups"`
-	Loglevel      string                `mapstructure:"loglevel"`
-	Modules       map[string]Module     `mapstructure:"modules"`
-	RedfishClient RedfishClientConfig   `mapstructure:"redfish_client"`
+	Hosts           map[string]HostConfig `mapstructure:"hosts"`
+	Groups          map[string]HostConfig `mapstructure:"groups"`
+	Loglevel        string                `mapstructure:"loglevel"`
+	ShutdownTimeout time.Duration         `mapstructure:"shutdown_timeout"`
+	Modules         map[string]Module     `mapstructure:"modules"`
+	RedfishClient   RedfishClientConfig   `mapstructure:"redfish_client"`
 }
 
 // Validate runs end-of-parsing validations against a Config.

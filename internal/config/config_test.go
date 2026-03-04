@@ -53,8 +53,9 @@ loglevel: info
 `,
 			wantErrString: "",
 			wantConfig: &Config{
-				Loglevel:      "info",
-				RedfishClient: DefaultRedfishConfig,
+				Loglevel:        "info",
+				ShutdownTimeout: 60 * time.Second,
+				RedfishClient:   DefaultRedfishConfig,
 			},
 		},
 		"happy path, just one value changed": {
@@ -64,6 +65,7 @@ redfish_client:
 `,
 			wantErrString: "",
 			wantConfig: &Config{
+				ShutdownTimeout: 60 * time.Second,
 				RedfishClient: RedfishClientConfig{
 					MaxConcurrentRequests: 100,
 					DialTimeout:           10 * time.Second,
@@ -78,6 +80,7 @@ redfish_client:
 `,
 			wantErrString: "",
 			wantConfig: &Config{
+				ShutdownTimeout: 60 * time.Second,
 				RedfishClient: RedfishClientConfig{
 					MaxConcurrentRequests: 100,
 					DialTimeout:           30 * time.Second,
@@ -88,15 +91,17 @@ redfish_client:
 			inputYAML: `loglevel: info`,
 			envVars:   map[string]string{"LOGLEVEL": "debug"},
 			wantConfig: &Config{
-				Loglevel:      "debug",
-				RedfishClient: DefaultRedfishConfig,
+				Loglevel:        "debug",
+				ShutdownTimeout: 60 * time.Second,
+				RedfishClient:   DefaultRedfishConfig,
 			},
 		},
 		"REDFISH_CLIENT_MAX_CONCURRENT_REQUESTS overrides redfish_client.max_concurrent_requests": {
 			inputYAML: `loglevel: info`,
 			envVars:   map[string]string{"REDFISH_CLIENT_MAX_CONCURRENT_REQUESTS": "5"},
 			wantConfig: &Config{
-				Loglevel: "info",
+				Loglevel:        "info",
+				ShutdownTimeout: 60 * time.Second,
 				RedfishClient: RedfishClientConfig{
 					MaxConcurrentRequests: 5,
 					DialTimeout:           10 * time.Second,
@@ -107,7 +112,8 @@ redfish_client:
 			inputYAML: `loglevel: info`,
 			envVars:   map[string]string{"REDFISH_CLIENT_DIAL_TIMEOUT": "30s"},
 			wantConfig: &Config{
-				Loglevel: "info",
+				Loglevel:        "info",
+				ShutdownTimeout: 60 * time.Second,
 				RedfishClient: RedfishClientConfig{
 					MaxConcurrentRequests: 1,
 					DialTimeout:           30 * time.Second,
@@ -115,10 +121,14 @@ redfish_client:
 			},
 		},
 		"prefix MYPREFIX applies to all env vars": {
-			inputYAML:  `loglevel: info`,
-			envVars:    map[string]string{"MYPREFIX_LOGLEVEL": "debug"},
-			envPrefix:  "MYPREFIX",
-			wantConfig: &Config{Loglevel: "debug", RedfishClient: DefaultRedfishConfig},
+			inputYAML: `loglevel: info`,
+			envVars:   map[string]string{"MYPREFIX_LOGLEVEL": "debug"},
+			envPrefix: "MYPREFIX",
+			wantConfig: &Config{
+				Loglevel:        "debug",
+				ShutdownTimeout: 60 * time.Second,
+				RedfishClient:   DefaultRedfishConfig,
+			},
 		},
 	}
 	for tName, test := range tT {
@@ -151,7 +161,8 @@ modules:
 `,
 			wantErrString: "",
 			wantConfig: &Config{
-				RedfishClient: DefaultRedfishConfig,
+				ShutdownTimeout: 60 * time.Second,
+				RedfishClient:   DefaultRedfishConfig,
 				Modules: map[string]Module{
 					"foo": {
 						Prober:           "gpu_collector",
@@ -180,8 +191,9 @@ modules:
 `,
 			wantErrString: "",
 			wantConfig: &Config{
-				Loglevel:      "info",
-				RedfishClient: DefaultRedfishConfig,
+				Loglevel:        "info",
+				ShutdownTimeout: 60 * time.Second,
+				RedfishClient:   DefaultRedfishConfig,
 				Modules: map[string]Module{
 					"foo": {
 						Prober:           "gpu_collector",
@@ -281,7 +293,8 @@ func TestModulesConfig_JSONCollector(t *testing.T) {
 			inputFile:     "testdata/config.j2m.yaml",
 			wantErrString: "",
 			wantConfig: &Config{
-				RedfishClient: DefaultRedfishConfig,
+				ShutdownTimeout: 60 * time.Second,
+				RedfishClient:   DefaultRedfishConfig,
 				Modules: map[string]Module{
 					"rf_version": {
 						Prober: "json_collector",
@@ -328,7 +341,8 @@ map(.help = "Value yielded from the Redfish API /Chassis/PowerShelf_0, expanded 
 			inputFile:     "testdata/json_collector_with_timeout.yaml",
 			wantErrString: "",
 			wantConfig: &Config{
-				RedfishClient: DefaultRedfishConfig,
+				ShutdownTimeout: 60 * time.Second,
+				RedfishClient:   DefaultRedfishConfig,
 				Modules: map[string]Module{
 					"31s_timeout_collector": {
 						Prober: "json_collector",
