@@ -293,6 +293,10 @@ func (t *TelemetryCollector) collect(ctx context.Context, ch chan<- prometheus.M
 		)
 		return
 	}
+	if telemetryService == nil {
+		t.logger.Debug("telemetry service is nil - may not be supported")
+		return
+	}
 
 	// Get all metric reports
 	metricReports, err := telemetryService.MetricReports()

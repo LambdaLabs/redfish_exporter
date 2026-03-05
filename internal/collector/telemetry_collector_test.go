@@ -13,6 +13,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stmcginnis/gofish"
 	"github.com/stmcginnis/gofish/schemas"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	expConfig "github.com/LambdaLabs/redfish_exporter/internal/config"
@@ -99,27 +100,48 @@ func TestTelemetryCollectorIntegration(t *testing.T) {
 }
 
 func TestTelemetryCollectorDescribe(t *testing.T) {
-	// Create a mock client (won't be used for Describe)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	collector, err := NewTelemetryCollector(t.Name(), nil, logger, expConfig.DefaultTelemetryCollector)
 	require.NoError(t, err)
 
-	// Describe should work without a client
 	descChan := make(chan *prometheus.Desc, 100)
 	go func() {
 		collector.Describe(descChan)
 		close(descChan)
 	}()
-
 	descCount := 0
 	for range descChan {
 		descCount++
 	}
+	assert.Equal(t, len(telemetryMetrics)+1, descCount) // +1 for scrape status
+}
 
-	// We should have descriptions for all our metrics
-	expectedDescs := len(telemetryMetrics) + 1 // +1 for scrape status
-	if descCount != expectedDescs {
-		t.Errorf("Expected %d metric descriptions, got %d", expectedDescs, descCount)
+func TestTelemetryCollectorCollect(t *testing.T) {
+	tests := []struct {
+		name        string
+		setupClient func(t *testing.T) *gofish.APIClient
+	}{
+		{
+			name: "no TelemetryService link: Collect does not panic",
+			setupClient: func(t *testing.T) *gofish.APIClient {
+				server := newTestRedfishServer(t)
+				return connectToTestServer(t, server.Server)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			collector, err := NewTelemetryCollector(t.Name(), tc.setupClient(t), logger, expConfig.DefaultTelemetryCollector)
+			require.NoError(t, err)
+
+			ch := make(chan prometheus.Metric, 100)
+			require.NotPanics(t, func() {
+				collector.Collect(ch)
+				close(ch)
+			})
+		})
 	}
 }
 
@@ -294,20 +316,6 @@ func TestTelemetryMetricCount(t *testing.T) {
 
 	if actualCount != totalExpected {
 		t.Errorf("Expected %d total metrics, got %d", totalExpected, actualCount)
-	}
-}
-
-func TestTelemetryCollectorGracefulNoService(t *testing.T) {
-	// Test that collector handles missing TelemetryService gracefully
-	// This would require a mock client that returns an error
-	// For now, just verify the collector can be created without panic
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewTelemetryCollector(t.Name(), nil, logger, expConfig.DefaultTelemetryCollector)
-	require.NoError(t, err)
-
-	// Verify it has the right number of metrics defined
-	if len(collector.metrics) != len(telemetryMetrics) {
-		t.Errorf("Expected %d metrics, got %d", len(telemetryMetrics), len(collector.metrics))
 	}
 }
 
