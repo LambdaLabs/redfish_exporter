@@ -15,6 +15,7 @@ import (
 
 	"github.com/LambdaLabs/redfish_exporter/internal/collector"
 	"github.com/LambdaLabs/redfish_exporter/internal/config"
+	"github.com/LambdaLabs/redfish_exporter/internal/ctxlog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/exporter-toolkit/web"
@@ -27,7 +28,6 @@ type (
 
 const (
 	scrapeRequestCtxKey rfContextKey = iota
-	loggerCtxKey
 )
 
 var (
@@ -106,22 +106,14 @@ type scrapeRequest struct {
 
 func withLogger(next http.Handler, logger *slog.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), loggerCtxKey, logger)
+		ctx := ctxlog.NewContext(r.Context(), logger)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-func getContextLogger(r *http.Request) (*slog.Logger, bool) {
-	logger, ok := r.Context().Value(loggerCtxKey).(*slog.Logger)
-	return logger, ok
-}
-
 func mustScrapeRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctxLogger, loggerOk := getContextLogger(r)
-		if !loggerOk {
-			ctxLogger = slog.Default()
-		}
+		ctxLogger := ctxlog.GetContextLogger(r.Context())
 
 		urlQuery, urlErr := url.ParseQuery(r.URL.RawQuery)
 		if urlErr != nil {
@@ -170,7 +162,7 @@ func mustScrapeRequest(next http.Handler) http.Handler {
 			HostConfig: hostConfig,
 		}
 		ctx := context.WithValue(r.Context(), scrapeRequestCtxKey, sr)
-		ctx = context.WithValue(ctx, loggerCtxKey, ctxLogger)
+		ctx = ctxlog.NewContext(ctx, ctxLogger)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -187,10 +179,7 @@ func metricsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		registry := prometheus.NewRegistry()
 
-		ctxLogger, loggerOk := getContextLogger(r)
-		if !loggerOk {
-			ctxLogger = slog.Default()
-		}
+		ctxLogger := ctxlog.GetContextLogger(r.Context())
 
 		sr, ok := getScrapeRequest(r)
 		if !ok {
