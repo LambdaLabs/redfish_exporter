@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/LambdaLabs/redfish_exporter/internal/config"
@@ -118,11 +117,8 @@ func TestParseLeakDetector(t *testing.T) {
 
 	metricsCh := make(chan prometheus.Metric, 10)
 
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	parseLeakDetector(metricsCh, "test_chassis", detectors[0], wg)
+	parseLeakDetector(metricsCh, "test_chassis", detectors[0])
 	close(metricsCh)
-	wg.Wait()
 
 	for metric := range metricsCh {
 		dto := &dto.Metric{}

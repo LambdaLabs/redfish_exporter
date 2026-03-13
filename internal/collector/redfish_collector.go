@@ -7,8 +7,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"runtime/debug"
-	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -90,29 +88,20 @@ func (r *RedfishCollector) Collect(ch chan<- prometheus.Metric) {
 	if r.redfishClient != nil {
 		defer r.redfishClient.Logout()
 		r.redfishUp.Set(1)
-		wg := &sync.WaitGroup{}
-		wg.Add(len(r.collectors))
+		eg := newRecoverGroup(r.ctx)
 		for _, collector := range r.collectors {
 			if r.ctx.Err() != nil {
 				r.logger.With("error", r.ctx.Err()).Warn("skipping further collection")
-				wg.Done()
 				continue
 			}
-			go func(collector ContextAwareCollector) {
-				defer wg.Done()
-				defer func() {
-					if rec := recover(); rec != nil {
-						r.logger.Error("panic in collector",
-							"collector", fmt.Sprintf("%T", collector),
-							"panic", rec,
-							"stack", string(debug.Stack()),
-						)
-					}
-				}()
+			eg.Go(func() error {
 				collector.CollectWithContext(r.ctx, ch)
-			}(collector)
+				return nil
+			})
 		}
-		wg.Wait()
+		if err := eg.Wait(); err != nil {
+			r.logger.Error("goroutine error", slog.Any("error", err))
+		}
 	} else {
 		r.redfishUp.Set(0)
 	}

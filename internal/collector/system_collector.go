@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
@@ -204,15 +203,7 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 				ch <- prometheus.MustNewConstMetric(s.metrics["system_total_memory_health_state"].desc, prometheus.GaugeValue, systemTotalMemoryHealthStateValue, systemLabelValues...)
 			}
 
-			wg1 := &sync.WaitGroup{}
-			wg2 := &sync.WaitGroup{}
-			wg3 := &sync.WaitGroup{}
-			wg4 := &sync.WaitGroup{}
-			wg5 := &sync.WaitGroup{}
-			wg6 := &sync.WaitGroup{}
-			wg7 := &sync.WaitGroup{}
-			wg8 := &sync.WaitGroup{}
-			wg9 := &sync.WaitGroup{}
+			eg := newRecoverGroup(ctx)
 
 			// process memory metrics
 			memories, err := system.Memory()
@@ -221,9 +212,11 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 			} else if memories == nil {
 				systemLogger.Info("no memory data found", slog.String("operation", "system.Memory()"))
 			} else {
-				wg1.Add(len(memories))
 				for _, memory := range memories {
-					go parseMemory(ch, memory, wg1, systemLogger)
+					eg.Go(func() error {
+						parseMemory(ch, memory, systemLogger)
+						return nil
+					})
 				}
 			}
 
@@ -234,9 +227,11 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 			} else if processors == nil {
 				systemLogger.Info("no processor data found", slog.String("operation", "system.Processors()"))
 			} else {
-				wg2.Add(len(processors))
 				for _, processor := range processors {
-					go parseProcessor(ch, processor, wg2, systemLogger)
+					eg.Go(func() error {
+						parseProcessor(ch, processor, systemLogger)
+						return nil
+					})
 				}
 			}
 
@@ -253,9 +248,11 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 					if volumes, err := storage.Volumes(); err != nil {
 						systemLogger.Error("error getting storage data from system", slog.String("operation", "system.Volumes()"), slog.Any("wrror", err))
 					} else {
-						wg3.Add(len(volumes))
 						for _, volume := range volumes {
-							go parseVolume(ch, volume, wg3)
+							eg.Go(func() error {
+								parseVolume(ch, volume)
+								return nil
+							})
 						}
 					}
 
@@ -265,9 +262,11 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 					} else if drives == nil {
 						systemLogger.Info("no drive data found", slog.String("operation", "system.Drives()"), slog.String("storage", storage.ID))
 					} else {
-						wg4.Add(len(drives))
 						for _, drive := range drives {
-							go parseDrive(ch, drive, storageID, wg4)
+							eg.Go(func() error {
+								parseDrive(ch, drive, storageID)
+								return nil
+							})
 						}
 					}
 				}
@@ -279,9 +278,11 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 			} else if pcieDevices == nil {
 				systemLogger.Info("no PCI-E device data found", slog.String("operation", "system.PCIeDevices()"))
 			} else {
-				wg5.Add(len(pcieDevices))
 				for _, pcieDevice := range pcieDevices {
-					go parsePcieDevice(ch, pcieDevice, wg5)
+					eg.Go(func() error {
+						parsePcieDevice(ch, pcieDevice)
+						return nil
+					})
 				}
 			}
 
@@ -292,9 +293,11 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 			} else if networkInterfaces == nil {
 				systemLogger.Info("no network interface data found", slog.String("operation", "system.NetworkInterfaces"))
 			} else {
-				wg6.Add(len(networkInterfaces))
 				for _, networkInterface := range networkInterfaces {
-					go parseNetworkInterface(ch, networkInterface, wg6)
+					eg.Go(func() error {
+						parseNetworkInterface(ch, networkInterface)
+						return nil
+					})
 				}
 			}
 
@@ -305,9 +308,11 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 			} else if ethernetInterfaces == nil {
 				systemLogger.Info("no ethernet interface data found", slog.String("operation", "system.PCIeDevices()"))
 			} else {
-				wg7.Add(len(ethernetInterfaces))
 				for _, ethernetInterface := range ethernetInterfaces {
-					go parseEthernetInterface(ch, ethernetInterface, wg7)
+					eg.Go(func() error {
+						parseEthernetInterface(ch, ethernetInterface)
+						return nil
+					})
 				}
 			}
 
@@ -318,21 +323,17 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 			} else if pcieFunctions == nil {
 				systemLogger.Info("no PCI-E device function data found", slog.String("operation", "system.PCIeFunctions()"))
 			} else {
-				wg9.Add(len(pcieFunctions))
 				for _, pcieFunction := range pcieFunctions {
-					go parsePcieFunction(ch, pcieFunction, wg9)
+					eg.Go(func() error {
+						parsePcieFunction(ch, pcieFunction)
+						return nil
+					})
 				}
 			}
 
-			wg1.Wait()
-			wg2.Wait()
-			wg3.Wait()
-			wg4.Wait()
-			wg5.Wait()
-			wg6.Wait()
-			wg7.Wait()
-			wg8.Wait()
-			wg9.Wait()
+			if err := eg.Wait(); err != nil {
+				systemLogger.Error("goroutine error", slog.Any("error", err))
+			}
 
 			systemLogger.Info("collector scrape completed")
 		}
@@ -340,8 +341,7 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 	}
 }
 
-func parseMemory(ch chan<- prometheus.Metric, memory *schemas.Memory, wg *sync.WaitGroup, logger *slog.Logger) {
-	defer wg.Done()
+func parseMemory(ch chan<- prometheus.Metric, memory *schemas.Memory, logger *slog.Logger) {
 	memoryName := memory.Name
 	memoryID := memory.ID
 	memoryCapacityMiB := gofish.Deref(memory.CapacityMiB)
@@ -359,8 +359,7 @@ func parseMemory(ch chan<- prometheus.Metric, memory *schemas.Memory, wg *sync.W
 
 }
 
-func parseProcessor(ch chan<- prometheus.Metric, processor *schemas.Processor, wg *sync.WaitGroup, logger *slog.Logger) {
-	defer wg.Done()
+func parseProcessor(ch chan<- prometheus.Metric, processor *schemas.Processor, logger *slog.Logger) {
 	processorName := processor.Name
 	processorID := processor.ID
 	processorTotalCores := gofish.Deref(processor.TotalCores)
@@ -404,8 +403,7 @@ func parseProcessor(ch chan<- prometheus.Metric, processor *schemas.Processor, w
 	}
 }
 
-func parseVolume(ch chan<- prometheus.Metric, volume *schemas.Volume, wg *sync.WaitGroup) {
-	defer wg.Done()
+func parseVolume(ch chan<- prometheus.Metric, volume *schemas.Volume) {
 	volumeName := volume.Name
 	volumeID := volume.ID
 	volumeCapacityBytes := gofish.Deref(volume.CapacityBytes)
@@ -421,8 +419,7 @@ func parseVolume(ch chan<- prometheus.Metric, volume *schemas.Volume, wg *sync.W
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_volume_capacity"].desc, prometheus.GaugeValue, float64(volumeCapacityBytes), systemVolumeLabelValues...)
 }
 
-func parseDrive(ch chan<- prometheus.Metric, drive *schemas.Drive, storageControllerID string, wg *sync.WaitGroup) {
-	defer wg.Done()
+func parseDrive(ch chan<- prometheus.Metric, drive *schemas.Drive, storageControllerID string) {
 	driveName := drive.Name
 	driveID := drive.ID
 	driveCapacityBytes := gofish.Deref(drive.CapacityBytes)
@@ -438,8 +435,7 @@ func parseDrive(ch chan<- prometheus.Metric, drive *schemas.Drive, storageContro
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_drive_capacity"].desc, prometheus.GaugeValue, float64(driveCapacityBytes), systemdriveLabelValues...)
 }
 
-func parsePcieDevice(ch chan<- prometheus.Metric, pcieDevice *schemas.PCIeDevice, wg *sync.WaitGroup) {
-	defer wg.Done()
+func parsePcieDevice(ch chan<- prometheus.Metric, pcieDevice *schemas.PCIeDevice) {
 	pcieDeviceName := pcieDevice.Name
 	pcieDeviceID := pcieDevice.ID
 	pcieDeviceState := pcieDevice.Status.State
@@ -457,8 +453,7 @@ func parsePcieDevice(ch chan<- prometheus.Metric, pcieDevice *schemas.PCIeDevice
 	}
 }
 
-func parseNetworkInterface(ch chan<- prometheus.Metric, networkInterface *schemas.NetworkInterface, wg *sync.WaitGroup) {
-	defer wg.Done()
+func parseNetworkInterface(ch chan<- prometheus.Metric, networkInterface *schemas.NetworkInterface) {
 	networkInterfaceName := networkInterface.Name
 	networkInterfaceID := networkInterface.ID
 	networkInterfaceState := networkInterface.Status.State
@@ -473,8 +468,7 @@ func parseNetworkInterface(ch chan<- prometheus.Metric, networkInterface *schema
 	}
 }
 
-func parseEthernetInterface(ch chan<- prometheus.Metric, ethernetInterface *schemas.EthernetInterface, wg *sync.WaitGroup) {
-	defer wg.Done()
+func parseEthernetInterface(ch chan<- prometheus.Metric, ethernetInterface *schemas.EthernetInterface) {
 
 	ethernetInterfaceName := ethernetInterface.Name
 	ethernetInterfaceID := ethernetInterface.ID
@@ -497,8 +491,7 @@ func parseEthernetInterface(ch chan<- prometheus.Metric, ethernetInterface *sche
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_ethernet_interface_link_enabled"].desc, prometheus.GaugeValue, boolToFloat64(ethernetInterfaceEnabled), systemEthernetInterfaceLabelValues...)
 }
 
-func parsePcieFunction(ch chan<- prometheus.Metric, pcieFunction *schemas.PCIeFunction, wg *sync.WaitGroup) {
-	defer wg.Done()
+func parsePcieFunction(ch chan<- prometheus.Metric, pcieFunction *schemas.PCIeFunction) {
 
 	pcieFunctionName := pcieFunction.Name
 	pcieFunctionID := fmt.Sprint(pcieFunction.ID)
