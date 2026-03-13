@@ -6,7 +6,6 @@ import (
 	"math"
 	"os"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -763,11 +762,9 @@ func TestTelemetryCollector_CollectPlatformGPUMetrics(t *testing.T) {
 				logger:  logger,
 				metrics: createTelemetryMetricMap(),
 			}
-			testWG := &sync.WaitGroup{}
-			testWG.Add(len(test.report.MetricValues))
 			outCh := make(chan prometheus.Metric, len(test.report.MetricValues))
 			go func() {
-				tc.collectPlatformEnvironmentMetrics(outCh, test.report, map[string]string{"GPU_Energy": "HGX_GPU_0"}, testWG)
+				tc.collectPlatformEnvironmentMetrics(outCh, test.report, map[string]string{"GPU_Energy": "HGX_GPU_0"})
 				close(outCh)
 			}()
 

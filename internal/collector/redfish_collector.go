@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -33,10 +32,10 @@ var (
 	)
 )
 
-// RedfishCollector is an aggregation of various other prometheus.Collector.
+// redfishCollector is an aggregation of various other prometheus.Collector.
 // It implements prometheus.Collector, and at Describe or Collect time will iterate all of
 // its own collectors to yield data.
-type RedfishCollector struct {
+type redfishCollector struct {
 	ctx           context.Context
 	logger        *slog.Logger
 	redfishClient *gofish.APIClient
@@ -44,14 +43,14 @@ type RedfishCollector struct {
 	redfishUp     prometheus.Gauge
 }
 
-// NewRedfishCollector returns a *RedfishCollector or an error.
-func NewRedfishCollector(ctx context.Context, logger *slog.Logger, host string, username string, password string, rfConfig config.RedfishClientConfig) (*RedfishCollector, error) {
+// NewRedfishCollector returns a *redfishCollector or an error.
+func NewRedfishCollector(ctx context.Context, logger *slog.Logger, host string, username string, password string, rfConfig config.RedfishClientConfig) (*redfishCollector, error) {
 	redfishClient, err := newRedfishClient(ctx, host, username, password, rfConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	return &RedfishCollector{
+	return &redfishCollector{
 		ctx:           ctx,
 		logger:        logger,
 		redfishClient: redfishClient,
@@ -67,16 +66,16 @@ func NewRedfishCollector(ctx context.Context, logger *slog.Logger, host string, 
 }
 
 // WithCollectors sets a slice of prometheus.Collector which this aggregated RedfishCollector should use.
-func (r *RedfishCollector) WithCollectors(c []ContextAwareCollector) {
+func (r *redfishCollector) WithCollectors(c []ContextAwareCollector) {
 	r.collectors = c
 }
 
-func (r *RedfishCollector) Client() *gofish.APIClient {
+func (r *redfishCollector) Client() *gofish.APIClient {
 	return r.redfishClient
 }
 
 // Describe implements prometheus.Collector.
-func (r *RedfishCollector) Describe(ch chan<- *prometheus.Desc) {
+func (r *redfishCollector) Describe(ch chan<- *prometheus.Desc) {
 	for _, collector := range r.collectors {
 		collector.Describe(ch)
 	}
@@ -84,27 +83,24 @@ func (r *RedfishCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 // Collect implements prometheus.Collector.
-func (r *RedfishCollector) Collect(ch chan<- prometheus.Metric) {
+func (r *redfishCollector) Collect(ch chan<- prometheus.Metric) {
 	scrapeTime := time.Now()
-	if r.redfishClient != nil {
-		defer r.redfishClient.Logout()
-		r.redfishUp.Set(1)
-		wg := &sync.WaitGroup{}
-		wg.Add(len(r.collectors))
-		for _, collector := range r.collectors {
-			if r.ctx.Err() != nil {
-				r.logger.With("error", r.ctx.Err()).Warn("skipping further collection")
-				wg.Done()
-				continue
-			}
-			go func(collector ContextAwareCollector) {
-				defer wg.Done()
-				collector.CollectWithContext(r.ctx, ch)
-			}(collector)
-		}
-		wg.Wait()
-	} else {
+	if r.ctx.Err() != nil {
+		r.logger.With("error", r.ctx.Err()).Warn("skipping further collection")
 		r.redfishUp.Set(0)
+	} else {
+		r.redfishUp.Set(1)
+		defer r.redfishClient.Logout()
+		eg := newRecoverGroup(r.ctx)
+		for _, collector := range r.collectors {
+			eg.Go(func() error {
+				collector.CollectWithContext(r.ctx, ch)
+				return nil
+			})
+		}
+		if err := eg.Wait(); err != nil {
+			r.logger.Error("goroutine error", slog.Any("error", err))
+		}
 	}
 
 	ch <- r.redfishUp

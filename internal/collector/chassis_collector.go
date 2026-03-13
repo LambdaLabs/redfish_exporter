@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"math"
 	"strings"
-	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
@@ -179,21 +178,24 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 			} else if chassisThermal == nil {
 				chassisLogger.Info("no thermal data found", slog.String("operation", "chassis.Thermal()"))
 			} else {
-				// process temperature
+				// process temperature and fans
 				chassisTemperatures := chassisThermal.Temperatures
-				wg := &sync.WaitGroup{}
-				wg.Add(len(chassisTemperatures))
-
-				for _, chassisTemperature := range chassisTemperatures {
-					go parseChassisTemperature(ch, chassisID, chassisTemperature, wg)
-				}
-
-				// process fans
 				chassisFans := chassisThermal.Fans
-				wg2 := &sync.WaitGroup{}
-				wg2.Add(len(chassisFans))
+				eg := newRecoverGroup(ctx)
+				for _, chassisTemperature := range chassisTemperatures {
+					eg.Go(func() error {
+						parseChassisTemperature(ch, chassisID, chassisTemperature)
+						return nil
+					})
+				}
 				for _, chassisFan := range chassisFans {
-					go parseChassisFan(ch, chassisID, chassisFan, wg2)
+					eg.Go(func() error {
+						parseChassisFan(ch, chassisID, chassisFan)
+						return nil
+					})
+				}
+				if err := eg.Wait(); err != nil {
+					chassisLogger.Error("goroutine error", slog.Any("error", err))
 				}
 			}
 			chassisThermalSubsystem, err := chassis.ThermalSubsystem()
@@ -206,12 +208,16 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 				leakDetectors := c.getLeakDetectors(chassisThermalSubsystem, chassisLogger)
 
 				if len(leakDetectors) > 0 {
-					wgLD := &sync.WaitGroup{}
-					wgLD.Add(len(leakDetectors))
+					egLD := newRecoverGroup(ctx)
 					for _, ld := range leakDetectors {
-						go parseLeakDetector(ch, chassisID, ld, wgLD)
+						egLD.Go(func() error {
+							parseLeakDetector(ch, chassisID, ld)
+							return nil
+						})
 					}
-					wgLD.Wait()
+					if err := egLD.Wait(); err != nil {
+						chassisLogger.Error("goroutine error", slog.Any("error", err))
+					}
 				} else {
 					chassisLogger.Info("no leak detectors found")
 				}
@@ -223,45 +229,51 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 			} else if chassisPowerInfo == nil {
 				chassisLogger.Info("no power data found", slog.String("operation", "chassis.Power()"))
 			} else {
+				egPower := newRecoverGroup(ctx)
+
 				// power voltages
-				chassisPowerInfoVoltages := chassisPowerInfo.Voltages
-				wg3 := &sync.WaitGroup{}
-				wg3.Add(len(chassisPowerInfoVoltages))
-				for _, chassisPowerInfoVoltage := range chassisPowerInfoVoltages {
-					go parseChassisPowerInfoVoltage(ch, chassisID, chassisPowerInfoVoltage, wg3)
+				for _, chassisPowerInfoVoltage := range chassisPowerInfo.Voltages {
+					egPower.Go(func() error {
+						parseChassisPowerInfoVoltage(ch, chassisID, chassisPowerInfoVoltage)
+						return nil
+					})
 				}
 
 				// power control
-				chassisPowerInfoPowerControls := chassisPowerInfo.PowerControl
-				wg4 := &sync.WaitGroup{}
-				wg4.Add(len(chassisPowerInfoPowerControls))
-				for _, chassisPowerInfoPowerControl := range chassisPowerInfoPowerControls {
-					go parseChassisPowerInfoPowerControl(ch, chassisID, chassisPowerInfoPowerControl, wg4)
+				for _, chassisPowerInfoPowerControl := range chassisPowerInfo.PowerControl {
+					egPower.Go(func() error {
+						parseChassisPowerInfoPowerControl(ch, chassisID, chassisPowerInfoPowerControl)
+						return nil
+					})
 				}
 
 				// powerSupply
-				chassisPowerInfoPowerSupplies := chassisPowerInfo.PowerSupplies
-				wg5 := &sync.WaitGroup{}
-				wg5.Add(len(chassisPowerInfoPowerSupplies))
-				for _, chassisPowerInfoPowerSupply := range chassisPowerInfoPowerSupplies {
-					go parseChassisPowerInfoPowerSupply(ch, chassisID, chassisPowerInfoPowerSupply, wg5)
+				for _, chassisPowerInfoPowerSupply := range chassisPowerInfo.PowerSupplies {
+					egPower.Go(func() error {
+						parseChassisPowerInfoPowerSupply(ch, chassisID, chassisPowerInfoPowerSupply)
+						return nil
+					})
+				}
+				if err := egPower.Wait(); err != nil {
+					chassisLogger.Error("goroutine error", slog.Any("error", err))
 				}
 			}
 
-			// process NetapAdapter
+			// process NetworkAdapter
 			networkAdapters, err := chassis.NetworkAdapters()
 			if err != nil {
 				chassisLogger.Error("error getting network adapters data from chassis", slog.String("operation", "chassis.NetworkAdapters()"), slog.Any("error", err))
 			} else if networkAdapters == nil {
 				chassisLogger.Info("no network adapters data found", slog.String("operation", "chassis.NetworkAdapters()"))
 			} else {
-				wg5 := &sync.WaitGroup{}
-				wg5.Add(len(networkAdapters))
-
+				egNA := newRecoverGroup(ctx)
 				for _, networkAdapter := range networkAdapters {
-					if err = parseNetworkAdapter(ch, chassisID, networkAdapter, wg5); err != nil {
-						chassisLogger.Error("error getting network ports from network adapter", slog.String("operation", "chassis.NetworkAdapters()"), slog.Any("error", err))
-					}
+					egNA.Go(func() error {
+						return parseNetworkAdapter(ctx, ch, chassisID, networkAdapter)
+					})
+				}
+				if err := egNA.Wait(); err != nil {
+					chassisLogger.Error("error getting network ports from network adapter", slog.String("operation", "chassis.NetworkAdapters()"), slog.Any("error", err))
 				}
 			}
 
@@ -335,8 +347,7 @@ func (c *ChassisCollector) getLeakDetectors(thermalSubsystem *schemas.ThermalSub
 	return allDetectors
 }
 
-func parseChassisTemperature(ch chan<- prometheus.Metric, chassisID string, chassisTemperature schemas.Temperature, wg *sync.WaitGroup) {
-	defer wg.Done()
+func parseChassisTemperature(ch chan<- prometheus.Metric, chassisID string, chassisTemperature schemas.Temperature) {
 	chassisTemperatureSensorName := chassisTemperature.Name
 	chassisTemperatureSensorID := chassisTemperature.MemberID
 	chassisTemperatureStatus := chassisTemperature.Status
@@ -357,8 +368,7 @@ func parseChassisTemperature(ch chan<- prometheus.Metric, chassisID string, chas
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_temperature_celsius"].desc, prometheus.GaugeValue, gofish.Deref(chassisTemperature.ReadingCelsius), chassisTemperatureLabelvalues...)
 }
 
-func parseChassisFan(ch chan<- prometheus.Metric, chassisID string, chassisFan schemas.ThermalFan, wg *sync.WaitGroup) {
-	defer wg.Done()
+func parseChassisFan(ch chan<- prometheus.Metric, chassisID string, chassisFan schemas.ThermalFan) {
 	chassisFanID := chassisFan.MemberID
 	chassisFanName := chassisFan.Name
 	chassisFanStaus := chassisFan.Status
@@ -407,9 +417,7 @@ func parseChassisFan(ch chan<- prometheus.Metric, chassisID string, chassisFan s
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_upper_threshold_fatal"].desc, prometheus.GaugeValue, chassisFanRPMUpperFatalThreshold, chassisFanLabelvalues...)
 }
 
-func parseLeakDetector(ch chan<- prometheus.Metric, chassisID string, ld *schemas.LeakDetector, wg *sync.WaitGroup) {
-	defer wg.Done()
-
+func parseLeakDetector(ch chan<- prometheus.Metric, chassisID string, ld *schemas.LeakDetector) {
 	ldID := ld.ID
 	labelValues := []string{"leak_detector", chassisID, "LeakDetection", ldID}
 
@@ -418,8 +426,7 @@ func parseLeakDetector(ch chan<- prometheus.Metric, chassisID string, ld *schema
 	}
 }
 
-func parseChassisPowerInfoVoltage(ch chan<- prometheus.Metric, chassisID string, chassisPowerInfoVoltage schemas.Voltage, wg *sync.WaitGroup) {
-	defer wg.Done()
+func parseChassisPowerInfoVoltage(ch chan<- prometheus.Metric, chassisID string, chassisPowerInfoVoltage schemas.Voltage) {
 	chassisPowerInfoVoltageName := chassisPowerInfoVoltage.Name
 	chassisPowerInfoVoltageID := chassisPowerInfoVoltage.MemberID
 	chassisPowerInfoVoltageNameReadingVolts := chassisPowerInfoVoltage.ReadingVolts
@@ -431,8 +438,7 @@ func parseChassisPowerInfoVoltage(ch chan<- prometheus.Metric, chassisID string,
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_voltage_volts"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisPowerInfoVoltageNameReadingVolts), chassisPowerVoltageLabelvalues...)
 }
 
-func parseChassisPowerInfoPowerControl(ch chan<- prometheus.Metric, chassisID string, chassisPowerInfoPowerControl schemas.PowerControl, wg *sync.WaitGroup) {
-	defer wg.Done()
+func parseChassisPowerInfoPowerControl(ch chan<- prometheus.Metric, chassisID string, chassisPowerInfoPowerControl schemas.PowerControl) {
 	name := chassisPowerInfoPowerControl.Name
 	id := chassisPowerInfoPowerControl.MemberID
 	pm := chassisPowerInfoPowerControl.PowerMetrics
@@ -440,8 +446,7 @@ func parseChassisPowerInfoPowerControl(ch chan<- prometheus.Metric, chassisID st
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_average_consumed_watts"].desc, prometheus.GaugeValue, float32PtrToFloat64(pm.AverageConsumedWatts), chassisPowerVoltageLabelvalues...)
 }
 
-func parseChassisPowerInfoPowerSupply(ch chan<- prometheus.Metric, chassisID string, chassisPowerInfoPowerSupply schemas.PowerSupply, wg *sync.WaitGroup) {
-	defer wg.Done()
+func parseChassisPowerInfoPowerSupply(ch chan<- prometheus.Metric, chassisID string, chassisPowerInfoPowerSupply schemas.PowerSupply) {
 	chassisPowerInfoPowerSupplyName := chassisPowerInfoPowerSupply.Name
 	// This is optional in some devices causing duplicate metrics
 	chassisPowerInfoPowerSupplyID := chassisPowerInfoPowerSupply.MemberID
@@ -475,8 +480,7 @@ func parseChassisPowerInfoPowerSupply(ch chan<- prometheus.Metric, chassisID str
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_output_watts"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisPowerInfoPowerSupplyPowerOutputWatts), chassisPowerSupplyLabelvalues...)
 }
 
-func parseNetworkAdapter(ch chan<- prometheus.Metric, chassisID string, networkAdapter *schemas.NetworkAdapter, wg *sync.WaitGroup) error {
-	defer wg.Done()
+func parseNetworkAdapter(ctx context.Context, ch chan<- prometheus.Metric, chassisID string, networkAdapter *schemas.NetworkAdapter) error {
 	networkAdapterName := networkAdapter.Name
 	networkAdapterID := networkAdapter.ID
 	networkAdapterState := networkAdapter.Status.State
@@ -489,21 +493,24 @@ func parseNetworkAdapter(ch chan<- prometheus.Metric, chassisID string, networkA
 		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_network_adapter_health_state"].desc, prometheus.GaugeValue, networkAdapterHealthStateValue, chassisNetworkAdapterLabelValues...)
 	}
 
-	if networkPorts, err := networkAdapter.NetworkPorts(); err != nil {
+	networkPorts, err := networkAdapter.NetworkPorts()
+	if err != nil {
 		return err
-	} else {
-		wg6 := &sync.WaitGroup{}
-		wg6.Add(len(networkPorts))
-		for _, networkPort := range networkPorts {
-			go parseNetworkPort(ch, chassisID, networkPort, networkAdapterName, networkAdapterID, wg6)
-		}
-		wg6.Wait()
+	}
+	egPort := newRecoverGroup(ctx)
+	for _, networkPort := range networkPorts {
+		egPort.Go(func() error {
+			parseNetworkPort(ch, chassisID, networkPort, networkAdapterName, networkAdapterID)
+			return nil
+		})
+	}
+	if err := egPort.Wait(); err != nil {
+		return err
 	}
 	return nil
 }
 
-func parseNetworkPort(ch chan<- prometheus.Metric, chassisID string, networkPort *schemas.NetworkPort, networkAdapterName string, networkAdapterID string, wg *sync.WaitGroup) {
-	defer wg.Done()
+func parseNetworkPort(ch chan<- prometheus.Metric, chassisID string, networkPort *schemas.NetworkPort, networkAdapterName string, networkAdapterID string) {
 	networkPortName := networkPort.Name
 	networkPortID := networkPort.ID
 	networkPortState := networkPort.Status.State
