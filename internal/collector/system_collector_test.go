@@ -1,9 +1,9 @@
 package collector
 
 import (
+	"context"
 	"log/slog"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -123,7 +123,7 @@ func TestDriveMetrics(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ch := make(chan prometheus.Metric, 100)
-			wg := &sync.WaitGroup{}
+			eg := newRecoverGroup(context.Background())
 
 			// Process all drive+controller combinations
 			for _, d := range tt.drives {
@@ -140,10 +140,14 @@ func TestDriveMetrics(t *testing.T) {
 				}
 
 				// Create drive metrics with controller ID
-				wg.Add(1)
-				go parseDrive(ch, drive, d.controllerID, wg)
+				dr := drive
+				cID := d.controllerID
+				eg.Go(func() error {
+					parseDrive(ch, dr, cID)
+					return nil
+				})
 			}
-			wg.Wait()
+			eg.Wait() //nolint:errcheck
 
 			// Collect metrics from channel
 			driveMetricCount := 0
@@ -225,14 +229,11 @@ func TestProcessorWithoutMetrics(t *testing.T) {
 
 	// Test metric collection
 	ch := make(chan prometheus.Metric, 100)
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
 
 	// Create a test logger
 	logger := slog.Default()
 
-	go parseProcessor(ch, mockProcessor, wg, logger)
-	wg.Wait()
+	parseProcessor(ch, mockProcessor, logger)
 
 	// Collect metrics from channel
 	processorMetricCount := 0

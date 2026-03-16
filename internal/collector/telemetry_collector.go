@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	isoDuration "github.com/sosodev/duration"
@@ -333,40 +332,53 @@ func (t *TelemetryCollector) collect(ctx context.Context, ch chan<- prometheus.M
 	}
 
 	// Process each metric report
-	wg := &sync.WaitGroup{}
+	eg := newRecoverGroup(ctx)
 	for _, report := range metricReports {
 		if ctx.Err() != nil {
 			t.logger.With("error", ctx.Err(), "collector", "telemetry").Debug("skipping further collection")
 			continue
 		}
 		if strings.Contains(report.ID, reportIDProcessorGPMMetrics) {
-			wg.Add(1)
-			go t.collectGPMMetrics(ch, report, systemMap, wg)
+			eg.Go(func() error {
+				t.collectGPMMetrics(ch, report, systemMap)
+				return nil
+			})
 		} else if strings.Contains(report.ID, reportIDProcessorMetrics) && !strings.Contains(report.ID, reportIDProcessorResetMetrics) && !strings.Contains(report.ID, reportIDProcessorPortMetrics) {
-			wg.Add(1)
-			go t.collectProcessorMetrics(ch, report, systemMap, wg)
+			eg.Go(func() error {
+				t.collectProcessorMetrics(ch, report, systemMap)
+				return nil
+			})
 		} else if strings.Contains(report.ID, reportIDMemoryMetrics) {
-			wg.Add(1)
-			go t.collectMemoryMetrics(ch, report, systemMap, wg)
+			eg.Go(func() error {
+				t.collectMemoryMetrics(ch, report, systemMap)
+				return nil
+			})
 		} else if strings.Contains(report.ID, reportIDProcessorResetMetrics) {
-			wg.Add(1)
-			go t.collectResetMetrics(ch, report, systemMap, wg)
+			eg.Go(func() error {
+				t.collectResetMetrics(ch, report, systemMap)
+				return nil
+			})
 		} else if strings.Contains(report.ID, reportIDProcessorPortMetrics) {
-			wg.Add(1)
-			go t.collectPortMetrics(ch, report, systemMap, wg)
+			eg.Go(func() error {
+				t.collectPortMetrics(ch, report, systemMap)
+				return nil
+			})
 		} else if strings.Contains(report.ID, reportIDPlatformEnvMetrics) {
-			wg.Add(1)
-			go t.collectPlatformEnvironmentMetrics(ch, report, systemMap, wg)
+			eg.Go(func() error {
+				t.collectPlatformEnvironmentMetrics(ch, report, systemMap)
+				return nil
+			})
 		}
 	}
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		t.logger.Error("goroutine error", slog.Any("error", err))
+	}
 	t.collectorScrapeStatus.WithLabelValues("telemetry").Set(float64(1))
 }
 
 // collectProcessorMetrics processes a single HGX_ProcessorMetrics report
-func (t *TelemetryCollector) collectProcessorMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
-	defer wg.Done()
+func (t *TelemetryCollector) collectProcessorMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string) {
 
 	t.logger.Debug("processing metric report",
 		slog.String("report_id", report.ID),
@@ -611,8 +623,7 @@ func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels 
 }
 
 // collectMemoryMetrics processes a single HGX_MemoryMetrics report
-func (t *TelemetryCollector) collectMemoryMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
-	defer wg.Done()
+func (t *TelemetryCollector) collectMemoryMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string) {
 
 	t.logger.Debug("processing memory metric report",
 		slog.String("report_id", report.ID),
@@ -758,8 +769,7 @@ func (t *TelemetryCollector) emitMemoryMetrics(ch chan<- prometheus.Metric, labe
 }
 
 // collectResetMetrics processes a single HGX_ProcessorResetMetrics report
-func (t *TelemetryCollector) collectResetMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
-	defer wg.Done()
+func (t *TelemetryCollector) collectResetMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string) {
 
 	t.logger.Debug("processing reset metric report",
 		slog.String("report_id", report.ID),
@@ -932,8 +942,7 @@ func (t *TelemetryCollector) emitResetMetrics(ch chan<- prometheus.Metric, label
 }
 
 // collectPortMetrics processes a single HGX_ProcessorPortMetrics report
-func (t *TelemetryCollector) collectPortMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
-	defer wg.Done()
+func (t *TelemetryCollector) collectPortMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string) {
 
 	t.logger.Debug("processing port metric report",
 		slog.String("report_id", report.ID),
@@ -1240,8 +1249,7 @@ func (t *TelemetryCollector) emitPortMetrics(ch chan<- prometheus.Metric, labels
 }
 
 // collectGPMMetrics processes a single HGX_ProcessorGPMMetrics report
-func (t *TelemetryCollector) collectGPMMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
-	defer wg.Done()
+func (t *TelemetryCollector) collectGPMMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string) {
 
 	t.logger.Debug("processing GPM metric report",
 		slog.String("report_id", report.ID),
@@ -1555,8 +1563,7 @@ func (t *TelemetryCollector) emitGPMInstanceMetrics(ch chan<- prometheus.Metric,
 
 // collectPlatformEnvironmentMetrics processes HGX_PlatformEnvironmentMetrics report
 // This collects GPU, CPU, and ambient environmental metrics (power, temperature, energy)
-func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string, wg *sync.WaitGroup) {
-	defer wg.Done()
+func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string) {
 
 	t.logger.Debug("processing platform environment metric report",
 		slog.String("report_id", report.ID),
