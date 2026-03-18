@@ -214,10 +214,10 @@ redfish_gpu_health{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 1
 redfish_gpu_health{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 2
 # HELP redfish_gpu_info GPU information with serial number and UUID
 # TYPE redfish_gpu_info gauge
-redfish_gpu_info{gpu_id="GPU_0",serial_number="123456",system_id="HGX_Baseboard_0",uuid="gpu-0-uuid"} 1
-redfish_gpu_info{gpu_id="GPU_1",serial_number="234567",system_id="HGX_Baseboard_0",uuid="gpu-1-uuid"} 1
-redfish_gpu_info{gpu_id="GPU_2",serial_number="345678",system_id="HGX_Baseboard_0",uuid="gpu-2-uuid"} 1
-redfish_gpu_info{gpu_id="GPU_3",serial_number="456789",system_id="HGX_Baseboard_0",uuid="gpu-3-uuid"} 1
+redfish_gpu_info{firmware_version="97.10.3E.00.05",gpu_id="GPU_0",serial_number="123456",system_id="HGX_Baseboard_0",uuid="gpu-0-uuid"} 1
+redfish_gpu_info{firmware_version="97.10.3E.00.05",gpu_id="GPU_1",serial_number="234567",system_id="HGX_Baseboard_0",uuid="gpu-1-uuid"} 1
+redfish_gpu_info{firmware_version="97.10.3E.00.05",gpu_id="GPU_2",serial_number="345678",system_id="HGX_Baseboard_0",uuid="gpu-2-uuid"} 1
+redfish_gpu_info{firmware_version="97.10.3E.00.05",gpu_id="GPU_3",serial_number="456789",system_id="HGX_Baseboard_0",uuid="gpu-3-uuid"} 1
 # HELP redfish_gpu_state GPU processor state,1(Enabled),2(Disabled),3(StandbyOffinline),4(StandbySpare),5(InTest),6(Starting),7(Absent),8(UnavailableOffline),9(Deferring),10(Quiesced),11(Updating)
 # TYPE redfish_gpu_state gauge
 redfish_gpu_state{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 1
@@ -234,8 +234,8 @@ redfish_gpu_state{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 5
 			wantSeriesString: `
 # HELP redfish_gpu_info GPU information with serial number and UUID
 # TYPE redfish_gpu_info gauge
-redfish_gpu_info{gpu_id="GPU_SXM_1",serial_number="unknown",system_id="HGX_Baseboard_0",uuid="unknown"} 1
-redfish_gpu_info{gpu_id="GPU_SXM_2",serial_number="unknown",system_id="HGX_Baseboard_0",uuid="unknown"} 1
+redfish_gpu_info{firmware_version="unknown",gpu_id="GPU_SXM_1",serial_number="unknown",system_id="HGX_Baseboard_0",uuid="unknown"} 1
+redfish_gpu_info{firmware_version="unknown",gpu_id="GPU_SXM_2",serial_number="unknown",system_id="HGX_Baseboard_0",uuid="unknown"} 1
 `,
 		},
 	}
