@@ -19,7 +19,6 @@
   "EnvironmentMetrics": {
     "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_2/EnvironmentMetrics"
   },
-  "FirmwareVersion": "97.00.7F.00.04",
   "Id": "GPU_SXM_2",
   "Links": {
     "Chassis": {
