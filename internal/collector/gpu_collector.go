@@ -27,7 +27,7 @@ var (
 	// gpuPortLabels appends NVLink labels gpuBaseLabels for NVLink-related series
 	gpuPortLabels = baseWithExtraLabels([]string{"port_id", "port_type", "port_protocol"})
 	// gpuInfoLabels appends a S/N and UUID to gpuBaseLabels for the redfish_gpu_info series
-	gpuInfoLabels = baseWithExtraLabels([]string{"serial_number", "uuid"})
+	gpuInfoLabels = baseWithExtraLabels([]string{"firmware_version", "serial_number", "uuid"})
 	gpuMetrics    = createGPUMetricMap()
 )
 
@@ -377,14 +377,18 @@ func (g *GPUCollector) emitHealthInfo(ch chan<- prometheus.Metric, gpu SystemGPU
 			procBaseLabels...,
 		)
 	}
-	var gpuSerial, gpuUUID string
+	var gpuFirmware, gpuSerial, gpuUUID string
 	if gpuSerial = gpu.SerialNumber; gpuSerial == "" {
 		gpuSerial = "unknown"
 	}
 	if gpuUUID = gpu.UUID; gpuUUID == "" {
 		gpuUUID = "unknown"
 	}
-	infoLabels := []string{gpu.SystemName, gpu.ID, gpuSerial, gpuUUID}
+	if gpuFirmware = gpu.FirmwareVersion; gpuFirmware == "" {
+		gpuFirmware = "unknown"
+	}
+
+	infoLabels := []string{gpu.SystemName, gpu.ID, gpuFirmware, gpuSerial, gpuUUID}
 	ch <- prometheus.MustNewConstMetric(
 		g.metrics["gpu_info"].desc,
 		prometheus.GaugeValue,
