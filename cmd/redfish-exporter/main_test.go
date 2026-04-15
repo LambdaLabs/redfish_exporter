@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/LambdaLabs/redfish_exporter/internal/config"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stmcginnis/gofish"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -259,6 +260,84 @@ func TestRunServer(t *testing.T) {
 			check()
 		})
 	}
+}
+
+// newScrapeRequest builds an *http.Request with a scrapeRequest injected into its context,
+// pointing at the given target. hostConfig may be nil to use empty credentials.
+func newScrapeRequest(target string, hostConfig *config.HostConfig) *http.Request {
+	if hostConfig == nil {
+		hostConfig = &config.HostConfig{}
+	}
+	sr := &scrapeRequest{
+		Target:     target,
+		Modules:    []string{"rf_exporter_default"},
+		HostConfig: hostConfig,
+	}
+	r := httptest.NewRequest(http.MethodGet, "/redfish?target="+target, nil)
+	ctx := context.WithValue(r.Context(), scrapeRequestCtxKey, sr)
+	return r.WithContext(ctx)
+}
+
+func TestScrapeRequestsTotal(t *testing.T) {
+	// Use a minimal safeConfig so metricsHandler can call RedfishClientConfig().
+	safeConfig = config.NewSafeConfig("")
+
+	t.Run("increments on failed connection", func(t *testing.T) {
+		// Use a unique target per sub-test so counters start at zero.
+		target := "unreachable-failed.test:1"
+		before := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target))
+
+		w := httptest.NewRecorder()
+		metricsHandler()(w, newScrapeRequest(target, nil))
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, before+1, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target)))
+	})
+
+	t.Run("increments on successful scrape", func(t *testing.T) {
+		// newRedfishClient always uses https://, so we need a TLS server.
+		// Insecure: true is hardcoded in newRedfishClient so self-signed certs are accepted.
+		rfServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"@odata.id": r.URL.Path})
+		}))
+		t.Cleanup(rfServer.Close)
+
+		target := rfServer.Listener.Addr().String()
+		before := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target))
+
+		w := httptest.NewRecorder()
+		metricsHandler()(w, newScrapeRequest(target, nil))
+
+		assert.Equal(t, before+1, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target)))
+	})
+
+	t.Run("counts are per target", func(t *testing.T) {
+		targetA := "per-target-a.test:1"
+		targetB := "per-target-b.test:1"
+		beforeA := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(targetA))
+		beforeB := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(targetB))
+
+		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(targetA, nil))
+		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(targetA, nil))
+		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(targetB, nil))
+
+		assert.Equal(t, beforeA+2, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(targetA)))
+		assert.Equal(t, beforeB+1, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(targetB)))
+	})
+
+	t.Run("does not increment when scrape request missing from context", func(t *testing.T) {
+		// Request with no scrapeRequest in context — getScrapeRequest returns false.
+		target := "no-context.test:1"
+		before := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target))
+
+		r := httptest.NewRequest(http.MethodGet, "/redfish", nil)
+		w := httptest.NewRecorder()
+		metricsHandler()(w, r)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, before, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target)))
+	})
 }
 
 func TestBuildCollectorsFor(t *testing.T) {
