@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -10,11 +11,18 @@ import (
 
 // stubCollector is a no-op ContextAwareCollector used to populate redfishCollector.collectors
 // without making any real Redfish API calls.
-type stubCollector struct{}
+type stubCollector struct {
+	// panicOnCollect causes CollectWithContext to panic, simulating a sub-collector crash.
+	panicOnCollect bool
+}
 
-func (s *stubCollector) Describe(_ chan<- *prometheus.Desc)                           {}
-func (s *stubCollector) Collect(_ chan<- prometheus.Metric)                           {}
-func (s *stubCollector) CollectWithContext(_ context.Context, _ chan<- prometheus.Metric) {}
+func (s *stubCollector) Describe(_ chan<- *prometheus.Desc)                              {}
+func (s *stubCollector) Collect(_ chan<- prometheus.Metric)                              {}
+func (s *stubCollector) CollectWithContext(_ context.Context, _ chan<- prometheus.Metric) {
+	if s.panicOnCollect {
+		panic("simulated collector panic")
+	}
+}
 
 // newTestRedfishCollector builds a redfishCollector with no real Redfish connection,
 // suitable for unit-testing collector-level behaviour such as counter resets.
@@ -22,8 +30,77 @@ func newTestRedfishCollector(collectors []ContextAwareCollector) *redfishCollect
 	return &redfishCollector{
 		ctx:        context.Background(),
 		collectors: collectors,
+		logger:     slog.Default(),
 		redfishUp:  prometheus.NewGauge(prometheus.GaugeOpts{Name: "redfish_up_test"}),
 	}
+}
+
+// TestCollect_CountsOutcomes verifies that collectorsSucceeded and collectorsFailed reflect
+// the actual outcome of each sub-collector goroutine after Collect() completes.
+// collectorsSucceeded is incremented only when CollectWithContext returns normally;
+// collectorsFailed is derived as len(collectors) - collectorsSucceeded, so panicking
+// goroutines (caught by recoverGroup) are automatically counted as failures.
+func TestCollect_CountsOutcomes(t *testing.T) {
+	t.Run("all collectors succeed", func(t *testing.T) {
+		rc := newTestRedfishCollector([]ContextAwareCollector{
+			&stubCollector{},
+			&stubCollector{},
+			&stubCollector{},
+		})
+		ch := make(chan prometheus.Metric, 16)
+		rc.Collect(ch)
+
+		assert.Equal(t, int64(3), rc.collectorsSucceeded.Load())
+		assert.Equal(t, int64(0), rc.collectorsFailed.Load())
+	})
+
+	t.Run("all collectors fail via panic", func(t *testing.T) {
+		rc := newTestRedfishCollector([]ContextAwareCollector{
+			&stubCollector{panicOnCollect: true},
+			&stubCollector{panicOnCollect: true},
+		})
+		ch := make(chan prometheus.Metric, 16)
+		rc.Collect(ch)
+
+		assert.Equal(t, int64(0), rc.collectorsSucceeded.Load())
+		assert.Equal(t, int64(2), rc.collectorsFailed.Load())
+	})
+
+	t.Run("mixed success and failure", func(t *testing.T) {
+		rc := newTestRedfishCollector([]ContextAwareCollector{
+			&stubCollector{},
+			&stubCollector{panicOnCollect: true},
+			&stubCollector{},
+			&stubCollector{panicOnCollect: true},
+		})
+		ch := make(chan prometheus.Metric, 16)
+		rc.Collect(ch)
+
+		assert.Equal(t, int64(2), rc.collectorsSucceeded.Load())
+		assert.Equal(t, int64(2), rc.collectorsFailed.Load())
+	})
+
+	t.Run("no collectors registered", func(t *testing.T) {
+		rc := newTestRedfishCollector([]ContextAwareCollector{})
+		ch := make(chan prometheus.Metric, 16)
+		rc.Collect(ch)
+
+		assert.Equal(t, int64(0), rc.collectorsSucceeded.Load())
+		assert.Equal(t, int64(0), rc.collectorsFailed.Load())
+	})
+
+	t.Run("succeeded and failed always sum to total collectors", func(t *testing.T) {
+		collectors := []ContextAwareCollector{
+			&stubCollector{},
+			&stubCollector{panicOnCollect: true},
+			&stubCollector{},
+		}
+		rc := newTestRedfishCollector(collectors)
+		ch := make(chan prometheus.Metric, 16)
+		rc.Collect(ch)
+
+		assert.Equal(t, int64(len(collectors)), rc.collectorsSucceeded.Load()+rc.collectorsFailed.Load())
+	})
 }
 
 // TestCollect_ResetsCounters verifies that collectorsSucceeded and collectorsFailed are

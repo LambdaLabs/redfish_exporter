@@ -45,8 +45,10 @@ type redfishCollector struct {
 
 	// collectorsSucceeded and collectorsFailed track how many sub-collectors
 	// completed successfully or failed in the most recent Collect() call.
-	// They are reset to zero at the start of each Collect() and incremented
-	// as sub-collector goroutines complete.
+	// They are reset to zero at the start of each Collect(). collectorSucceeded is 
+	// incremented as sub-collector goroutines complete. collectorsFailed is derived 
+	// at the end of Collect() as the difference between total collectors and successful 
+	// ones.
 	collectorsSucceeded atomic.Int64
 	collectorsFailed    atomic.Int64
 }
@@ -106,12 +108,18 @@ func (r *redfishCollector) Collect(ch chan<- prometheus.Metric) {
 		for _, collector := range r.collectors {
 			eg.Go(func() error {
 				collector.CollectWithContext(r.ctx, ch)
+				// Only reached if CollectWithContext returns without panicking.
+				// Panics are caught by recoverGroup and skip this line, so
+				// collectorsSucceeded naturally undercounts on panic.
+				r.collectorsSucceeded.Add(1)
 				return nil
 			})
 		}
 		if err := eg.Wait(); err != nil {
 			r.logger.Error("goroutine error", slog.Any("error", err))
 		}
+		// The delta is the number of collectors that didn't complete successfully.
+		r.collectorsFailed.Store(int64(len(r.collectors)) - r.collectorsSucceeded.Load())
 	}
 
 	ch <- r.redfishUp
