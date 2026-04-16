@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -41,6 +42,13 @@ type redfishCollector struct {
 	redfishClient *gofish.APIClient
 	collectors    []ContextAwareCollector
 	redfishUp     prometheus.Gauge
+
+	// collectorsSucceeded and collectorsFailed track how many sub-collectors
+	// completed successfully or failed in the most recent Collect() call.
+	// They are reset to zero at the start of each Collect() and incremented
+	// as sub-collector goroutines complete.
+	collectorsSucceeded atomic.Int64
+	collectorsFailed    atomic.Int64
 }
 
 // NewRedfishCollector returns a *redfishCollector or an error.
@@ -84,6 +92,9 @@ func (r *redfishCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect implements prometheus.Collector.
 func (r *redfishCollector) Collect(ch chan<- prometheus.Metric) {
+	r.collectorsSucceeded.Store(0)
+	r.collectorsFailed.Store(0)
+
 	scrapeTime := time.Now()
 	if r.ctx.Err() != nil {
 		r.logger.With("error", r.ctx.Err()).Warn("skipping further collection")
