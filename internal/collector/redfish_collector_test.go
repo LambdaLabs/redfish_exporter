@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // stubCollector is a no-op ContextAwareCollector used to populate redfishCollector.collectors
@@ -16,8 +18,8 @@ type stubCollector struct {
 	panicOnCollect bool
 }
 
-func (s *stubCollector) Describe(_ chan<- *prometheus.Desc)                              {}
-func (s *stubCollector) Collect(_ chan<- prometheus.Metric)                              {}
+func (s *stubCollector) Describe(_ chan<- *prometheus.Desc) {}
+func (s *stubCollector) Collect(_ chan<- prometheus.Metric) {}
 func (s *stubCollector) CollectWithContext(_ context.Context, _ chan<- prometheus.Metric) {
 	if s.panicOnCollect {
 		panic("simulated collector panic")
@@ -103,6 +105,59 @@ func TestCollect_CountsOutcomes(t *testing.T) {
 	})
 }
 
+// TestCollectorOutcome verifies that CollectorOutcome() returns the succeeded and failed
+// counts that reflect the most recent Collect() call, and that it is consistent with
+// the values emitted as Prometheus gauges.
+func TestCollectorOutcome(t *testing.T) {
+	t.Run("returns succeeded and failed counts after all succeed", func(t *testing.T) {
+		rc := newTestRedfishCollector([]ContextAwareCollector{
+			&stubCollector{},
+			&stubCollector{},
+		})
+		ch := make(chan prometheus.Metric, 16)
+		rc.Collect(ch)
+
+		succeeded, failed := rc.CollectorOutcome()
+		assert.Equal(t, int64(2), succeeded)
+		assert.Equal(t, int64(0), failed)
+	})
+
+	t.Run("returns succeeded and failed counts after all fail", func(t *testing.T) {
+		rc := newTestRedfishCollector([]ContextAwareCollector{
+			&stubCollector{panicOnCollect: true},
+			&stubCollector{panicOnCollect: true},
+		})
+		ch := make(chan prometheus.Metric, 16)
+		rc.Collect(ch)
+
+		succeeded, failed := rc.CollectorOutcome()
+		assert.Equal(t, int64(0), succeeded)
+		assert.Equal(t, int64(2), failed)
+	})
+
+	t.Run("returns updated counts after each Collect call", func(t *testing.T) {
+		// Verifies that CollectorOutcome() always reflects the most recent Collect(),
+		// not a stale result from a previous scrape session.
+		rc := newTestRedfishCollector([]ContextAwareCollector{
+			&stubCollector{},
+			&stubCollector{panicOnCollect: true},
+		})
+
+		ch := make(chan prometheus.Metric, 16)
+		rc.Collect(ch)
+		succeeded, failed := rc.CollectorOutcome()
+		assert.Equal(t, int64(1), succeeded)
+		assert.Equal(t, int64(1), failed)
+
+		// Second Collect with same collectors — outcome should be identical, not accumulated.
+		ch = make(chan prometheus.Metric, 16)
+		rc.Collect(ch)
+		succeeded, failed = rc.CollectorOutcome()
+		assert.Equal(t, int64(1), succeeded)
+		assert.Equal(t, int64(1), failed)
+	})
+}
+
 // TestCollect_ResetsCounters verifies that collectorsSucceeded and collectorsFailed are
 // both reset to zero at the start of every Collect() call. This ensures that counts from
 // a previous scrape session do not carry over into the next one, keeping per-scrape
@@ -142,5 +197,87 @@ func TestCollect_ResetsCounters(t *testing.T) {
 			assert.NotEqual(t, int64(99), rc.collectorsSucceeded.Load())
 			assert.NotEqual(t, int64(99), rc.collectorsFailed.Load())
 		}
+	})
+}
+
+func findSubstring(s, sub string) bool {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}
+
+// TestCollect_EmitsGauges verifies that Collect() emits
+// redfish_exporter_collectors_succeeded and redfish_exporter_collectors_failed
+// as Prometheus gauge metrics with values that match the atomic counters.
+func TestCollect_EmitsGauges(t *testing.T) {
+	// collectMetricValues runs Collect and returns the emitted gauge values for
+	// collectors_succeeded and collectors_failed by reading from the channel.
+	collectMetricValues := func(t *testing.T, rc *redfishCollector) (succeeded, failed float64) {
+		t.Helper()
+		ch := make(chan prometheus.Metric, 32)
+		rc.Collect(ch)
+		close(ch)
+		for m := range ch {
+			var dtoM dto.Metric
+			require.NoError(t, m.Write(&dtoM))
+			if dtoM.Gauge == nil {
+				continue
+			}
+			desc := m.Desc().String()
+			if findSubstring(desc, "collectors_succeeded") {
+				succeeded = dtoM.Gauge.GetValue()
+			}
+			if findSubstring(desc, "collectors_failed") {
+				failed = dtoM.Gauge.GetValue()
+			}
+		}
+		return
+	}
+
+	t.Run("emits succeeded=N failed=0 when all collectors succeed", func(t *testing.T) {
+		rc := newTestRedfishCollector([]ContextAwareCollector{
+			&stubCollector{},
+			&stubCollector{},
+			&stubCollector{},
+		})
+		succeeded, failed := collectMetricValues(t, rc)
+		assert.Equal(t, float64(3), succeeded)
+		assert.Equal(t, float64(0), failed)
+	})
+
+	t.Run("emits succeeded=0 failed=N when all collectors panic", func(t *testing.T) {
+		rc := newTestRedfishCollector([]ContextAwareCollector{
+			&stubCollector{panicOnCollect: true},
+			&stubCollector{panicOnCollect: true},
+		})
+		succeeded, failed := collectMetricValues(t, rc)
+		assert.Equal(t, float64(0), succeeded)
+		assert.Equal(t, float64(2), failed)
+	})
+
+	t.Run("emits correct values for mixed success and failure", func(t *testing.T) {
+		rc := newTestRedfishCollector([]ContextAwareCollector{
+			&stubCollector{},
+			&stubCollector{panicOnCollect: true},
+			&stubCollector{},
+		})
+		succeeded, failed := collectMetricValues(t, rc)
+		assert.Equal(t, float64(2), succeeded)
+		assert.Equal(t, float64(1), failed)
+	})
+
+	t.Run("gauge values match atomic counters after Collect", func(t *testing.T) {
+		// Verifies consistency between the emitted gauge values and the struct fields,
+		// ensuring the metrics are not stale snapshots taken at the wrong point.
+		rc := newTestRedfishCollector([]ContextAwareCollector{
+			&stubCollector{},
+			&stubCollector{panicOnCollect: true},
+		})
+		succeeded, failed := collectMetricValues(t, rc)
+		assert.Equal(t, float64(rc.collectorsSucceeded.Load()), succeeded)
+		assert.Equal(t, float64(rc.collectorsFailed.Load()), failed)
 	})
 }
