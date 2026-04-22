@@ -320,7 +320,7 @@ func TestScrapeRequestsTotal(t *testing.T) {
 
 		w := httptest.NewRecorder()
 		metricsHandler()(w, newScrapeRequest(target, nil))
-
+		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, before+1, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target)))
 	})
 
@@ -332,6 +332,7 @@ func TestScrapeRequestsTotal(t *testing.T) {
 		beforeA := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(targetA))
 		beforeB := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(targetB))
 
+		// Scrape targetA twice and targetB once, then verify the expected increments.
 		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(targetA, nil))
 		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(targetA, nil))
 		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(targetB, nil))
