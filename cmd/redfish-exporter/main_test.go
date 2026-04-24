@@ -357,6 +357,53 @@ func TestScrapeRequestsTotal(t *testing.T) {
 	})
 }
 
+// TestScrapeSuccessesTotal verifies that redfish_exporter_scrape_successes_total is incremented
+// only when all sub-collectors in the scrape session completed without failure.
+func TestScrapeSuccessesTotal(t *testing.T) {
+	safeConfig = config.NewSafeConfig("")
+
+	t.Run("increments when all collectors succeed", func(t *testing.T) {
+		// A TLS server that responds with minimal valid JSON allows NewRedfishCollector
+		// to connect and all (stub) collectors to complete without panicking.
+		rfServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"@odata.id": r.URL.Path})
+		}))
+		t.Cleanup(rfServer.Close)
+
+		target := rfServer.Listener.Addr().String()
+		before := testutil.ToFloat64(scrapeSuccessesTotal.WithLabelValues(target))
+
+		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(target, nil))
+
+		assert.Equal(t, before+1, testutil.ToFloat64(scrapeSuccessesTotal.WithLabelValues(target)))
+	})
+
+	t.Run("does not increment when connection fails", func(t *testing.T) {
+		// An unreachable target means NewRedfishCollector fails and no collectors run,
+		// so CollectorOutcome() returns failed > 0 and the success counter must not increment.
+		target := "unreachable-success.test:1"
+		before := testutil.ToFloat64(scrapeSuccessesTotal.WithLabelValues(target))
+
+		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(target, nil))
+
+		assert.Equal(t, before, testutil.ToFloat64(scrapeSuccessesTotal.WithLabelValues(target)))
+	})
+
+	t.Run("requests and successes counters are independent", func(t *testing.T) {
+		// Verifies that a failed scrape increments requests but not successes,
+		// so the difference between the two counters reflects the failure count.
+		target := "independent-counters.test:1"
+		beforeReqs := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target))
+		beforeSucc := testutil.ToFloat64(scrapeSuccessesTotal.WithLabelValues(target))
+
+		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(target, nil))
+
+		assert.Equal(t, beforeReqs+1, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target)))
+		assert.Equal(t, beforeSucc, testutil.ToFloat64(scrapeSuccessesTotal.WithLabelValues(target)))
+	})
+}
+
 func TestBuildCollectorsFor(t *testing.T) {
 	moduleConfig := map[string]config.Module{
 		"chassis_collector": {Prober: "chassis_collector"},

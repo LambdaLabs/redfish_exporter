@@ -70,6 +70,11 @@ var (
 		Name: "redfish_exporter_scrape_requests_total",
 		Help: "Total number of scrape requests received per target, regardless of success or failure.",
 	}, []string{"target"})
+	// scrapeSuccessesTotal counts scrapes where all sub-collectors completed without failure.
+	scrapeSuccessesTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "redfish_exporter_scrape_successes_total",
+		Help: "Total number of scrapes where all sub-collectors completed successfully for the target.",
+	}, []string{"target"})
 )
 
 func reloadHandler() http.HandlerFunc {
@@ -101,6 +106,7 @@ func registerMetaMetrics() {
 		collectorLastStatus,
 		collectorModuleUnknown,
 		scrapeRequestsTotal,
+		scrapeSuccessesTotal,
 	}
 
 	prometheus.DefaultRegisterer.MustRegister(custom...)
@@ -219,6 +225,10 @@ func metricsHandler() http.HandlerFunc {
 		// Delegate http serving to Prometheus client library, which will call collector.Collect.
 		h := promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{})
 		h.ServeHTTP(w, r)
+
+		if _, failed := aggregateCollector.CollectorOutcome(); failed == 0 {
+			scrapeSuccessesTotal.WithLabelValues(sr.Target).Inc()
+		}
 	}
 }
 

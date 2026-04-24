@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -30,6 +31,16 @@ var (
 		"Collector time duration.",
 		nil, nil,
 	)
+	collectorsSucceededDesc = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, exporter, "collectors_succeeded"),
+		"Number of sub-collectors that completed successfully in the most recent scrape.",
+		nil, nil,
+	)
+	collectorsFailedDesc = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, exporter, "collectors_failed"),
+		"Number of sub-collectors that failed (panicked) in the most recent scrape.",
+		nil, nil,
+	)
 )
 
 // redfishCollector is an aggregation of various other prometheus.Collector.
@@ -41,6 +52,15 @@ type redfishCollector struct {
 	redfishClient *gofish.APIClient
 	collectors    []ContextAwareCollector
 	redfishUp     prometheus.Gauge
+
+	// collectorsSucceeded and collectorsFailed track how many sub-collectors
+	// completed successfully or failed in the most recent Collect() call.
+	// They are reset to zero at the start of each Collect(). collectorSucceeded is
+	// incremented as sub-collector goroutines complete. collectorsFailed is derived
+	// at the end of Collect() as the difference between total collectors and successful
+	// ones.
+	collectorsSucceeded atomic.Int64
+	collectorsFailed    atomic.Int64
 }
 
 // NewRedfishCollector returns a *redfishCollector or an error.
@@ -70,6 +90,12 @@ func (r *redfishCollector) WithCollectors(c []ContextAwareCollector) {
 	r.collectors = c
 }
 
+// CollectorOutcome returns the number of sub-collectors that succeeded and failed
+// in the most recent Collect() session. Values are meaningful only after Collect() returns.
+func (r *redfishCollector) CollectorOutcome() (succeeded, failed int64) {
+	return r.collectorsSucceeded.Load(), r.collectorsFailed.Load()
+}
+
 func (r *redfishCollector) Client() *gofish.APIClient {
 	return r.redfishClient
 }
@@ -79,11 +105,15 @@ func (r *redfishCollector) Describe(ch chan<- *prometheus.Desc) {
 	for _, collector := range r.collectors {
 		collector.Describe(ch)
 	}
-
+	ch <- collectorsSucceededDesc
+	ch <- collectorsFailedDesc
 }
 
 // Collect implements prometheus.Collector.
 func (r *redfishCollector) Collect(ch chan<- prometheus.Metric) {
+	r.collectorsSucceeded.Store(0)
+	r.collectorsFailed.Store(0)
+
 	scrapeTime := time.Now()
 	if r.ctx.Err() != nil {
 		r.logger.With("error", r.ctx.Err()).Warn("skipping further collection")
@@ -95,16 +125,24 @@ func (r *redfishCollector) Collect(ch chan<- prometheus.Metric) {
 		for _, collector := range r.collectors {
 			eg.Go(func() error {
 				collector.CollectWithContext(r.ctx, ch)
+				// Only reached if CollectWithContext returns without panicking.
+				// Panics are caught by recoverGroup and skip this line, so
+				// collectorsSucceeded naturally undercounts on panic.
+				r.collectorsSucceeded.Add(1)
 				return nil
 			})
 		}
 		if err := eg.Wait(); err != nil {
 			r.logger.Error("goroutine error", slog.Any("error", err))
 		}
+		// The delta is the number of collectors that didn't complete successfully.
+		r.collectorsFailed.Store(int64(len(r.collectors)) - r.collectorsSucceeded.Load())
 	}
 
 	ch <- r.redfishUp
 	ch <- prometheus.MustNewConstMetric(totalScrapeDurationDesc, prometheus.GaugeValue, time.Since(scrapeTime).Seconds())
+	ch <- prometheus.MustNewConstMetric(collectorsSucceededDesc, prometheus.GaugeValue, float64(r.collectorsSucceeded.Load()))
+	ch <- prometheus.MustNewConstMetric(collectorsFailedDesc, prometheus.GaugeValue, float64(r.collectorsFailed.Load()))
 }
 
 type collectorCtxKey struct{}
