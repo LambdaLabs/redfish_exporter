@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/LambdaLabs/redfish_exporter/internal/config"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stmcginnis/gofish"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -259,6 +260,101 @@ func TestRunServer(t *testing.T) {
 			check()
 		})
 	}
+}
+
+// newScrapeRequest builds an *http.Request with a scrapeRequest injected into its context,
+// pointing at the given target. hostConfig may be nil to use empty credentials.
+func newScrapeRequest(target string, hostConfig *config.HostConfig) *http.Request {
+	if hostConfig == nil {
+		hostConfig = &config.HostConfig{}
+	}
+	sr := &scrapeRequest{
+		Target:     target,
+		Modules:    []string{"rf_exporter_default"},
+		HostConfig: hostConfig,
+	}
+	r := httptest.NewRequest(http.MethodGet, "/redfish?target="+target, nil)
+	ctx := context.WithValue(r.Context(), scrapeRequestCtxKey, sr)
+	return r.WithContext(ctx)
+}
+
+// TestScrapeRequestsTotal verifies that redfish_exporter_scrape_requests_total is incremented
+// correctly across different scrape outcomes. The counter is intended to always reflect the
+// number of scrape attempts per target, regardless of whether the scrape succeeded or failed,
+// so that operators can detect missing or failing endpoints even when no other metrics are emitted.
+func TestScrapeRequestsTotal(t *testing.T) {
+	// Use a minimal safeConfig so metricsHandler can call RedfishClientConfig().
+	safeConfig = config.NewSafeConfig("")
+
+	// Each sub-test uses a unique target address so its counter label starts at zero,
+	// allowing absolute value assertions without resetting shared state.
+
+	t.Run("increments on failed connection", func(t *testing.T) {
+		// Verifies the counter is incremented even when the Redfish connection fails entirely.
+		// This is the primary motivation for the metric: scrape attempts that produce no metrics
+		// at all (e.g. host unreachable, TLS error) must still be counted so gaps in other
+		// metrics can be attributed to collection failure rather than a healthy absence of data.
+		target := "unreachable-failed.test:1"
+		before := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target))
+
+		w := httptest.NewRecorder()
+		metricsHandler()(w, newScrapeRequest(target, nil))
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, before+1, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target)))
+	})
+
+	t.Run("increments on successful scrape", func(t *testing.T) {
+		// Verifies the counter is also incremented on the happy path, where the Redfish
+		// endpoint is reachable and the handler proceeds to collect metrics.
+		// newRedfishClient always dials https://, so a TLS server is required here.
+		// Insecure: true is hardcoded in newRedfishClient, so the self-signed test cert is accepted.
+		rfServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"@odata.id": r.URL.Path})
+		}))
+		t.Cleanup(rfServer.Close)
+
+		target := rfServer.Listener.Addr().String()
+		before := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target))
+
+		w := httptest.NewRecorder()
+		metricsHandler()(w, newScrapeRequest(target, nil))
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, before+1, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target)))
+	})
+
+	t.Run("counts are per target", func(t *testing.T) {
+		// Verifies that the counter uses the target address as a label, so each host's
+		// scrape count is tracked independently and requests to one target do not affect another.
+		targetA := "per-target-a.test:1"
+		targetB := "per-target-b.test:1"
+		beforeA := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(targetA))
+		beforeB := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(targetB))
+
+		// Scrape targetA twice and targetB once, then verify the expected increments.
+		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(targetA, nil))
+		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(targetA, nil))
+		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(targetB, nil))
+
+		assert.Equal(t, beforeA+2, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(targetA)))
+		assert.Equal(t, beforeB+1, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(targetB)))
+	})
+
+	t.Run("does not increment when scrape request missing from context", func(t *testing.T) {
+		// Verifies the counter is NOT incremented for malformed requests where the scrape
+		// request was never injected into the context (i.e. the mustScrapeRequest middleware
+		// was bypassed). These are not genuine scrape attempts and should not be counted.
+		target := "no-context.test:1"
+		before := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target))
+
+		r := httptest.NewRequest(http.MethodGet, "/redfish", nil)
+		w := httptest.NewRecorder()
+		metricsHandler()(w, r)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, before, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target)))
+	})
 }
 
 func TestBuildCollectorsFor(t *testing.T) {

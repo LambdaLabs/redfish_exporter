@@ -65,6 +65,11 @@ var (
 		Name: "redfish_exporter_unknown_modules_requested_total",
 		Help: "Count of requests specifying a module name not known to this exporter",
 	})
+	// scrapeRequestsTotal counts every scrape attempt per target, regardless of outcome.
+	scrapeRequestsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "redfish_exporter_scrape_requests_total",
+		Help: "Total number of scrape requests received per target, regardless of success or failure.",
+	}, []string{"target"})
 )
 
 func reloadHandler() http.HandlerFunc {
@@ -95,6 +100,7 @@ func registerMetaMetrics() {
 	custom := []prometheus.Collector{
 		collectorLastStatus,
 		collectorModuleUnknown,
+		scrapeRequestsTotal,
 	}
 
 	prometheus.DefaultRegisterer.MustRegister(custom...)
@@ -188,6 +194,8 @@ func metricsHandler() http.HandlerFunc {
 			http.Error(w, "scrape request not found in context", 500)
 			return
 		}
+
+		scrapeRequestsTotal.WithLabelValues(sr.Target).Inc()
 
 		scrapeLogger := ctxLogger.With("scrape_host", sr.Target)
 		rfClientConfig := safeConfig.RedfishClientConfig()
