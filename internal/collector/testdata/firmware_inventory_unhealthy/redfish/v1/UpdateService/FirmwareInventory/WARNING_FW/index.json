@@ -1,0 +1,14 @@
+{
+  "@odata.type": "#SoftwareInventory.v1_4_0.SoftwareInventory",
+  "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/WARNING_FW",
+  "Id": "WARNING_FW",
+  "Name": "Warning Firmware",
+  "Version": "1.0.0-warn",
+  "Manufacturer": "TestVendor",
+  "Status": {
+    "State": "Enabled",
+    "Health": "Warning"
+  },
+  "Updateable": true,
+  "WriteProtected": false
+}

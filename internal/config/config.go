@@ -12,6 +12,8 @@ import (
 var (
 	// DefaultChassisCollector is a default unless the user provides particular values.
 	DefaultChassisCollector = ChassisCollectorConfig{}
+	// DefaultFirmwareInventoryCollector is a default unless the user provides particular values.
+	DefaultFirmwareInventoryCollector = FirmwareInventoryCollectorConfig{}
 	// DefaultGPUCollector is a default unless the user provides particular values.
 	DefaultGPUCollector = GPUCollectorConfig{}
 	//DefaultJSONCollector is a default unless the user provides particular values.
@@ -31,6 +33,10 @@ var (
 		"chassis_collector": {
 			Prober:           "chassis_collector",
 			ChassisCollector: DefaultChassisCollector,
+		},
+		"firmware_inventory_collector": {
+			Prober:                     "firmware_inventory_collector",
+			FirmwareInventoryCollector: DefaultFirmwareInventoryCollector,
 		},
 		"gpu_collector": {
 			Prober:       "gpu_collector",
@@ -103,6 +109,9 @@ func unmarshalViperConfig(v *viper.Viper) (*Config, error) {
 // ChassisCollectorConfig is a prober configuration.
 type ChassisCollectorConfig struct{}
 
+// FirmwareInventoryCollectorConfig is a prober configuration.
+type FirmwareInventoryCollectorConfig struct{}
+
 // GPUCollectorConfig is a prober configuration.
 type GPUCollectorConfig struct{}
 
@@ -128,14 +137,15 @@ type PowershelfCollectorConfig struct{}
 // when executed against a host.
 // Modules are expected to specify a 'prober', and then a particular collector.
 type Module struct {
-	Prober              string                    `mapstructure:"prober"`
-	ChassisCollector    ChassisCollectorConfig    `mapstructure:"chassis_collector"`
-	GPUCollector        GPUCollectorConfig        `mapstructure:"gpu_collector"`
-	JSONCollector       JSONCollectorConfig       `mapstructure:"json_collector"`
-	ManagerCollector    ManagerCollectorConfig    `mapstructure:"manager_collector"`
-	SystemCollector     SystemCollectorConfig     `mapstructure:"system_collector"`
-	TelemetryCollector  TelemetryCollectorConfig  `mapstructure:"telemetry_collector"`
-	PowershelfCollector PowershelfCollectorConfig `mapstructure:"powershelf_collector"`
+	Prober                     string                           `mapstructure:"prober"`
+	ChassisCollector           ChassisCollectorConfig           `mapstructure:"chassis_collector"`
+	FirmwareInventoryCollector FirmwareInventoryCollectorConfig `mapstructure:"firmware_inventory_collector"`
+	GPUCollector               GPUCollectorConfig               `mapstructure:"gpu_collector"`
+	JSONCollector              JSONCollectorConfig              `mapstructure:"json_collector"`
+	ManagerCollector           ManagerCollectorConfig           `mapstructure:"manager_collector"`
+	PowershelfCollector        PowershelfCollectorConfig        `mapstructure:"powershelf_collector"`
+	SystemCollector            SystemCollectorConfig            `mapstructure:"system_collector"`
+	TelemetryCollector         TelemetryCollectorConfig         `mapstructure:"telemetry_collector"`
 }
 
 func (m *Module) Validate() error {

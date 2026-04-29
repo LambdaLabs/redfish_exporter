@@ -20,6 +20,8 @@ loglevel: info
 modules:
   chassis:
     prober: chassis_collector
+  firmware_inventory:
+    prober: firmware_inventory_collector
   gpu:
     prober: gpu_collector
   manager:
