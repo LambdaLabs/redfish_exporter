@@ -25,6 +25,8 @@ var (
 	firmwareInventoryMetrics = createFirmwareInventoryMetricMap()
 )
 
+var _ ContextAwareCollector = (*FirmwareInventoryCollector)(nil)
+
 // FirmwareInventoryCollector implements the prometheus.Collector for firmware inventory metrics.
 type FirmwareInventoryCollector struct {
 	redfishClient         *gofish.APIClient
@@ -38,7 +40,7 @@ func createFirmwareInventoryMetricMap() map[string]Metric {
 	metrics := make(map[string]Metric)
 	addToMetricMap(metrics, FirmwareInventorySubsystem, "state", fmt.Sprintf("firmware inventory state,%s", CommonStateHelp), FirmwareInventoryLabelNames)
 	addToMetricMap(metrics, FirmwareInventorySubsystem, "health", fmt.Sprintf("firmware inventory health,%s", CommonHealthHelp), FirmwareInventoryLabelNames)
-	addToMetricMap(metrics, FirmwareInventorySubsystem, "write_protected", "firmware inventory write protection (1 if write-protected)", FirmwareInventoryLabelNames)
+	addToMetricMap(metrics, FirmwareInventorySubsystem, "write_protected", "firmware inventory write protection (1 if write-protected, 0 if not write-protected or field absent from BMC response)", FirmwareInventoryLabelNames)
 	addToMetricMap(metrics, FirmwareInventorySubsystem, "info", "firmware inventory metadata; always 1. The version label on this metric is the fleet drift signal.", FirmwareInventoryInfoLabelNames)
 	return metrics
 }
@@ -86,7 +88,7 @@ func (f *FirmwareInventoryCollector) collect(ctx context.Context, ch chan<- prom
 		return
 	}
 	logger := f.logger.With(slog.String("collector", "FirmwareInventoryCollector"))
-	service := f.redfishClient.Service
+	service := f.redfishClient.WithContext(ctx).Service
 
 	updateService, err := service.UpdateService()
 	if err != nil {
