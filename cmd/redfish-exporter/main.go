@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -65,17 +66,32 @@ var (
 		Name: "redfish_exporter_unknown_modules_requested_total",
 		Help: "Count of requests specifying a module name not known to this exporter",
 	})
-	// scrapeRequestsTotal counts every scrape attempt per target, regardless of outcome.
-	scrapeRequestsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "redfish_exporter_scrape_requests_total",
-		Help: "Total number of scrape requests received per target, regardless of success or failure.",
-	}, []string{"target"})
-	// scrapeSuccessesTotal counts scrapes where all sub-collectors completed without failure.
-	scrapeSuccessesTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "redfish_exporter_scrape_successes_total",
-		Help: "Total number of scrapes where all sub-collectors completed successfully for the target.",
-	}, []string{"target"})
 )
+
+type diagnosticCounters struct {
+	requests  prometheus.Counter
+	successes prometheus.Counter
+}
+
+var diagnosticCountersByTarget sync.Map // map[string]*diagnosticCounters
+
+func fetchDiagnosticCounters(target string) *diagnosticCounters {
+	if v, ok := diagnosticCountersByTarget.Load(target); ok {
+		return v.(*diagnosticCounters)
+	}
+	tc := &diagnosticCounters{
+		requests: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "redfish_exporter_scrape_requests_total",
+			Help: "Total number of scrape requests received for this target, regardless of success or failure.",
+		}),
+		successes: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "redfish_exporter_scrape_successes_total",
+			Help: "Total number of scrapes where all sub-collectors completed successfully for this target.",
+		}),
+	}
+	actual, _ := diagnosticCountersByTarget.LoadOrStore(target, tc)
+	return actual.(*diagnosticCounters)
+}
 
 func reloadHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -105,8 +121,6 @@ func registerMetaMetrics() {
 	custom := []prometheus.Collector{
 		collectorLastStatus,
 		collectorModuleUnknown,
-		scrapeRequestsTotal,
-		scrapeSuccessesTotal,
 	}
 
 	prometheus.DefaultRegisterer.MustRegister(custom...)
@@ -201,7 +215,8 @@ func metricsHandler() http.HandlerFunc {
 			return
 		}
 
-		scrapeRequestsTotal.WithLabelValues(sr.Target).Inc()
+		tc := fetchDiagnosticCounters(sr.Target)
+		tc.requests.Inc()
 
 		scrapeLogger := ctxLogger.With("scrape_host", sr.Target)
 		rfClientConfig := safeConfig.RedfishClientConfig()
@@ -219,6 +234,10 @@ func metricsHandler() http.HandlerFunc {
 		collectors := buildCollectorsFor(r.Context(), sr.Modules, safeConfig.GetModules(), aggregateCollector.Client(), scrapeLogger)
 		aggregateCollector.WithCollectors(collectors)
 		registry.MustRegister(aggregateCollector)
+		// Register this target's scrape counters on the same per-request registry as the
+		// redfish collectors, so they emit at /redfish?target=X and pick up the same SD
+		// labels (hostname, oob_ip, rack, ...) as every other redfish_* metric.
+		registry.MustRegister(tc.requests, tc.successes)
 		gatherers := prometheus.Gatherers{
 			registry,
 		}
@@ -227,7 +246,7 @@ func metricsHandler() http.HandlerFunc {
 		h.ServeHTTP(w, r)
 
 		if _, failed := aggregateCollector.CollectorOutcome(); failed == 0 {
-			scrapeSuccessesTotal.WithLabelValues(sr.Target).Inc()
+			tc.successes.Inc()
 		}
 	}
 }
