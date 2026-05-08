@@ -295,13 +295,13 @@ func TestScrapeRequestsTotal(t *testing.T) {
 		// at all (e.g. host unreachable, TLS error) must still be counted so gaps in other
 		// metrics can be attributed to collection failure rather than a healthy absence of data.
 		target := "unreachable-failed.test:1"
-		before := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target))
+		before := testutil.ToFloat64(scrapeCountersFor(target).requests)
 
 		w := httptest.NewRecorder()
 		metricsHandler()(w, newScrapeRequest(target, nil))
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.Equal(t, before+1, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target)))
+		assert.Equal(t, before+1, testutil.ToFloat64(scrapeCountersFor(target).requests))
 	})
 
 	t.Run("increments on successful scrape", func(t *testing.T) {
@@ -316,12 +316,12 @@ func TestScrapeRequestsTotal(t *testing.T) {
 		t.Cleanup(rfServer.Close)
 
 		target := rfServer.Listener.Addr().String()
-		before := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target))
+		before := testutil.ToFloat64(scrapeCountersFor(target).requests)
 
 		w := httptest.NewRecorder()
 		metricsHandler()(w, newScrapeRequest(target, nil))
 
-		assert.Equal(t, before+1, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target)))
+		assert.Equal(t, before+1, testutil.ToFloat64(scrapeCountersFor(target).requests))
 	})
 
 	t.Run("counts are per target", func(t *testing.T) {
@@ -329,15 +329,15 @@ func TestScrapeRequestsTotal(t *testing.T) {
 		// scrape count is tracked independently and requests to one target do not affect another.
 		targetA := "per-target-a.test:1"
 		targetB := "per-target-b.test:1"
-		beforeA := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(targetA))
-		beforeB := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(targetB))
+		beforeA := testutil.ToFloat64(scrapeCountersFor(targetA).requests)
+		beforeB := testutil.ToFloat64(scrapeCountersFor(targetB).requests)
 
 		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(targetA, nil))
 		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(targetA, nil))
 		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(targetB, nil))
 
-		assert.Equal(t, beforeA+2, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(targetA)))
-		assert.Equal(t, beforeB+1, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(targetB)))
+		assert.Equal(t, beforeA+2, testutil.ToFloat64(scrapeCountersFor(targetA).requests))
+		assert.Equal(t, beforeB+1, testutil.ToFloat64(scrapeCountersFor(targetB).requests))
 	})
 
 	t.Run("does not increment when scrape request missing from context", func(t *testing.T) {
@@ -345,14 +345,14 @@ func TestScrapeRequestsTotal(t *testing.T) {
 		// request was never injected into the context (i.e. the mustScrapeRequest middleware
 		// was bypassed). These are not genuine scrape attempts and should not be counted.
 		target := "no-context.test:1"
-		before := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target))
+		before := testutil.ToFloat64(scrapeCountersFor(target).requests)
 
 		r := httptest.NewRequest(http.MethodGet, "/redfish", nil)
 		w := httptest.NewRecorder()
 		metricsHandler()(w, r)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.Equal(t, before, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target)))
+		assert.Equal(t, before, testutil.ToFloat64(scrapeCountersFor(target).requests))
 	})
 }
 
@@ -371,35 +371,35 @@ func TestScrapeSuccessesTotal(t *testing.T) {
 		t.Cleanup(rfServer.Close)
 
 		target := rfServer.Listener.Addr().String()
-		before := testutil.ToFloat64(scrapeSuccessesTotal.WithLabelValues(target))
+		before := testutil.ToFloat64(scrapeCountersFor(target).successes)
 
 		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(target, nil))
 
-		assert.Equal(t, before+1, testutil.ToFloat64(scrapeSuccessesTotal.WithLabelValues(target)))
+		assert.Equal(t, before+1, testutil.ToFloat64(scrapeCountersFor(target).successes))
 	})
 
 	t.Run("does not increment when connection fails", func(t *testing.T) {
 		// An unreachable target means NewRedfishCollector fails and no collectors run,
 		// so CollectorOutcome() returns failed > 0 and the success counter must not increment.
 		target := "unreachable-success.test:1"
-		before := testutil.ToFloat64(scrapeSuccessesTotal.WithLabelValues(target))
+		before := testutil.ToFloat64(scrapeCountersFor(target).successes)
 
 		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(target, nil))
 
-		assert.Equal(t, before, testutil.ToFloat64(scrapeSuccessesTotal.WithLabelValues(target)))
+		assert.Equal(t, before, testutil.ToFloat64(scrapeCountersFor(target).successes))
 	})
 
 	t.Run("requests and successes counters are independent", func(t *testing.T) {
 		// Verifies that a failed scrape increments requests but not successes,
 		// so the difference between the two counters reflects the failure count.
 		target := "independent-counters.test:1"
-		beforeReqs := testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target))
-		beforeSucc := testutil.ToFloat64(scrapeSuccessesTotal.WithLabelValues(target))
+		beforeReqs := testutil.ToFloat64(scrapeCountersFor(target).requests)
+		beforeSucc := testutil.ToFloat64(scrapeCountersFor(target).successes)
 
 		metricsHandler()(httptest.NewRecorder(), newScrapeRequest(target, nil))
 
-		assert.Equal(t, beforeReqs+1, testutil.ToFloat64(scrapeRequestsTotal.WithLabelValues(target)))
-		assert.Equal(t, beforeSucc, testutil.ToFloat64(scrapeSuccessesTotal.WithLabelValues(target)))
+		assert.Equal(t, beforeReqs+1, testutil.ToFloat64(scrapeCountersFor(target).requests))
+		assert.Equal(t, beforeSucc, testutil.ToFloat64(scrapeCountersFor(target).successes))
 	})
 }
 
