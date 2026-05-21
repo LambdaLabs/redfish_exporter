@@ -22,6 +22,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/exporter-toolkit/web"
 	"github.com/stmcginnis/gofish"
+	"github.com/stmcginnis/gofish/schemas"
 )
 
 type (
@@ -212,7 +213,12 @@ func metricsHandler() http.HandlerFunc {
 
 		if err != nil {
 			scrapeLogger.With("error", err).Error("unable to create redfish aggregate collector, bailing")
-			http.Error(w, "unable to construct aggregate collector", 500)
+			statusCode := http.StatusInternalServerError
+			var rfErr *schemas.Error
+			if errors.As(err, &rfErr) && rfErr.HTTPReturnedStatusCode != 0 {
+				statusCode = rfErr.HTTPReturnedStatusCode
+			}
+			http.Error(w, fmt.Sprintf("unable to construct aggregate collector: %s", err), statusCode)
 			return
 		}
 
