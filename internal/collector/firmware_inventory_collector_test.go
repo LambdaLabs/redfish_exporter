@@ -123,7 +123,9 @@ func TestFirmwareInventoryCollectorVersionOnlyOnInfoMetric(t *testing.T) {
 
 	// Drift detection requires version to live exclusively on _info; if it leaks onto
 	// _state/_health/_write_protected, every firmware update spawns new time series
-	// for those metrics and breaks historical health queries.
+	// for those metrics and breaks historical health queries. name and manufacturer
+	// are stable across firmware updates and ARE expected on the status metrics
+	// for query/alert ergonomics.
 	for _, m := range collected {
 		switch m.metricName {
 		case "redfish_firmware_inventory_state",
@@ -131,8 +133,10 @@ func TestFirmwareInventoryCollectorVersionOnlyOnInfoMetric(t *testing.T) {
 			"redfish_firmware_inventory_write_protected":
 			require.NotContains(t, m.labels, "version",
 				"version label must not appear on %s (component_id=%s)", m.metricName, m.labels["component_id"])
-			require.NotContains(t, m.labels, "manufacturer",
-				"manufacturer label must not appear on %s (component_id=%s)", m.metricName, m.labels["component_id"])
+			require.Contains(t, m.labels, "name",
+				"name label must appear on %s (component_id=%s)", m.metricName, m.labels["component_id"])
+			require.Contains(t, m.labels, "manufacturer",
+				"manufacturer label must appear on %s (component_id=%s)", m.metricName, m.labels["component_id"])
 		}
 	}
 }

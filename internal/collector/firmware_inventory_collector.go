@@ -15,8 +15,14 @@ import (
 var (
 	FirmwareInventorySubsystem = "firmware_inventory"
 
-	FirmwareInventoryLabelNames     = []string{"component_id"}
-	FirmwareInventoryInfoLabelNames = []string{"component_id", "name", "version", "manufacturer"}
+	// FirmwareInventoryLabelNames are on every firmware_inventory_* metric. name and
+	// manufacturer are stable across firmware updates, so inlining them avoids forcing
+	// `* on(...) group_left(name, manufacturer) _info` joins in every query/alert.
+	FirmwareInventoryLabelNames = []string{"component_id", "name", "manufacturer"}
+	// FirmwareInventoryInfoLabelNames adds version — the only volatile identifier —
+	// so firmware updates churn just _info, leaving _state/_health/_write_protected
+	// on continuous series.
+	FirmwareInventoryInfoLabelNames = []string{"component_id", "name", "manufacturer", "version"}
 
 	// Id-prefix exclusions: inactive recovery / standby / staged-update slots
 	// that would generate false drift alerts if surfaced as fleet metrics.
@@ -115,7 +121,7 @@ func (f *FirmwareInventoryCollector) collect(ctx context.Context, ch chan<- prom
 			continue
 		}
 
-		labelValues := []string{item.ID}
+		labelValues := []string{item.ID, item.Name, item.Manufacturer}
 
 		if v, ok := parseCommonStatusState(item.Status.State); ok {
 			ch <- prometheus.MustNewConstMetric(f.metrics["firmware_inventory_state"].desc, prometheus.GaugeValue, v, labelValues...)
@@ -125,7 +131,7 @@ func (f *FirmwareInventoryCollector) collect(ctx context.Context, ch chan<- prom
 		}
 		ch <- prometheus.MustNewConstMetric(f.metrics["firmware_inventory_write_protected"].desc, prometheus.GaugeValue, boolToFloat64(item.WriteProtected), labelValues...)
 
-		infoLabelValues := []string{item.ID, item.Name, item.Version, item.Manufacturer}
+		infoLabelValues := append(labelValues, item.Version)
 		ch <- prometheus.MustNewConstMetric(f.metrics["firmware_inventory_info"].desc, prometheus.GaugeValue, 1, infoLabelValues...)
 	}
 
