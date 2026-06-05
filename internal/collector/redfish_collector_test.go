@@ -7,6 +7,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/stmcginnis/gofish/schemas"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -280,4 +281,36 @@ func TestCollect_EmitsGauges(t *testing.T) {
 		assert.Equal(t, float64(rc.collectorsSucceeded.Load()), succeeded)
 		assert.Equal(t, float64(rc.collectorsFailed.Load()), failed)
 	})
+}
+
+func TestParseCommonStatusState(t *testing.T) {
+	cases := []struct {
+		name   string
+		input  schemas.State
+		want   float64
+		wantOK bool
+	}{
+		{"empty", "", 0, false},
+		{"Enabled", "Enabled", 1, true},
+		{"Disabled", "Disabled", 2, true},
+		{"StandbyOffinline (preserved typo)", "StandbyOffinline", 3, true},
+		{"StandbyOffline (correct spelling, same code)", "StandbyOffline", 3, true},
+		{"StandbySpare", "StandbySpare", 4, true},
+		{"InTest", "InTest", 5, true},
+		{"Starting", "Starting", 6, true},
+		{"Absent", "Absent", 7, true},
+		{"UnavailableOffline", "UnavailableOffline", 8, true},
+		{"Deferring", "Deferring", 9, true},
+		{"Quiesced", "Quiesced", 10, true},
+		{"Updating", "Updating", 11, true},
+		{"Standby (non-standard, seen on LITE-ON PSUs)", "Standby", 12, true},
+		{"unrecognized value", "Bogus", 0, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := parseCommonStatusState(tc.input)
+			assert.Equal(t, tc.wantOK, ok)
+			assert.Equal(t, tc.want, got)
+		})
+	}
 }

@@ -1,0 +1,16 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_powerfactor",
+  "@odata.type": "#Sensor.v1_10_1.Sensor",
+  "Id": "ps6_powerfactor",
+  "Name": "ps6 powerfactor",
+  "PhysicalContext": "PowerSupply",
+  "Reading": 82.88,
+  "ReadingRangeMax": null,
+  "ReadingRangeMin": null,
+  "ReadingType": "Percent",
+  "ReadingUnits": "%",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  }
+}

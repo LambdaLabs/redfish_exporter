@@ -1,0 +1,16 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_total_energy_in",
+  "@odata.type": "#Sensor.v1_10_1.Sensor",
+  "Id": "ps1_total_energy_in",
+  "Name": "ps1 total energy in",
+  "PhysicalContext": "PowerSupply",
+  "Reading": 46.15,
+  "ReadingRangeMax": null,
+  "ReadingRangeMin": null,
+  "ReadingType": "EnergykWh",
+  "ReadingUnits": "kWh",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  }
+}

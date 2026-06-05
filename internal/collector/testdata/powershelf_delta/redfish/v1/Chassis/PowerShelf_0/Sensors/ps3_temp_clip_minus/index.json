@@ -1,0 +1,16 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_temp_clip_minus",
+  "@odata.type": "#Sensor.v1_10_1.Sensor",
+  "Id": "ps3_temp_clip_minus",
+  "Name": "ps3 temp clip minus",
+  "PhysicalContext": "PowerSupply",
+  "Reading": 46,
+  "ReadingRangeMax": null,
+  "ReadingRangeMin": null,
+  "ReadingType": "Temperature",
+  "ReadingUnits": "Cel",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  }
+}

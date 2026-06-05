@@ -1,0 +1,10 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/Server_0",
+  "@odata.type": "#Chassis.v1_25_0.Chassis",
+  "Id": "Server_0",
+  "Name": "Server_0",
+  "ChassisType": "RackMount",
+  "Manufacturer": "NVIDIA",
+  "Model": "Some GPU Box",
+  "Status": {"Health": "OK", "State": "Enabled"}
+}

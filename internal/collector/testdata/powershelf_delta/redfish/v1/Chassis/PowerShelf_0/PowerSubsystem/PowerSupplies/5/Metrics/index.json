@@ -1,0 +1,53 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/PowerSubsystem/PowerSupplies/5/Metrics",
+  "@odata.type": "#PowerSupplyMetrics.v1_1_2.PowerSupplyMetrics",
+  "EnergykWh": {
+    "DataSourceUri": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_energy_in",
+    "LifetimeReading": 132.92764888888888,
+    "Reading": 0.06108888888888889
+  },
+  "FanSpeedPercent": {
+    "DataSourceUri": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_fan1",
+    "SpeedRPM": 6960
+  },
+  "Id": "Metrics",
+  "InputCurrentAmps": {
+    "DataSourceUri": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_input_current",
+    "Reading": 0.78
+  },
+  "InputPowerWatts": {
+    "DataSourceUri": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_input_power",
+    "Reading": 263
+  },
+  "InputVoltage": {
+    "DataSourceUri": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_input_voltage",
+    "Reading": 241.5
+  },
+  "Name": "Metrics for Power Supply 5",
+  "OutputPowerWatts": {
+    "DataSourceUri": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_output_power",
+    "Reading": 252
+  },
+  "RailCurrentAmps": [
+    {
+      "DataSourceUri": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_output_current",
+      "Reading": 5.04
+    }
+  ],
+  "RailPowerWatts": [
+    {
+      "DataSourceUri": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_output_power",
+      "Reading": 252
+    }
+  ],
+  "RailVoltage": [
+    {
+      "DataSourceUri": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_output_voltage",
+      "Reading": 49.9
+    }
+  ],
+  "TemperatureCelsius": {
+    "DataSourceUri": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_temp_hotspot",
+    "Reading": 60
+  }
+}

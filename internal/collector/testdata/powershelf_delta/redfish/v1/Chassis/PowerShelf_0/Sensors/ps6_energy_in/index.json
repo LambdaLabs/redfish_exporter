@@ -1,0 +1,16 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_energy_in",
+  "@odata.type": "#Sensor.v1_10_1.Sensor",
+  "Id": "ps6_energy_in",
+  "Name": "ps6 energy in",
+  "PhysicalContext": "PowerSupply",
+  "Reading": 284319,
+  "ReadingRangeMax": null,
+  "ReadingRangeMin": null,
+  "ReadingType": "EnergyJoules",
+  "ReadingUnits": "J",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  }
+}

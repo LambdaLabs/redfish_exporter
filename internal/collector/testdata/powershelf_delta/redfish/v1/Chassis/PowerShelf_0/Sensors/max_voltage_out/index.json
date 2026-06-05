@@ -1,0 +1,30 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/max_voltage_out",
+  "@odata.type": "#Sensor.v1_10_1.Sensor",
+  "Id": "max_voltage_out",
+  "Name": "max voltage out",
+  "PhysicalContext": "Chassis",
+  "Reading": 49.9,
+  "ReadingRangeMax": null,
+  "ReadingRangeMin": null,
+  "ReadingType": "Voltage",
+  "ReadingUnits": "V",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  },
+  "Thresholds": {
+    "LowerCaution": {
+      "Reading": null
+    },
+    "LowerCritical": {
+      "Reading": null
+    },
+    "UpperCaution": {
+      "Reading": null
+    },
+    "UpperCritical": {
+      "Reading": null
+    }
+  }
+}

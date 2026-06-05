@@ -1,0 +1,30 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/total_power_in_A",
+  "@odata.type": "#Sensor.v1_10_1.Sensor",
+  "Id": "total_power_in_A",
+  "Name": "total power in A",
+  "PhysicalContext": "Chassis",
+  "Reading": 1749,
+  "ReadingRangeMax": null,
+  "ReadingRangeMin": null,
+  "ReadingType": "Power",
+  "ReadingUnits": "W",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  },
+  "Thresholds": {
+    "LowerCaution": {
+      "Reading": null
+    },
+    "LowerCritical": {
+      "Reading": null
+    },
+    "UpperCaution": {
+      "Reading": null
+    },
+    "UpperCritical": {
+      "Reading": null
+    }
+  }
+}

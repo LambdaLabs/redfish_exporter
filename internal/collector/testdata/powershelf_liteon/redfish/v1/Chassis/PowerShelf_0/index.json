@@ -1,0 +1,56 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0",
+  "@odata.type": "#Chassis.v1_22_0.Chassis",
+  "Actions": {
+    "#Chassis.ForceOff": {
+      "@Redfish.ActionInfo": "/redfish/v1/Chassis/PowerShelf_0/ForceOffActionInfo",
+      "target": "/redfish/v1/Chassis/PowerShelf_0/Actions/Chassis.ForceOff"
+    },
+    "#Chassis.On": {
+      "@Redfish.ActionInfo": "/redfish/v1/Chassis/PowerShelf_0/OnActionInfo",
+      "target": "/redfish/v1/Chassis/PowerShelf_0/Actions/Chassis.On"
+    },
+    "#Chassis.Reset": {
+      "@Redfish.ActionInfo": "/redfish/v1/Chassis/PowerShelf_0/ResetActionInfo",
+      "target": "/redfish/v1/Chassis/PowerShelf_0/Actions/Chassis.Reset"
+    }
+  },
+  "ChassisType": "Shelf",
+  "HardwareVersion": "X1",
+  "Id": "PowerShelf_0",
+  "IndicatorLED": "Off",
+  "InputSourceNum": 1,
+  "Links": {
+    "Chassis": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/PowerShelf_0"
+      }
+    ],
+    "ManagedBy": [
+      {
+        "@odata.id": "/redfish/v1/Managers/bmc"
+      }
+    ]
+  },
+  "Manufacturer": "LITE-ON TECHNOLOGY CORP.",
+  "MaxPowerWatts": 33000,
+  "Model": "PF-1333-7RB",
+  "Name": "PowerShelf_0",
+  "PartNumber": "PF-1333-7RB",
+  "PowerState": "On",
+  "PowerSubsystem": {
+    "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/PowerSubsystem"
+  },
+  "Sensors": {
+    "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors"
+  },
+  "SerialNumber": "REDACTED",
+  "Status": {
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Standby"
+  },
+  "Thermal": {
+    "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Thermal"
+  }
+}

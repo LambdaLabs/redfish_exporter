@@ -442,7 +442,7 @@ redfish_gpu_nvlink_runtime_error{gpu_id="GPU_3",port_id="NVLink_6",port_protocol
 redfish_gpu_nvlink_runtime_error{gpu_id="GPU_3",port_id="NVLink_7",port_protocol="NVLink",port_type="BidirectionalPort",system_id="HGX_Baseboard_0"} 0
 redfish_gpu_nvlink_runtime_error{gpu_id="GPU_3",port_id="NVLink_8",port_protocol="NVLink",port_type="BidirectionalPort",system_id="HGX_Baseboard_0"} 0
 redfish_gpu_nvlink_runtime_error{gpu_id="GPU_3",port_id="NVLink_9",port_protocol="NVLink",port_type="BidirectionalPort",system_id="HGX_Baseboard_0"} 0
-# HELP redfish_gpu_nvlink_state NVLink port state,1(Enabled),2(Disabled),3(StandbyOffinline),4(StandbySpare),5(InTest),6(Starting),7(Absent),8(UnavailableOffline),9(Deferring),10(Quiesced),11(Updating)
+# HELP redfish_gpu_nvlink_state NVLink port state,1(Enabled),2(Disabled),3(StandbyOffinline),4(StandbySpare),5(InTest),6(Starting),7(Absent),8(UnavailableOffline),9(Deferring),10(Quiesced),11(Updating),12(Standby)
 # TYPE redfish_gpu_nvlink_state gauge
 redfish_gpu_nvlink_state{gpu_id="GPU_0",port_id="NVLink_0",port_protocol="NVLink",port_type="BidirectionalPort",system_id="HGX_Baseboard_0"} 1
 redfish_gpu_nvlink_state{gpu_id="GPU_0",port_id="NVLink_1",port_protocol="NVLink",port_type="BidirectionalPort",system_id="HGX_Baseboard_0"} 1

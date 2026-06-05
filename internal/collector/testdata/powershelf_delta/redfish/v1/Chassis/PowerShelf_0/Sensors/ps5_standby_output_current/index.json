@@ -1,0 +1,16 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_standby_output_current",
+  "@odata.type": "#Sensor.v1_10_1.Sensor",
+  "Id": "ps5_standby_output_current",
+  "Name": "ps5 standby output current",
+  "PhysicalContext": "PowerSupply",
+  "Reading": 0,
+  "ReadingRangeMax": null,
+  "ReadingRangeMin": null,
+  "ReadingType": "Current",
+  "ReadingUnits": "A",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  }
+}

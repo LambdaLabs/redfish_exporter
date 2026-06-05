@@ -1,0 +1,16 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/hotswap_output_voltage",
+  "@odata.type": "#Sensor.v1_10_1.Sensor",
+  "Id": "hotswap_output_voltage",
+  "Name": "hotswap output voltage",
+  "PhysicalContext": "Chassis",
+  "Reading": 49.83,
+  "ReadingRangeMax": null,
+  "ReadingRangeMin": null,
+  "ReadingType": "Voltage",
+  "ReadingUnits": "V",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  }
+}

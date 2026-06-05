@@ -1,0 +1,30 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/total_efficiency",
+  "@odata.type": "#Sensor.v1_10_1.Sensor",
+  "Id": "total_efficiency",
+  "Name": "total efficiency",
+  "PhysicalContext": "Chassis",
+  "Reading": 95.84,
+  "ReadingRangeMax": null,
+  "ReadingRangeMin": null,
+  "ReadingType": "Percent",
+  "ReadingUnits": "%",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  },
+  "Thresholds": {
+    "LowerCaution": {
+      "Reading": null
+    },
+    "LowerCritical": {
+      "Reading": null
+    },
+    "UpperCaution": {
+      "Reading": null
+    },
+    "UpperCritical": {
+      "Reading": null
+    }
+  }
+}

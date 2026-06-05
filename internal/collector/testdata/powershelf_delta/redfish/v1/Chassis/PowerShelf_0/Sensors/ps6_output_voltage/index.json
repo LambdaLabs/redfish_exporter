@@ -1,0 +1,16 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_output_voltage",
+  "@odata.type": "#Sensor.v1_10_1.Sensor",
+  "Id": "ps6_output_voltage",
+  "Name": "ps6 output voltage",
+  "PhysicalContext": "PowerSupply",
+  "Reading": 49.89,
+  "ReadingRangeMax": 60,
+  "ReadingRangeMin": 0,
+  "ReadingType": "Voltage",
+  "ReadingUnits": "V",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  }
+}

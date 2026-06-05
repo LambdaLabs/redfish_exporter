@@ -1,0 +1,16 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_temp_hotspot",
+  "@odata.type": "#Sensor.v1_10_1.Sensor",
+  "Id": "ps1_temp_hotspot",
+  "Name": "ps1 temp hotspot",
+  "PhysicalContext": "PowerSupply",
+  "Reading": 66,
+  "ReadingRangeMax": null,
+  "ReadingRangeMin": null,
+  "ReadingType": "Temperature",
+  "ReadingUnits": "Cel",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  }
+}

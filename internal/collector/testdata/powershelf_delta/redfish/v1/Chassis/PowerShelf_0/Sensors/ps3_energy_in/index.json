@@ -1,0 +1,16 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_energy_in",
+  "@odata.type": "#Sensor.v1_10_1.Sensor",
+  "Id": "ps3_energy_in",
+  "Name": "ps3 energy in",
+  "PhysicalContext": "PowerSupply",
+  "Reading": 273839,
+  "ReadingRangeMax": null,
+  "ReadingRangeMin": null,
+  "ReadingType": "EnergyJoules",
+  "ReadingUnits": "J",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  }
+}

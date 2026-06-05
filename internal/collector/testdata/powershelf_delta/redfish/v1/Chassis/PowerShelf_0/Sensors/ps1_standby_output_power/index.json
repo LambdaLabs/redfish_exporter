@@ -1,0 +1,16 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_standby_output_power",
+  "@odata.type": "#Sensor.v1_10_1.Sensor",
+  "Id": "ps1_standby_output_power",
+  "Name": "ps1 standby output power",
+  "PhysicalContext": "PowerSupply",
+  "Reading": 0,
+  "ReadingRangeMax": null,
+  "ReadingRangeMin": null,
+  "ReadingType": "Power",
+  "ReadingUnits": "W",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  }
+}

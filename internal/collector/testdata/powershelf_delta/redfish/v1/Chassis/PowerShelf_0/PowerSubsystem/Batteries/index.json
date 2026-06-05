@@ -1,0 +1,7 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/PowerSubsystem/Batteries",
+  "@odata.type": "#BatteryCollection.BatteryCollection",
+  "Members": [],
+  "Members@odata.count": 0,
+  "Name": "Battery Collection"
+}

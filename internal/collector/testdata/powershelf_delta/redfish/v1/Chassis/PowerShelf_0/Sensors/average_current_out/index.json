@@ -1,0 +1,30 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/average_current_out",
+  "@odata.type": "#Sensor.v1_10_1.Sensor",
+  "Id": "average_current_out",
+  "Name": "average current out",
+  "PhysicalContext": "Chassis",
+  "Reading": 5.59,
+  "ReadingRangeMax": null,
+  "ReadingRangeMin": null,
+  "ReadingType": "Current",
+  "ReadingUnits": "A",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  },
+  "Thresholds": {
+    "LowerCaution": {
+      "Reading": null
+    },
+    "LowerCritical": {
+      "Reading": null
+    },
+    "UpperCaution": {
+      "Reading": null
+    },
+    "UpperCritical": {
+      "Reading": null
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_input_voltage",
+  "@odata.type": "#Sensor.v1_10_1.Sensor",
+  "Id": "ps4_input_voltage",
+  "Name": "ps4 input voltage",
+  "PhysicalContext": "PowerSupply",
+  "Reading": 241.25,
+  "ReadingRangeMax": 300,
+  "ReadingRangeMin": 0,
+  "ReadingType": "Voltage",
+  "ReadingUnits": "V",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  }
+}

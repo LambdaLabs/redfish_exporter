@@ -1,0 +1,16 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_fan2",
+  "@odata.type": "#Sensor.v1_10_1.Sensor",
+  "Id": "ps5_fan2",
+  "Name": "ps5 fan2",
+  "PhysicalContext": "PowerSupply",
+  "Reading": 0,
+  "ReadingRangeMax": null,
+  "ReadingRangeMin": null,
+  "ReadingType": "Rotational",
+  "ReadingUnits": "RPM",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  }
+}
