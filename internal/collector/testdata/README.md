@@ -66,6 +66,34 @@ For instance, `/redfish/v1/Systems` will return a JSON response typically for al
 To return these "unnamed" endpoints' data, the response MUST be represented in `testdata/` directories as a file `index.json`.
 The test helpers will read and respond accordingly.
 
+### Expanded collections (avoid one file per member)
+
+A naive capture of a large collection (e.g. a powershelf `Sensors` collection with 140+ sensors)
+produces a collection `index.json` whose `Members` are bare `@odata.id` references, plus one
+`<member>/index.json` directory per member. gofish then fetches each member individually, so the
+fixture balloons to hundreds of tiny files.
+
+Prefer the **expanded-member** form instead: inline each member's full object directly into the
+collection's `Members` array — exactly what a BMC returns for `GET .../Sensors?$expand=*`. gofish's
+`GetCollectionObjects` uses an inlined member directly when it carries an `Id` (`entity.GetID() != ""`)
+and skips the per-member HTTP fetch, so no `<member>/index.json` files are needed at all.
+
+``` jsonc
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors",
+  "@odata.type": "#SensorCollection.SensorCollection",
+  "Members": [
+    { "@odata.id": ".../Sensors/ps1_input_voltage", "Id": "ps1_input_voltage", "Reading": 241.5, "ReadingType": "Voltage", ... },
+    { "@odata.id": ".../Sensors/ps1_input_current", "Id": "ps1_input_current", "Reading": 4.2,   "ReadingType": "Current", ... }
+  ],
+  "Members@odata.count": 2
+}
+```
+
+The `powershelf_delta` and `powershelf_liteon` fixtures use this form. Capture with
+`curl -sk "https://<user>:<password>@<redfish-ip>/redfish/v1/Chassis/<id>/Sensors?\$expand=*"` to get
+the expanded payload directly.
+
 ### `golden` directories
 
 Golden files generally allow for representing expected string outputs of a test, for comparison.

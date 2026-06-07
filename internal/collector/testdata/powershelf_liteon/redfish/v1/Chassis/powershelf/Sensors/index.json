@@ -4,220 +4,2092 @@
   "Description": "Collection of Sensors for this Chassis",
   "Members": [
     {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_chassis_input_current"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_chassis_output_current"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_ishare"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p0_iin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p0_iout"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p1_iin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p1_iout"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p2_iin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p2_iout"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p3_iin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p3_iout"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p4_iin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p4_iout"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p5_iin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p5_iout"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/fantach_p0_fan1"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/fantach_p1_fan1"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/fantach_p2_fan1"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/fantach_p3_fan1"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/fantach_p4_fan1"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/fantach_p5_fan1"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_chassis_input_power"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_chassis_output_power"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p0_pin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p0_pout"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p1_pin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p1_pout"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p2_pin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p2_pout"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p3_pin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p3_pout"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p4_pin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p4_pout"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p5_pin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p5_pout"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_DC_temp_minus"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_DC_temp_plus"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_chassis_temperature"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p0_ambient"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p0_exhaust"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p0_hotspot"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p1_ambient"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p1_exhaust"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p1_hotspot"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p2_ambient"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p2_exhaust"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p2_hotspot"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p3_ambient"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p3_exhaust"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p3_hotspot"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p4_ambient"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p4_exhaust"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p4_hotspot"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p5_ambient"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p5_exhaust"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p5_hotspot"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/utilization_chassis_efficiency"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/utilization_chassis_load"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_chassis_input_voltage"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_chassis_output_voltage"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p0_vin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p0_vout"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p1_vin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p1_vout"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p2_vin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p2_vout"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p3_vin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p3_vout"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p4_vin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p4_vout"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p5_vin"
-    },
-    {
-      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p5_vout"
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_chassis_input_current",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "chassis_input_current",
+      "Name": "chassis input current",
+      "Reading": 17.61,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_chassis_output_current",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "chassis_output_current",
+      "Name": "chassis output current",
+      "Reading": 79.06,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_ishare",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "ishare",
+      "Name": "ishare",
+      "Reading": 14.386576184237866,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p0_iin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p0_iin",
+      "Name": "p0 iin",
+      "Reading": 3.14,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p0_iout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p0_iout",
+      "Name": "p0 iout",
+      "Reading": 14.23,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p1_iin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p1_iin",
+      "Name": "p1 iin",
+      "Reading": 2.84,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p1_iout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p1_iout",
+      "Name": "p1 iout",
+      "Reading": 12.62,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p2_iin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p2_iin",
+      "Name": "p2 iin",
+      "Reading": 2.83,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p2_iout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p2_iout",
+      "Name": "p2 iout",
+      "Reading": 12.53,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p3_iin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p3_iin",
+      "Name": "p3 iin",
+      "Reading": 3.11,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p3_iout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p3_iout",
+      "Name": "p3 iout",
+      "Reading": 14.04,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p4_iin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p4_iin",
+      "Name": "p4 iin",
+      "Reading": 2.84,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p4_iout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p4_iout",
+      "Name": "p4 iout",
+      "Reading": 12.76,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p5_iin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p5_iin",
+      "Name": "p5 iin",
+      "Reading": 2.84,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/current_p5_iout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p5_iout",
+      "Name": "p5 iout",
+      "Reading": 12.71,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/fantach_p0_fan1",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p0_fan1",
+      "Name": "p0 fan1",
+      "Reading": 6016,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/fantach_p1_fan1",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p1_fan1",
+      "Name": "p1 fan1",
+      "Reading": 5824,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/fantach_p2_fan1",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p2_fan1",
+      "Name": "p2 fan1",
+      "Reading": 5888,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/fantach_p3_fan1",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p3_fan1",
+      "Name": "p3 fan1",
+      "Reading": 5952,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/fantach_p4_fan1",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p4_fan1",
+      "Name": "p4 fan1",
+      "Reading": 5888,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/fantach_p5_fan1",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p5_fan1",
+      "Name": "p5 fan1",
+      "Reading": 5888,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_chassis_input_power",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "chassis_input_power",
+      "Name": "chassis input power",
+      "Reading": 4252,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_chassis_output_power",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "chassis_output_power",
+      "Name": "chassis output power",
+      "Reading": 3928,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p0_pin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p0_pin",
+      "Name": "p0 pin",
+      "Reading": 759,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p0_pout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p0_pout",
+      "Name": "p0 pout",
+      "Reading": 711,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p1_pin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p1_pin",
+      "Name": "p1 pin",
+      "Reading": 689,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p1_pout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p1_pout",
+      "Name": "p1 pout",
+      "Reading": 625,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p2_pin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p2_pin",
+      "Name": "p2 pin",
+      "Reading": 683,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p2_pout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p2_pout",
+      "Name": "p2 pout",
+      "Reading": 621,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p3_pin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p3_pin",
+      "Name": "p3 pin",
+      "Reading": 754,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p3_pout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p3_pout",
+      "Name": "p3 pout",
+      "Reading": 698,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p4_pin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p4_pin",
+      "Name": "p4 pin",
+      "Reading": 688,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p4_pout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p4_pout",
+      "Name": "p4 pout",
+      "Reading": 642,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p5_pin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p5_pin",
+      "Name": "p5 pin",
+      "Reading": 677,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/power_p5_pout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p5_pout",
+      "Name": "p5 pout",
+      "Reading": 633,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_DC_temp_minus",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "DC_temp_minus",
+      "Name": "DC temp minus",
+      "Reading": 45.11677570565016,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_DC_temp_plus",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "DC_temp_plus",
+      "Name": "DC temp plus",
+      "Reading": 45.00113334316987,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_chassis_temperature",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "chassis_temperature",
+      "Name": "chassis temperature",
+      "Reading": 26.45,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p0_ambient",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p0_ambient",
+      "Name": "p0 ambient",
+      "Reading": 26.5,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p0_exhaust",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p0_exhaust",
+      "Name": "p0 exhaust",
+      "Reading": 49.25,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p0_hotspot",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p0_hotspot",
+      "Name": "p0 hotspot",
+      "Reading": 52.5,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p1_ambient",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p1_ambient",
+      "Name": "p1 ambient",
+      "Reading": 26.5,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p1_exhaust",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p1_exhaust",
+      "Name": "p1 exhaust",
+      "Reading": 49.5,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p1_hotspot",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p1_hotspot",
+      "Name": "p1 hotspot",
+      "Reading": 54.5,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p2_ambient",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p2_ambient",
+      "Name": "p2 ambient",
+      "Reading": 26.25,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p2_exhaust",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p2_exhaust",
+      "Name": "p2 exhaust",
+      "Reading": 48.5,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p2_hotspot",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p2_hotspot",
+      "Name": "p2 hotspot",
+      "Reading": 51,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p3_ambient",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p3_ambient",
+      "Name": "p3 ambient",
+      "Reading": 26.25,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p3_exhaust",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p3_exhaust",
+      "Name": "p3 exhaust",
+      "Reading": 49.75,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p3_hotspot",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p3_hotspot",
+      "Name": "p3 hotspot",
+      "Reading": 52.25,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p4_ambient",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p4_ambient",
+      "Name": "p4 ambient",
+      "Reading": 26.5,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p4_exhaust",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p4_exhaust",
+      "Name": "p4 exhaust",
+      "Reading": 49.25,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p4_hotspot",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p4_hotspot",
+      "Name": "p4 hotspot",
+      "Reading": 53.75,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p5_ambient",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p5_ambient",
+      "Name": "p5 ambient",
+      "Reading": 26.25,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p5_exhaust",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p5_exhaust",
+      "Name": "p5 exhaust",
+      "Reading": 49,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/temperature_p5_hotspot",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p5_hotspot",
+      "Name": "p5 hotspot",
+      "Reading": 51.25,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/utilization_chassis_efficiency",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "chassis_efficiency",
+      "Name": "chassis efficiency",
+      "Reading": 92.3964,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Percent",
+      "ReadingUnits": "%",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/utilization_chassis_load",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "chassis_load",
+      "Name": "chassis load",
+      "Reading": 11.8818,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Percent",
+      "ReadingUnits": "%",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_chassis_input_voltage",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "chassis_input_voltage",
+      "Name": "chassis input voltage",
+      "Reading": 239.87,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_chassis_output_voltage",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "chassis_output_voltage",
+      "Name": "chassis output voltage",
+      "Reading": 49.73,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p0_vin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p0_vin",
+      "Name": "p0 vin",
+      "Reading": 240.25,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p0_vout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p0_vout",
+      "Name": "p0 vout",
+      "Reading": 49.85,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p1_vin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p1_vin",
+      "Name": "p1 vin",
+      "Reading": 240,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p1_vout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p1_vout",
+      "Name": "p1 vout",
+      "Reading": 49.76,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p2_vin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p2_vin",
+      "Name": "p2 vin",
+      "Reading": 240.5,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p2_vout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p2_vout",
+      "Name": "p2 vout",
+      "Reading": 49.6,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p3_vin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p3_vin",
+      "Name": "p3 vin",
+      "Reading": 239.75,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p3_vout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p3_vout",
+      "Name": "p3 vout",
+      "Reading": 49.73,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p4_vin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p4_vin",
+      "Name": "p4 vin",
+      "Reading": 239.5,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p4_vout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p4_vout",
+      "Name": "p4 vout",
+      "Reading": 49.81,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p5_vin",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p5_vin",
+      "Name": "p5 vin",
+      "Reading": 240.25,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/powershelf/Sensors/voltage_p5_vout",
+      "@odata.type": "#Sensor.v1_0_0.Sensor",
+      "Id": "p5_vout",
+      "Name": "p5 vout",
+      "Reading": 49.66,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
     }
   ],
   "Members@odata.count": 72,
