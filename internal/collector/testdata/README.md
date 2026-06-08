@@ -130,6 +130,7 @@ In cases where added middleware is necessary (like to add artifical latency on c
 curl -sk "https://<user>:<password>@<redfish-ip>/some/path/here" | jq | xsel -ib
 ```
 will format the response and copy it to the system clipboard for pasting.
+- **Fixture only what the collector fetches** - A raw capture mirrors the entire BMC tree, but a fixture only needs the endpoints the collector under test actually requests. Trim everything else: gofish never GETs a path the collector doesn't navigate to, so unfetched endpoints (e.g. `ThermalSubsystem`, `Batteries`, `Oem/*` for the powershelf collector) are dead weight. This is the single biggest lever on fixture file count — the powershelf fixtures dropped from ~140 files per SUT to <10 by combining [expanded collections](#expanded-collections-avoid-one-file-per-member) with this rule.
 - **Naming `testdata/` directories** - Again, model these for either a SUT or a particular test case
 - **Remove UUIDs and Serial Numbers** - This is the most painful bit. We'd prefer to anonymize both UUIDs and Serial Numbers of hardware, so take a cursory look and replace with some placeholder for those fields. If the behavior being tested does not need them, consider even removing the fields entirely.
 

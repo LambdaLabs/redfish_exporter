@@ -35,10 +35,11 @@ var liteonShelfSensor = map[string]string{
 }
 
 // TODO: SKIPPED LITE-ON metrics
-//   frequency_p<N>_freqin (6, ReadingType=Frequency, ~60Hz) — these endpoints exist in the
-//   capture but are NOT Members of the powershelf/Sensors collection, so chassis.Sensors()
-//   never returns them. Needs either a direct-by-path fetch or confirmation the live BMC
-//   lists them. Would map to per-PSU input_frequency once available.
+//   frequency_p<N>_freqin (6, ReadingType=Frequency, ~60Hz) — these endpoints exist on the
+//   device but are NOT Members of the powershelf/Sensors collection, so chassis.Sensors()
+//   never returns them (and they are omitted from the trimmed test fixture). Needs either a
+//   direct-by-path fetch or confirmation the live BMC lists them. Would map to per-PSU
+//   input_frequency once available.
 
 type liteonAdapter struct{}
 

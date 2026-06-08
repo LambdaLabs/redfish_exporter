@@ -1,4 +1,4 @@
-.PHONY: benchmark build test mock-test capture clean help lint fmt fmt-check gotests unit-test integration-test coverage check ci perf-mock perf-live perf-help
+.PHONY: benchmark build test mock-test capture clean help lint fmt fmt-check gotests unit-test integration-test coverage check ci perf-mock perf-live perf-help validate-live
 
 # Default target
 help:
@@ -14,6 +14,7 @@ help:
 	@echo "  check       - Run fmt, lint, and test (dev workflow)"
 	@echo "  ci          - Run all CI checks"
 	@echo "  mock-test   - Run mock server with exporter for testing"
+	@echo "  validate-live - Scrape a live system and assert metrics are healthy"
 	@echo "  capture     - Capture Redfish data from a BMC"
 	@echo "  perf-mock   - Run performance analysis against mock server"
 	@echo "  perf-live   - Run performance analysis against live system"
@@ -26,6 +27,10 @@ help:
 	@echo ""
 	@echo "For capture, specify HOST, USER, PASS, and OUTPUT:"
 	@echo "  make capture HOST=10.0.0.1 USER=admin PASS=password OUTPUT=mysystem"
+	@echo ""
+	@echo "For validate-live, specify TARGET (and optionally MODULES + credentials):"
+	@echo "  make validate-live TARGET=10.0.0.1"
+	@echo "  REDFISH_USER=admin REDFISH_PASS=pass make validate-live TARGET=10.0.0.1 MODULES=powershelf"
 
 # Build the exporter
 build:
@@ -76,6 +81,28 @@ capture:
 	@echo ""
 	@echo "Capture complete! To test with mock server:"
 	@echo "  make mock-test TESTDATA=$(OUTPUT)/capture.txt"
+
+# Validate the exporter against a live Redfish system
+validate-live:
+	@if [ -z "$(TARGET)" ]; then \
+		echo "Error: TARGET is required"; \
+		echo "Usage: make validate-live TARGET=<ip-or-host[:port]>"; \
+		echo ""; \
+		echo "Optional parameters:"; \
+		echo "  MODULES=powershelf,chassis  - Modules to request (default: built-in bundle; powershelf NOT included)"; \
+		echo "  REDFISH_USER=admin          - Username (with REDFISH_PASS, generates a temp config)"; \
+		echo "  REDFISH_PASS=pass           - Password"; \
+		echo "  CONFIG_FILE=config.yml      - Existing config to use when no credentials are given"; \
+		echo "  EXPORTER_PORT=9613          - Local exporter port"; \
+		echo ""; \
+		echo "Examples:"; \
+		echo "  make validate-live TARGET=192.168.1.100"; \
+		echo "  REDFISH_USER=admin REDFISH_PASS=pass make validate-live TARGET=192.168.1.100 MODULES=powershelf"; \
+		exit 1; \
+	fi
+	@TARGET="$(TARGET)" MODULES="$(MODULES)" REDFISH_USER="$(REDFISH_USER)" REDFISH_PASS="$(REDFISH_PASS)" \
+		CONFIG_FILE="$(CONFIG_FILE)" EXPORTER_PORT="$(EXPORTER_PORT)" \
+		./tools/validate-live/validate.sh
 
 # Clean build artifacts
 clean:
