@@ -9,6 +9,10 @@ import (
 
 var deltaPSURe = regexp.MustCompile(`^ps(\d+)_(.+)$`)
 
+// deltaCounters lists the Delta per-PSU metric <name>s that are Prometheus counters
+// (accumulating registers) rather than gauges. Everything else is a gauge.
+var deltaCounters = map[string]bool{"total_energy_in": true}
+
 type deltaAdapter struct{}
 
 func (a *deltaAdapter) name() string { return "delta" }
@@ -32,7 +36,8 @@ func (a *deltaAdapter) collect(ctx context.Context, client *gofish.APIClient) ([
 			continue
 		}
 		if m := deltaPSURe.FindStringSubmatch(s.ID); m != nil { // "ps1_input_current"
-			samples = append(samples, Sample{Name: m[2], PowerSupply: "ps" + m[1], Value: *s.Reading})
+			name := m[2]
+			samples = append(samples, Sample{Name: name, PowerSupply: "ps" + m[1], Value: *s.Reading, IsCounter: deltaCounters[name]})
 			continue
 		}
 		samples = append(samples, Sample{Name: s.ID, Value: *s.Reading}) // shelf id IS the canonical name

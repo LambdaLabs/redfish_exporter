@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -35,6 +36,9 @@ type Sample struct {
 	PowerSupply string // "ps1".."ps6"; "" for shelf-level
 	Value       float64
 	SensorID    string // set only for catch-all metrics; carries the raw sensor id as a label
+	// IsCounter marks this sample as a Prometheus counter; default false = gauge.
+	// Currently set by the Delta adapter for its accumulating total_energy_in reading.
+	IsCounter bool
 }
 
 type vendorAdapter interface {
@@ -166,7 +170,7 @@ func (c *PowershelfCollector) collect(ctx context.Context, ch chan<- prometheus.
 				continue
 			}
 			vt := prometheus.GaugeValue
-			if s.Name == "total_energy_in" {
+			if s.IsCounter {
 				vt = prometheus.CounterValue
 			}
 			switch {
@@ -198,23 +202,38 @@ func (c *PowershelfCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // findPowershelfChassis returns the first Chassis whose Manufacturer contains vendorMatch
 // (compared upper-cased) and has a non-empty Sensors collection — the data-bearing
-// powershelf chassis for that vendor. Returns (nil, nil) if none match.
+// powershelf chassis for that vendor.
+//
+// Returns (nil, nil) when no chassis matches the vendor at all (genuinely "not my device").
+// If a vendor-matching chassis is found but reading its Sensors fails, that error is not
+// swallowed: it is accumulated and returned (when no data-bearing chassis is found) so the
+// caller surfaces it instead of silently mistaking a real powershelf for a non-match. A
+// vendor-matching chassis with an empty Sensors collection is a legitimate non-match (some
+// vendors expose multiple chassis, only one of which carries data) and is skipped quietly.
 func findPowershelfChassis(client *gofish.APIClient, vendorMatch string) (*schemas.Chassis, error) {
 	chassises, err := client.Service.Chassis()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("listing chassis: %w", err)
 	}
+	var sensorErrs error
 	for _, ch := range chassises {
 		if !strings.Contains(strings.ToUpper(ch.Manufacturer), vendorMatch) {
 			continue
 		}
 		sensors, err := ch.Sensors()
-		if err != nil || len(sensors) == 0 {
+		if err != nil {
+			// Vendor matched, so this is likely our device; remember the error rather than
+			// treating the chassis as "not a powershelf". We keep scanning in case another
+			// chassis carries the data.
+			sensorErrs = errors.Join(sensorErrs, fmt.Errorf("reading sensors for chassis %q: %w", ch.ID, err))
+			continue
+		}
+		if len(sensors) == 0 {
 			continue
 		}
 		return ch, nil
 	}
-	return nil, nil
+	return nil, sensorErrs
 }
 
 // collectPSUStatus emits psu_health/psu_state from the chassis PowerSubsystem.
