@@ -121,17 +121,21 @@ type SystemCollectorConfig struct{}
 // TelemetryCollectorConfig is a prober configuration.
 type TelemetryCollectorConfig struct{}
 
+// PowershelfCollectorConfig is a prober configuration
+type PowershelfCollectorConfig struct{}
+
 // Module is a struct which represents some particular behavior the redfish_exporter should have
 // when executed against a host.
 // Modules are expected to specify a 'prober', and then a particular collector.
 type Module struct {
-	Prober             string                   `mapstructure:"prober"`
-	ChassisCollector   ChassisCollectorConfig   `mapstructure:"chassis_collector"`
-	GPUCollector       GPUCollectorConfig       `mapstructure:"gpu_collector"`
-	JSONCollector      JSONCollectorConfig      `mapstructure:"json_collector"`
-	ManagerCollector   ManagerCollectorConfig   `mapstructure:"manager_collector"`
-	SystemCollector    SystemCollectorConfig    `mapstructure:"system_collector"`
-	TelemetryCollector TelemetryCollectorConfig `mapstructure:"telemetry_collector"`
+	Prober              string                    `mapstructure:"prober"`
+	ChassisCollector    ChassisCollectorConfig    `mapstructure:"chassis_collector"`
+	GPUCollector        GPUCollectorConfig        `mapstructure:"gpu_collector"`
+	JSONCollector       JSONCollectorConfig       `mapstructure:"json_collector"`
+	ManagerCollector    ManagerCollectorConfig    `mapstructure:"manager_collector"`
+	SystemCollector     SystemCollectorConfig     `mapstructure:"system_collector"`
+	TelemetryCollector  TelemetryCollectorConfig  `mapstructure:"telemetry_collector"`
+	PowershelfCollector PowershelfCollectorConfig `mapstructure:"powershelf_collector"`
 }
 
 func (m *Module) Validate() error {

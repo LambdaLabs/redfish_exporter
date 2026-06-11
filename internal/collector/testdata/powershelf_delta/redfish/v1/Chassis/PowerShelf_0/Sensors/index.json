@@ -1,0 +1,2519 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors",
+  "@odata.type": "#SensorCollection.SensorCollection",
+  "Description": "Collection of Sensors for this Chassis",
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/average_current_out",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "average_current_out",
+      "Name": "average current out",
+      "PhysicalContext": "Chassis",
+      "Reading": 5.59,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/current_in_A_A",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "current_in_A_A",
+      "Name": "current in A A",
+      "PhysicalContext": "Chassis",
+      "Reading": 2.52,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/current_in_A_B",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "current_in_A_B",
+      "Name": "current in A B",
+      "PhysicalContext": "Chassis",
+      "Reading": 1.84,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/current_in_A_C",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "current_in_A_C",
+      "Name": "current in A C",
+      "PhysicalContext": "Chassis",
+      "Reading": 2.55,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/hotswap_input_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "hotswap_input_current",
+      "Name": "hotswap input current",
+      "PhysicalContext": "Chassis",
+      "Reading": 0.08,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_input_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_input_current",
+      "Name": "ps1 input current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 1.67,
+      "ReadingRangeMax": 16,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_output_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_output_current",
+      "Name": "ps1 output current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 6.61,
+      "ReadingRangeMax": 77,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_standby_output_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_standby_output_current",
+      "Name": "ps1 standby output current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_input_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_input_current",
+      "Name": "ps2 input current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 1.06,
+      "ReadingRangeMax": 16,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_output_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_output_current",
+      "Name": "ps2 output current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 4.77,
+      "ReadingRangeMax": 77,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_standby_output_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_standby_output_current",
+      "Name": "ps2 standby output current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_input_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_input_current",
+      "Name": "ps3 input current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 1.19,
+      "ReadingRangeMax": 16,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_output_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_output_current",
+      "Name": "ps3 output current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 6.72,
+      "ReadingRangeMax": 77,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_standby_output_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_standby_output_current",
+      "Name": "ps3 standby output current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_input_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_input_current",
+      "Name": "ps4 input current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0.88,
+      "ReadingRangeMax": 16,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_output_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_output_current",
+      "Name": "ps4 output current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 4.93,
+      "ReadingRangeMax": 77,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_standby_output_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_standby_output_current",
+      "Name": "ps4 standby output current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_input_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_input_current",
+      "Name": "ps5 input current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0.77,
+      "ReadingRangeMax": 16,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_output_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_output_current",
+      "Name": "ps5 output current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 5.03,
+      "ReadingRangeMax": 77,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_standby_output_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_standby_output_current",
+      "Name": "ps5 standby output current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_input_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_input_current",
+      "Name": "ps6 input current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 1.34,
+      "ReadingRangeMax": 16,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_output_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_output_current",
+      "Name": "ps6 output current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 5.46,
+      "ReadingRangeMax": 77,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_standby_output_current",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_standby_output_current",
+      "Name": "ps6 standby output current",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/total_current_out",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "total_current_out",
+      "Name": "total current out",
+      "PhysicalContext": "Chassis",
+      "Reading": 33.54,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Current",
+      "ReadingUnits": "A",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_energy_in",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_energy_in",
+      "Name": "ps1 energy in",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 107382,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergyJoules",
+      "ReadingUnits": "J",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_energy_out",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_energy_out",
+      "Name": "ps1 energy out",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 329564,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergyJoules",
+      "ReadingUnits": "J",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_energy_in",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_energy_in",
+      "Name": "ps2 energy in",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 241595,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergyJoules",
+      "ReadingUnits": "J",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_energy_out",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_energy_out",
+      "Name": "ps2 energy out",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 41912,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergyJoules",
+      "ReadingUnits": "J",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_energy_in",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_energy_in",
+      "Name": "ps3 energy in",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 273839,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergyJoules",
+      "ReadingUnits": "J",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_energy_out",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_energy_out",
+      "Name": "ps3 energy out",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 6389,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergyJoules",
+      "ReadingUnits": "J",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_energy_in",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_energy_in",
+      "Name": "ps4 energy in",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 181221,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergyJoules",
+      "ReadingUnits": "J",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_energy_out",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_energy_out",
+      "Name": "ps4 energy out",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 219644,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergyJoules",
+      "ReadingUnits": "J",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_energy_in",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_energy_in",
+      "Name": "ps5 energy in",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 216870,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergyJoules",
+      "ReadingUnits": "J",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_energy_out",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_energy_out",
+      "Name": "ps5 energy out",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 405512,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergyJoules",
+      "ReadingUnits": "J",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_energy_in",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_energy_in",
+      "Name": "ps6 energy in",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 284319,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergyJoules",
+      "ReadingUnits": "J",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_energy_out",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_energy_out",
+      "Name": "ps6 energy out",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 262356,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergyJoules",
+      "ReadingUnits": "J",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_total_energy_in",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_total_energy_in",
+      "Name": "ps1 total energy in",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 46.15,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergykWh",
+      "ReadingUnits": "kWh",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_total_energy_in",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_total_energy_in",
+      "Name": "ps2 total energy in",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 61.31,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergykWh",
+      "ReadingUnits": "kWh",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_total_energy_in",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_total_energy_in",
+      "Name": "ps3 total energy in",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 48.89,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergykWh",
+      "ReadingUnits": "kWh",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_total_energy_in",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_total_energy_in",
+      "Name": "ps4 total energy in",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 65.51,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergykWh",
+      "ReadingUnits": "kWh",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_total_energy_in",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_total_energy_in",
+      "Name": "ps5 total energy in",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 1.85,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergykWh",
+      "ReadingUnits": "kWh",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_total_energy_in",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_total_energy_in",
+      "Name": "ps6 total energy in",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 14.97,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "EnergykWh",
+      "ReadingUnits": "kWh",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_powerfactor",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_powerfactor",
+      "Name": "ps1 powerfactor",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 85.28,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Percent",
+      "ReadingUnits": "%",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_powerfactor",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_powerfactor",
+      "Name": "ps2 powerfactor",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 79.52,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Percent",
+      "ReadingUnits": "%",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_powerfactor",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_powerfactor",
+      "Name": "ps3 powerfactor",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 86.24,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Percent",
+      "ReadingUnits": "%",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_powerfactor",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_powerfactor",
+      "Name": "ps4 powerfactor",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 80.32,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Percent",
+      "ReadingUnits": "%",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_powerfactor",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_powerfactor",
+      "Name": "ps5 powerfactor",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 80.88,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Percent",
+      "ReadingUnits": "%",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_powerfactor",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_powerfactor",
+      "Name": "ps6 powerfactor",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 82.88,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Percent",
+      "ReadingUnits": "%",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_fan1",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_fan1",
+      "Name": "ps1 fan1",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 7200,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_fan2",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_fan2",
+      "Name": "ps1 fan2",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_fan1",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_fan1",
+      "Name": "ps2 fan1",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 6928,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_fan2",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_fan2",
+      "Name": "ps2 fan2",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_fan1",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_fan1",
+      "Name": "ps3 fan1",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 6960,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_fan2",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_fan2",
+      "Name": "ps3 fan2",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_fan1",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_fan1",
+      "Name": "ps4 fan1",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 6928,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_fan2",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_fan2",
+      "Name": "ps4 fan2",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_fan1",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_fan1",
+      "Name": "ps5 fan1",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 6960,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_fan2",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_fan2",
+      "Name": "ps5 fan2",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_fan1",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_fan1",
+      "Name": "ps6 fan1",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 6904,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_fan2",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_fan2",
+      "Name": "ps6 fan2",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/hotswap_input_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "hotswap_input_power",
+      "Name": "hotswap input power",
+      "PhysicalContext": "Chassis",
+      "Reading": 3,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_input_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_input_power",
+      "Name": "ps1 input power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 341,
+      "ReadingRangeMax": 3500,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_output_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_output_power",
+      "Name": "ps1 output power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 326,
+      "ReadingRangeMax": 3200,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_standby_output_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_standby_output_power",
+      "Name": "ps1 standby output power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_input_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_input_power",
+      "Name": "ps2 input power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 249,
+      "ReadingRangeMax": 3500,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_output_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_output_power",
+      "Name": "ps2 output power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 239,
+      "ReadingRangeMax": 3200,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_standby_output_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_standby_output_power",
+      "Name": "ps2 standby output power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_input_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_input_power",
+      "Name": "ps3 input power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 353,
+      "ReadingRangeMax": 3500,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_output_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_output_power",
+      "Name": "ps3 output power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 338,
+      "ReadingRangeMax": 3200,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_standby_output_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_standby_output_power",
+      "Name": "ps3 standby output power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_input_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_input_power",
+      "Name": "ps4 input power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 258,
+      "ReadingRangeMax": 3500,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_output_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_output_power",
+      "Name": "ps4 output power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 248,
+      "ReadingRangeMax": 3200,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_standby_output_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_standby_output_power",
+      "Name": "ps4 standby output power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_input_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_input_power",
+      "Name": "ps5 input power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 262,
+      "ReadingRangeMax": 3500,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_output_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_output_power",
+      "Name": "ps5 output power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 252,
+      "ReadingRangeMax": 3200,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_standby_output_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_standby_output_power",
+      "Name": "ps5 standby output power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_input_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_input_power",
+      "Name": "ps6 input power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 290,
+      "ReadingRangeMax": 3500,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_output_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_output_power",
+      "Name": "ps6 output power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 278,
+      "ReadingRangeMax": 3200,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_standby_output_power",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_standby_output_power",
+      "Name": "ps6 standby output power",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 0,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/total_power_in",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "total_power_in",
+      "Name": "total power in",
+      "PhysicalContext": "Chassis",
+      "Reading": 1749,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/total_power_in_A",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "total_power_in_A",
+      "Name": "total power in A",
+      "PhysicalContext": "Chassis",
+      "Reading": 1749,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/total_power_out",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "total_power_out",
+      "Name": "total power out",
+      "PhysicalContext": "Chassis",
+      "Reading": 1674,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/bmc_temp",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "bmc_temp",
+      "Name": "bmc temp",
+      "PhysicalContext": "Chassis",
+      "Reading": 58,
+      "ReadingRangeMax": 127,
+      "ReadingRangeMin": -128,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": 0
+        },
+        "LowerCritical": {
+          "Reading": -2
+        },
+        "UpperCaution": {
+          "Reading": 90
+        },
+        "UpperCritical": {
+          "Reading": 100
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/hotswap_temp",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "hotswap_temp",
+      "Name": "hotswap temp",
+      "PhysicalContext": "Chassis",
+      "Reading": 48,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_temp_clip_minus",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_temp_clip_minus",
+      "Name": "ps1 temp clip minus",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 47,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_temp_clip_plus",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_temp_clip_plus",
+      "Name": "ps1 temp clip plus",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 47,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_temp_hotspot",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_temp_hotspot",
+      "Name": "ps1 temp hotspot",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 66,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_temp_input",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_temp_input",
+      "Name": "ps1 temp input",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 26,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_temp_output",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_temp_output",
+      "Name": "ps1 temp output",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 47,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_temp_clip_minus",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_temp_clip_minus",
+      "Name": "ps2 temp clip minus",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 46,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_temp_clip_plus",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_temp_clip_plus",
+      "Name": "ps2 temp clip plus",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 46,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_temp_hotspot",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_temp_hotspot",
+      "Name": "ps2 temp hotspot",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 63,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_temp_input",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_temp_input",
+      "Name": "ps2 temp input",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 25,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_temp_output",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_temp_output",
+      "Name": "ps2 temp output",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 46,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_temp_clip_minus",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_temp_clip_minus",
+      "Name": "ps3 temp clip minus",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 46,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_temp_clip_plus",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_temp_clip_plus",
+      "Name": "ps3 temp clip plus",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 46,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_temp_hotspot",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_temp_hotspot",
+      "Name": "ps3 temp hotspot",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 62,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_temp_input",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_temp_input",
+      "Name": "ps3 temp input",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 25,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_temp_output",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_temp_output",
+      "Name": "ps3 temp output",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 44,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_temp_clip_minus",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_temp_clip_minus",
+      "Name": "ps4 temp clip minus",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 46,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_temp_clip_plus",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_temp_clip_plus",
+      "Name": "ps4 temp clip plus",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 46,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_temp_hotspot",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_temp_hotspot",
+      "Name": "ps4 temp hotspot",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 65,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_temp_input",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_temp_input",
+      "Name": "ps4 temp input",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 24,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_temp_output",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_temp_output",
+      "Name": "ps4 temp output",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 44,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_temp_clip_minus",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_temp_clip_minus",
+      "Name": "ps5 temp clip minus",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 46,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_temp_clip_plus",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_temp_clip_plus",
+      "Name": "ps5 temp clip plus",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 46,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_temp_hotspot",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_temp_hotspot",
+      "Name": "ps5 temp hotspot",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 60,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_temp_input",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_temp_input",
+      "Name": "ps5 temp input",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 25,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_temp_output",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_temp_output",
+      "Name": "ps5 temp output",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 44,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_temp_clip_minus",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_temp_clip_minus",
+      "Name": "ps6 temp clip minus",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 46,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_temp_clip_plus",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_temp_clip_plus",
+      "Name": "ps6 temp clip plus",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 46,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_temp_hotspot",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_temp_hotspot",
+      "Name": "ps6 temp hotspot",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 59,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_temp_input",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_temp_input",
+      "Name": "ps6 temp input",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 24,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_temp_output",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_temp_output",
+      "Name": "ps6 temp output",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 44,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/power_load",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "power_load",
+      "Name": "power load",
+      "PhysicalContext": "Chassis",
+      "Reading": 5.09,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Percent",
+      "ReadingUnits": "%",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/total_efficiency",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "total_efficiency",
+      "Name": "total efficiency",
+      "PhysicalContext": "Chassis",
+      "Reading": 95.84,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Percent",
+      "ReadingUnits": "%",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/bmc_12v",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "bmc_12v",
+      "Name": "bmc 12v",
+      "PhysicalContext": "Chassis",
+      "Reading": 12.86,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": 11.36
+        },
+        "LowerCritical": {
+          "Reading": 11.120000000000001
+        },
+        "UpperCaution": {
+          "Reading": 12.92
+        },
+        "UpperCritical": {
+          "Reading": 12.96
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/bmc_3v3",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "bmc_3v3",
+      "Name": "bmc 3v3",
+      "PhysicalContext": "Chassis",
+      "Reading": 3.29,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": 2.36
+        },
+        "LowerCritical": {
+          "Reading": 2.32
+        },
+        "UpperCaution": {
+          "Reading": 3.92
+        },
+        "UpperCritical": {
+          "Reading": 3.96
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/hotswap_input_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "hotswap_input_voltage",
+      "Name": "hotswap input voltage",
+      "PhysicalContext": "Chassis",
+      "Reading": 49.94,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/hotswap_output_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "hotswap_output_voltage",
+      "Name": "hotswap output voltage",
+      "PhysicalContext": "Chassis",
+      "Reading": 49.83,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/max_voltage_out",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "max_voltage_out",
+      "Name": "max voltage out",
+      "PhysicalContext": "Chassis",
+      "Reading": 49.9,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_input_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_input_voltage",
+      "Name": "ps1 input voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 241.5,
+      "ReadingRangeMax": 300,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_output_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_output_voltage",
+      "Name": "ps1 output voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 49.87,
+      "ReadingRangeMax": 60,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps1_standby_output_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps1_standby_output_voltage",
+      "Name": "ps1 standby output voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 12.04,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_input_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_input_voltage",
+      "Name": "ps2 input voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 241.5,
+      "ReadingRangeMax": 300,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_output_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_output_voltage",
+      "Name": "ps2 output voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 49.9,
+      "ReadingRangeMax": 60,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps2_standby_output_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps2_standby_output_voltage",
+      "Name": "ps2 standby output voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 12.06,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_input_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_input_voltage",
+      "Name": "ps3 input voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 241.5,
+      "ReadingRangeMax": 300,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_output_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_output_voltage",
+      "Name": "ps3 output voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 49.87,
+      "ReadingRangeMax": 60,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps3_standby_output_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps3_standby_output_voltage",
+      "Name": "ps3 standby output voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 12.06,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_input_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_input_voltage",
+      "Name": "ps4 input voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 241.25,
+      "ReadingRangeMax": 300,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_output_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_output_voltage",
+      "Name": "ps4 output voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 49.9,
+      "ReadingRangeMax": 60,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps4_standby_output_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps4_standby_output_voltage",
+      "Name": "ps4 standby output voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 12.06,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_input_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_input_voltage",
+      "Name": "ps5 input voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 241.5,
+      "ReadingRangeMax": 300,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_output_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_output_voltage",
+      "Name": "ps5 output voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 49.9,
+      "ReadingRangeMax": 60,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps5_standby_output_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps5_standby_output_voltage",
+      "Name": "ps5 standby output voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 12.06,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_input_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_input_voltage",
+      "Name": "ps6 input voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 241.5,
+      "ReadingRangeMax": 300,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_output_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_output_voltage",
+      "Name": "ps6 output voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 49.89,
+      "ReadingRangeMax": 60,
+      "ReadingRangeMin": 0,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/ps6_standby_output_voltage",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "ps6_standby_output_voltage",
+      "Name": "ps6 standby output voltage",
+      "PhysicalContext": "PowerSupply",
+      "Reading": 12.04,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/voltage_in_A_A",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "voltage_in_A_A",
+      "Name": "voltage in A A",
+      "PhysicalContext": "Chassis",
+      "Reading": 241.75,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/voltage_in_A_B",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "voltage_in_A_B",
+      "Name": "voltage in A B",
+      "PhysicalContext": "Chassis",
+      "Reading": 241.5,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors/voltage_in_A_C",
+      "@odata.type": "#Sensor.v1_10_1.Sensor",
+      "Id": "voltage_in_A_C",
+      "Name": "voltage in A C",
+      "PhysicalContext": "Chassis",
+      "Reading": 241.25,
+      "ReadingRangeMax": null,
+      "ReadingRangeMin": null,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "Thresholds": {
+        "LowerCaution": {
+          "Reading": null
+        },
+        "LowerCritical": {
+          "Reading": null
+        },
+        "UpperCaution": {
+          "Reading": null
+        },
+        "UpperCritical": {
+          "Reading": null
+        }
+      }
+    }
+  ],
+  "Members@odata.count": 142,
+  "Name": "Sensors"
+}

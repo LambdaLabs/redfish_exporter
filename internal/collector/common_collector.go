@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	CommonStateHelp           = "1(Enabled),2(Disabled),3(StandbyOffinline),4(StandbySpare),5(InTest),6(Starting),7(Absent),8(UnavailableOffline),9(Deferring),10(Quiesced),11(Updating)"
+	CommonStateHelp           = "1(Enabled),2(Disabled),3(StandbyOffinline),4(StandbySpare),5(InTest),6(Starting),7(Absent),8(UnavailableOffline),9(Deferring),10(Quiesced),11(Updating),12(Standby)"
 	CommonHealthHelp          = "1(OK),2(Warning),3(Critical)"
 	CommonSeverityHelp        = CommonHealthHelp
 	CommonLinkHelp            = "1(LinkUp),2(NoLink),3(LinkDown)"

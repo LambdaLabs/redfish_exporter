@@ -1,0 +1,51 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0",
+  "@odata.type": "#Chassis.v1_26_0.Chassis",
+  "Actions": {
+    "#Chassis.Reset": {
+      "@Redfish.ActionInfo": "/redfish/v1/Chassis/PowerShelf_0/ResetActionInfo",
+      "target": "/redfish/v1/Chassis/PowerShelf_0/Actions/Chassis.Reset"
+    }
+  },
+  "ChassisType": "RackMount",
+  "DepthMm": 810,
+  "HeightMm": 44,
+  "Id": "PowerShelf_0",
+  "Links": {
+    "ManagedBy": [
+      {
+        "@odata.id": "/redfish/v1/Managers/PMC_0"
+      }
+    ]
+  },
+  "Manufacturer": "DELTA",
+  "MaxPowerWatts": 33000,
+  "Model": "AHE50V660A33KWR",
+  "Name": "PowerShelf_0",
+  "Oem": {
+    "deltaenergysystems": {
+      "AllSensors": {
+        "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Oem/deltaenergysystems/AllSensors"
+      }
+    }
+  },
+  "PartNumber": "ECD68000086",
+  "PowerState": "On",
+  "PowerSubsystem": {
+    "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/PowerSubsystem"
+  },
+  "SKU": "AHE50V660A33KWR",
+  "Sensors": {
+    "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors"
+  },
+  "SerialNumber": "REDACTED",
+  "Status": {
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Enabled"
+  },
+  "ThermalSubsystem": {
+    "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/ThermalSubsystem"
+  },
+  "WidthMm": 448
+}

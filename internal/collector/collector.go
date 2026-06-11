@@ -41,6 +41,8 @@ func NewCollectorFromModule(moduleName string, m *config.Module, rfClient *gofis
 		return NewSystemCollector(moduleName, rfClient, logger, m.SystemCollector)
 	case "telemetry_collector":
 		return NewTelemetryCollector(moduleName, rfClient, logger, m.TelemetryCollector)
+	case "powershelf_collector":
+		return NewPowershelfCollector(moduleName, rfClient, logger, m.PowershelfCollector)
 	default:
 	}
 	return nil, fmt.Errorf("prober type %s is not known to redfish_exporter", m.Prober)

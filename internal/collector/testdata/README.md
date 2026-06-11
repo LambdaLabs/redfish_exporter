@@ -66,6 +66,34 @@ For instance, `/redfish/v1/Systems` will return a JSON response typically for al
 To return these "unnamed" endpoints' data, the response MUST be represented in `testdata/` directories as a file `index.json`.
 The test helpers will read and respond accordingly.
 
+### Expanded collections (avoid one file per member)
+
+A naive capture of a large collection (e.g. a powershelf `Sensors` collection with 140+ sensors)
+produces a collection `index.json` whose `Members` are bare `@odata.id` references, plus one
+`<member>/index.json` directory per member. gofish then fetches each member individually, so the
+fixture balloons to hundreds of tiny files.
+
+Prefer the **expanded-member** form instead: inline each member's full object directly into the
+collection's `Members` array — exactly what a BMC returns for `GET .../Sensors?$expand=*`. gofish's
+`GetCollectionObjects` uses an inlined member directly when it carries an `Id` (`entity.GetID() != ""`)
+and skips the per-member HTTP fetch, so no `<member>/index.json` files are needed at all.
+
+``` jsonc
+{
+  "@odata.id": "/redfish/v1/Chassis/PowerShelf_0/Sensors",
+  "@odata.type": "#SensorCollection.SensorCollection",
+  "Members": [
+    { "@odata.id": ".../Sensors/ps1_input_voltage", "Id": "ps1_input_voltage", "Reading": 241.5, "ReadingType": "Voltage", ... },
+    { "@odata.id": ".../Sensors/ps1_input_current", "Id": "ps1_input_current", "Reading": 4.2,   "ReadingType": "Current", ... }
+  ],
+  "Members@odata.count": 2
+}
+```
+
+The `powershelf_delta` and `powershelf_liteon` fixtures use this form. Capture with
+`curl -sk "https://<user>:<password>@<redfish-ip>/redfish/v1/Chassis/<id>/Sensors?\$expand=*"` to get
+the expanded payload directly.
+
 ### `golden` directories
 
 Golden files generally allow for representing expected string outputs of a test, for comparison.
@@ -102,6 +130,7 @@ In cases where added middleware is necessary (like to add artifical latency on c
 curl -sk "https://<user>:<password>@<redfish-ip>/some/path/here" | jq | xsel -ib
 ```
 will format the response and copy it to the system clipboard for pasting.
+- **Fixture only what the collector fetches** - A raw capture mirrors the entire BMC tree, but a fixture only needs the endpoints the collector under test actually requests. Trim everything else: gofish never GETs a path the collector doesn't navigate to, so unfetched endpoints (e.g. `ThermalSubsystem`, `Batteries`, `Oem/*` for the powershelf collector) are dead weight. This is the single biggest lever on fixture file count — the powershelf fixtures dropped from ~140 files per SUT to <10 by combining [expanded collections](#expanded-collections-avoid-one-file-per-member) with this rule.
 - **Naming `testdata/` directories** - Again, model these for either a SUT or a particular test case
 - **Remove UUIDs and Serial Numbers** - This is the most painful bit. We'd prefer to anonymize both UUIDs and Serial Numbers of hardware, so take a cursory look and replace with some placeholder for those fields. If the behavior being tested does not need them, consider even removing the fields entirely.
 

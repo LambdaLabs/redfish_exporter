@@ -54,7 +54,7 @@ fi
 # Build the redfish_exporter if it doesn't exist
 if [ ! -f "./redfish_exporter" ]; then
     echo -e "${YELLOW}Building redfish_exporter...${NC}"
-    go build
+    go build -o redfish_exporter ./cmd/redfish-exporter
 fi
 
 # Create exporter config file
@@ -79,6 +79,19 @@ groups:
     username: admin
     password: password
 loglevel: info
+modules:
+  chassis:
+    prober: chassis_collector
+  system:
+    prober: system_collector
+  manager:
+    prober: manager_collector
+  gpu:
+    prober: gpu_collector
+  telemetry:
+    prober: telemetry_collector
+  powershelf:
+    prober: powershelf_collector
 EOF
 
 # Check if using HTTPS

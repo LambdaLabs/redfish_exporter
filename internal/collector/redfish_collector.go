@@ -218,7 +218,9 @@ func parseCommonStatusState(status schemas.State) (float64, bool) {
 		return float64(1), true
 	} else if bytes.Equal([]byte(status), []byte("Disabled")) {
 		return float64(2), true
-	} else if bytes.Equal([]byte(status), []byte("StandbyOffinline")) {
+	} else if bytes.Equal([]byte(status), []byte("StandbyOffinline")) { // sure looks like a typo, but maybe intentional?
+		return float64(3), true
+	} else if bytes.Equal([]byte(status), []byte("StandbyOffline")) { // correct spelling, same state
 		return float64(3), true
 	} else if bytes.Equal([]byte(status), []byte("StandbySpare")) {
 		return float64(4), true
@@ -236,6 +238,8 @@ func parseCommonStatusState(status schemas.State) (float64, bool) {
 		return float64(10), true
 	} else if bytes.Equal([]byte(status), []byte("Updating")) {
 		return float64(11), true
+	} else if bytes.Equal([]byte(status), []byte("Standby")) { // not standard, but seen on LITE-ON PSUs
+		return float64(12), true
 	}
 	return float64(0), false
 }
