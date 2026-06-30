@@ -16,6 +16,7 @@ import (
 var (
 	SystemSubsystem                   = "system"
 	SystemLabelNames                  = []string{"resource", "system_id"}
+	SystemBiosInfoLabelNames          = []string{"bios_version", "model"}
 	SystemMemoryLabelNames            = []string{"resource", "memory", "memory_id"}
 	SystemProcessorLabelNames         = []string{"resource", "processor", "processor_id"}
 	SystemVolumeLabelNames            = []string{"resource", "volume", "volume_id"}
@@ -47,6 +48,8 @@ func createSystemMetricMap() map[string]Metric {
 	addToMetricMap(systemMetrics, SystemSubsystem, "state", fmt.Sprintf("system state,%s", CommonStateHelp), SystemLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "health_state", fmt.Sprintf("system health,%s", CommonHealthHelp), SystemLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "power_state", "system power state", SystemLabelNames)
+
+	addToMetricMap(systemMetrics, SystemSubsystem, "bios_info", "host BIOS version (info metric, always 1)", SystemBiosInfoLabelNames)
 
 	addToMetricMap(systemMetrics, SystemSubsystem, "total_memory_state", fmt.Sprintf("system overall memory state,%s", CommonStateHelp), SystemLabelNames)
 	addToMetricMap(systemMetrics, SystemSubsystem, "total_memory_health_state", fmt.Sprintf("system overall memory health,%s", CommonHealthHelp), SystemLabelNames)
@@ -179,6 +182,13 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 			systemTotalMemoryAmount := gofish.Deref(system.MemorySummary.TotalSystemMemoryGiB)
 
 			systemLabelValues := []string{"system", SystemID}
+
+			// Emit the host BIOS version as an info metric. HGX baseboard systems report no
+			// BiosVersion and are skipped, keeping this scoped to the host system.
+			if system.BiosVersion != "" {
+				ch <- prometheus.MustNewConstMetric(s.metrics["system_bios_info"].desc, prometheus.GaugeValue, 1, system.BiosVersion, system.Model)
+			}
+
 			if systemHealthStateValue, ok := parseCommonStatusHealth(systemHealthState); ok {
 				ch <- prometheus.MustNewConstMetric(s.metrics["system_health_state"].desc, prometheus.GaugeValue, systemHealthStateValue, systemLabelValues...)
 			}
