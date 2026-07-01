@@ -162,18 +162,18 @@ redfish_gpu_memory_row_remapping_pending{gpu_id="GPU_2",memory_id="GPU_2_DRAM_0"
 redfish_gpu_memory_row_remapping_pending{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_Baseboard_0"} 0
 `,
 		},
-		"redfish_gpu_memory_ecc_correctable": {
+		"redfish_gpu_memory_ecc_correctable_total": {
 			testdataPath:    "testdata/gb300_happypath",
-			seriesToCheck:   []string{"redfish_gpu_memory_ecc_correctable"},
+			seriesToCheck:   []string{"redfish_gpu_memory_ecc_correctable_total"},
 			testLogLevel:    slog.LevelInfo,
 			wantSeriesCount: 4,
 			wantSeriesString: `
-# HELP redfish_gpu_memory_ecc_correctable current correctable memory ecc errors reported on the gpu
-# TYPE redfish_gpu_memory_ecc_correctable counter
-redfish_gpu_memory_ecc_correctable{gpu_id="GPU_0",memory_id="GPU_0_DRAM_0",system_id="HGX_Baseboard_0"} 0
-redfish_gpu_memory_ecc_correctable{gpu_id="GPU_1",memory_id="GPU_1_DRAM_0",system_id="HGX_Baseboard_0"} 100
-redfish_gpu_memory_ecc_correctable{gpu_id="GPU_2",memory_id="GPU_2_DRAM_0",system_id="HGX_Baseboard_0"} 0
-redfish_gpu_memory_ecc_correctable{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_gpu_memory_ecc_correctable_total current correctable memory ecc errors reported on the gpu
+# TYPE redfish_gpu_memory_ecc_correctable_total counter
+redfish_gpu_memory_ecc_correctable_total{gpu_id="GPU_0",memory_id="GPU_0_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_gpu_memory_ecc_correctable_total{gpu_id="GPU_1",memory_id="GPU_1_DRAM_0",system_id="HGX_Baseboard_0"} 100
+redfish_gpu_memory_ecc_correctable_total{gpu_id="GPU_2",memory_id="GPU_2_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_gpu_memory_ecc_correctable_total{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_Baseboard_0"} 0
 `,
 		},
 	}

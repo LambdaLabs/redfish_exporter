@@ -59,8 +59,8 @@ func createGPUMetricMap() map[string]Metric {
 	gpuMetrics := make(map[string]Metric)
 
 	// Basic GPU metrics from main branch
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_ecc_correctable", "current correctable memory ecc errors reported on the gpu", gpuMemoryLabels)
-	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_ecc_uncorrectable", "current uncorrectable memory ecc errors reported on the gpu", gpuMemoryLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_ecc_correctable_total", "current correctable memory ecc errors reported on the gpu", gpuMemoryLabels)
+	addToMetricMap(gpuMetrics, GPUSubsystem, "memory_ecc_uncorrectable_total", "current uncorrectable memory ecc errors reported on the gpu", gpuMemoryLabels)
 
 	// GPU info metric
 	addToMetricMap(gpuMetrics, GPUSubsystem, "info", "GPU information with serial number and UUID", gpuInfoLabels)
@@ -257,12 +257,12 @@ func (g *GPUCollector) emitGPUMemoryMetrics(ch chan<- prometheus.Metric, gpu Sys
 		memLabels = append(memLabels, mem.ID)
 
 		ch <- prometheus.MustNewConstMetric(
-			g.metrics["gpu_memory_ecc_correctable"].desc,
+			g.metrics["gpu_memory_ecc_correctable_total"].desc,
 			prometheus.CounterValue,
 			float64(gofish.Deref(memMetric.LifeTime.CorrectableECCErrorCount)),
 			memLabels...)
 		ch <- prometheus.MustNewConstMetric(
-			g.metrics["gpu_memory_ecc_uncorrectable"].desc,
+			g.metrics["gpu_memory_ecc_uncorrectable_total"].desc,
 			prometheus.CounterValue,
 			float64(gofish.Deref(memMetric.LifeTime.UncorrectableECCErrorCount)),
 			memLabels...)
