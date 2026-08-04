@@ -441,6 +441,21 @@ Exposes no user configuration.
 
 The Telemetry Collector exposes a wealth of data using the TelemetryService API.
 It was designed to capture much OEM data for Nvidia systems, and as such may not be less useful in non-GPU hardware environments.
+
+Reports are routed by exact match on their ID with any trailing instance index removed, so
+`HGX_ProcessorMetrics_0` and `HGX_ProcessorMetrics_1` share a handler. Matching is exact
+rather than by substring because substrings are ambiguous here: `ProcessorPortGPMMetrics`
+and `ProcessorPortMetrics` are different reports, and a bare `ProcessorMetrics` is a
+substring of `CpuProcessorMetrics`.
+
+**A report with no handler is reported, not silently dropped.** It logs at warn level and
+emits `redfish_telemetry_unhandled_report{report_id="..."}` carrying the number of discarded
+metric values. A non-zero value means a platform is publishing telemetry this exporter does
+not parse — the usual cause of an unnoticed coverage gap on new hardware. Known unhandled
+reports at time of writing include `HGX_NVSwitchPortMetrics`, `HGX_NVSwitchMetrics`,
+`HGX_PCIeRetimerMetrics`, `HGX_PCIeRetimerPortMetrics`, `HGX_NetworkAdapterPortMetrics` and
+the `{Min,Max,Avg}PowerConsumption{Hour,Day,Week}` rollups.
+
 Against a Lambda lab system, the collector yields the following timeseries:
 
 ```
@@ -464,6 +479,37 @@ Against a Lambda lab system, the collector yields the following timeseries:
 
 # HELP redfish_telemetry_collection_stale_reports_last Quantity of stale reports discovered on the last collection loop
 # TYPE redfish_telemetry_collection_stale_reports_last gauge
+
+# HELP redfish_telemetry_unhandled_report Number of metric values in a metric report that no handler claimed, and which were therefore discarded
+# TYPE redfish_telemetry_unhandled_report gauge
+
+# HELP redfish_telemetry_component_health health of a component reported via TelemetryService,1(OK),2(Warning),3(Critical)
+# TYPE redfish_telemetry_component_health gauge
+
+# HELP redfish_telemetry_component_health_rollup health rollup of a component reported via TelemetryService,1(OK),2(Warning),3(Critical)
+# TYPE redfish_telemetry_component_health_rollup gauge
+
+# HELP redfish_telemetry_cpu_frequency_mhz CPU core frequency in MHz
+# TYPE redfish_telemetry_cpu_frequency_mhz gauge
+
+# HELP redfish_telemetry_cpu_memory_controller_frequency_mhz CPU memory controller frequency in MHz
+# TYPE redfish_telemetry_cpu_memory_controller_frequency_mhz gauge
+
+# HELP redfish_telemetry_cpu_vreg_voltage_volts CPU voltage regulator output in volts
+# TYPE redfish_telemetry_cpu_vreg_voltage_volts gauge
+
+# HELP redfish_telemetry_cpu_memory_page_retirement_count Number of retired memory pages (NVIDIA OEM)
+# TYPE redfish_telemetry_cpu_memory_page_retirement_count gauge
+
+# HELP redfish_telemetry_cpu_edp_violation_state Whether the CPU is in an electrical design point violation state, 1(violating),0(nominal) (NVIDIA OEM)
+# TYPE redfish_telemetry_cpu_edp_violation_state gauge
+
+# HELP redfish_telemetry_cpu_power_break_performance_state Whether the CPU is in a power-break performance state, 1(active),0(nominal) (NVIDIA OEM)
+# TYPE redfish_telemetry_cpu_power_break_performance_state gauge
+
+# HELP redfish_telemetry_port_nvidia_nvlink_data_rx_bandwidth_gbps Per-port NVLink data RX bandwidth in Gbps (NVIDIA OEM)
+# TYPE redfish_telemetry_port_nvidia_nvlink_data_rx_bandwidth_gbps gauge
+# (also _data_tx_, _raw_rx_ and _raw_tx_ variants)
 
 # HELP redfish_telemetry_conventional_reset_entry_total Total conventional reset entry events
 # TYPE redfish_telemetry_conventional_reset_entry_total counter
