@@ -52,6 +52,25 @@ var (
 			Prober:             "telemetry_collector",
 			TelemetryCollector: DefaultTelemetryCollector,
 		},
+		// leak_detection is a narrowly scoped chassis_collector for coolant leak
+		// monitoring on liquid-cooled hardware. It exists so leak state can be scraped
+		// on a much shorter interval than a full chassis scrape allows: only
+		// ThermalSubsystem (leak detectors) and Sensors (their analog voltages and
+		// thresholds) are consulted.
+		//
+		// Deliberately not part of the rf_exporter_default bundle, and deliberately not
+		// filtered by chassis Id — chassis naming is vendor specific. Deployments that
+		// want the minimum possible request count should set chassis_include to match
+		// only the chassis carrying leak detectors (on a Supermicro NVL72 tray that is
+		// "^Chassis_[0-9]+$").
+		"leak_detection": {
+			Prober: "chassis_collector",
+			ChassisCollector: ChassisCollectorConfig{
+				DisableThermal:         true,
+				DisablePower:           true,
+				DisableNetworkAdapters: true,
+			},
+		},
 	}
 	DefaultRedfishConfig = RedfishClientConfig{
 		MaxConcurrentRequests: 1,
@@ -101,7 +120,33 @@ func unmarshalViperConfig(v *viper.Viper) (*Config, error) {
 }
 
 // ChassisCollectorConfig is a prober configuration.
-type ChassisCollectorConfig struct{}
+//
+// Every field's zero value preserves the collector's historical behaviour: all chassis
+// are collected and no subsystem is skipped. This keeps `chassis_collector: {}` a no-op
+// and lets the toggles be expressed as opt-outs.
+type ChassisCollectorConfig struct {
+	// ChassisInclude, when non-empty, is a regular expression matched against each
+	// chassis Id. Only matching chassis are collected. Applied before ChassisExclude.
+	ChassisInclude string `mapstructure:"chassis_include"`
+	// ChassisExclude, when non-empty, is a regular expression matched against each
+	// chassis Id. Matching chassis are skipped.
+	ChassisExclude string `mapstructure:"chassis_exclude"`
+
+	// DisableThermal skips the legacy Thermal schema (temperatures and fans).
+	DisableThermal bool `mapstructure:"disable_thermal"`
+	// DisableThermalSubsystem skips ThermalSubsystem, and with it leak detection.
+	DisableThermalSubsystem bool `mapstructure:"disable_thermal_subsystem"`
+	// DisablePower skips the legacy Power schema (voltages and power supplies).
+	DisablePower bool `mapstructure:"disable_power"`
+	// DisableNetworkAdapters skips NetworkAdapters and their NetworkPorts. This is
+	// often the most expensive subsystem, at one request per adapter plus one per port.
+	DisableNetworkAdapters bool `mapstructure:"disable_network_adapters"`
+	// DisableSensors skips the Sensors collection. Sensors are only consulted for a
+	// chassis that implements neither Thermal nor Power (for example an NVL72 tray),
+	// so leaving this enabled costs nothing on hardware that implements the legacy
+	// schemas and does not duplicate their metrics.
+	DisableSensors bool `mapstructure:"disable_sensors"`
+}
 
 // GPUCollectorConfig is a prober configuration.
 type GPUCollectorConfig struct{}

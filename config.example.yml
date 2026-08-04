@@ -20,6 +20,18 @@ loglevel: info
 modules:
   chassis:
     prober: chassis_collector
+  # A leak-detection-only chassis scrape, cheap enough to poll on a short interval.
+  # Coolant leaks on liquid-cooled hardware are a minutes-matter event, so this exists to
+  # be scraped far more frequently than a full chassis scrape allows.
+  leak_detection:
+    prober: chassis_collector
+    chassis_collector:
+      disable_thermal: true
+      disable_power: true
+      disable_network_adapters: true
+      # Optional and vendor specific: on a Supermicro NVL72 tray the leak detectors are on
+      # Chassis_0, so this trims the walk to the only chassis that carries them.
+      # chassis_include: "^Chassis_[0-9]+$"
   gpu:
     prober: gpu_collector
   manager:

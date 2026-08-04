@@ -1,0 +1,116 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/Chassis_0/Sensors",
+  "@odata.type": "#SensorCollection.SensorCollection",
+  "Name": "Sensor Collection",
+  "Description": "Collection of Sensor resource instances for Chassis_0",
+  "Members@odata.count": 6,
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/Chassis_0/Sensors/Chassis_0_LeakDetector_0_ColdPlate",
+      "@odata.type": "#Sensor.v1_7_0.Sensor",
+      "Id": "Chassis_0_LeakDetector_0_ColdPlate",
+      "Name": "Chassis 0 LeakDetector 0 ColdPlate",
+      "Reading": 1.724,
+      "ReadingRangeMax": 1.815,
+      "ReadingRangeMin": 0.165,
+      "ReadingType": "Voltage",
+      "ReadingUnits": "V",
+      "Thresholds": {
+        "LowerCritical": {
+          "Reading": 1.65
+        }
+      },
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/Chassis_0/Sensors/Chassis_0_FAN_1_FRONT",
+      "@odata.type": "#Sensor.v1_7_0.Sensor",
+      "Id": "Chassis_0_FAN_1_FRONT",
+      "Name": "Chassis 0 FAN 1 FRONT",
+      "Reading": 8623.0,
+      "ReadingRangeMax": 37400.0,
+      "ReadingRangeMin": 0.0,
+      "ReadingType": "Rotational",
+      "ReadingUnits": "RPM",
+      "Thresholds": {
+        "LowerCritical": {
+          "Reading": 2204.0
+        }
+      },
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/Chassis_0/Sensors/Chassis_0_Front_IO_Temp_0",
+      "@odata.type": "#Sensor.v1_7_0.Sensor",
+      "Id": "Chassis_0_Front_IO_Temp_0",
+      "Name": "Chassis 0 Front IO Temp 0",
+      "Reading": 27.5,
+      "ReadingRangeMax": 127.0,
+      "ReadingRangeMin": -128.0,
+      "ReadingType": "Temperature",
+      "ReadingUnits": "Cel",
+      "Thresholds": {
+        "UpperCaution": {
+          "Reading": 40.0
+        },
+        "UpperCritical": {
+          "Reading": 43.0
+        },
+        "UpperFatal": {
+          "Reading": 45.0
+        }
+      },
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/Chassis_0/Sensors/Chassis_0_FAN_1_PWM",
+      "@odata.type": "#Sensor.v1_7_0.Sensor",
+      "Id": "Chassis_0_FAN_1_PWM",
+      "Name": "Chassis 0 FAN 1 PWM",
+      "Reading": 29.80392156862745,
+      "ReadingRangeMax": 100.0,
+      "ReadingRangeMin": 0.0,
+      "ReadingType": "Percent",
+      "ReadingUnits": "%",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/Chassis_0/Sensors/Chassis_0_TotalHSC_Power_0",
+      "@odata.type": "#Sensor.v1_7_0.Sensor",
+      "Id": "Chassis_0_TotalHSC_Power_0",
+      "Name": "Chassis 0 TotalHSC Power 0",
+      "Reading": 1171.349692,
+      "ReadingType": "Power",
+      "ReadingUnits": "W",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/Chassis_0/Sensors/Chassis_0_Altitude_0",
+      "@odata.type": "#Sensor.v1_7_0.Sensor",
+      "Id": "Chassis_0_Altitude_0",
+      "Name": "Chassis 0 Altitude 0",
+      "Reading": 132.0,
+      "ReadingType": "Altitude",
+      "ReadingUnits": "m",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      }
+    }
+  ]
+}

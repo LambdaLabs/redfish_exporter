@@ -70,8 +70,29 @@ The Chassis Collector primarily exposes health data from the Chassis API. Agains
 # HELP redfish_chassis_health_rollup health rollup of chassis,1(OK),2(Warning),3(Critical)
 # TYPE redfish_chassis_health_rollup gauge
 
+# HELP redfish_chassis_leak_detection_health health of the chassis leak detection subsystem as a whole,1(OK),2(Warning),3(Critical)
+# TYPE redfish_chassis_leak_detection_health gauge
+
+# HELP redfish_chassis_leak_detection_state state of the chassis leak detection subsystem as a whole,1(Enabled),2(Disabled),...
+# TYPE redfish_chassis_leak_detection_state gauge
+
+# HELP redfish_chassis_leak_detector_enabled whether this chassis leak detector is enabled, 1(enabled),0(disabled); a disabled detector reports Unavailable state and does not trigger events
+# TYPE redfish_chassis_leak_detector_enabled gauge
+
 # HELP redfish_chassis_leak_detector_health chassis leak detector health state,1(OK),2(Warning),3(Critical)
 # TYPE redfish_chassis_leak_detector_health gauge
+
+# HELP redfish_chassis_leak_detector_info chassis leak detector type and physical location, always 1
+# TYPE redfish_chassis_leak_detector_info gauge
+
+# HELP redfish_chassis_leak_detector_state chassis leak detector state; this is the leak signal,1(OK),2(Warning),3(Critical),4(Unavailable),5(Absent)
+# TYPE redfish_chassis_leak_detector_state gauge
+
+# HELP redfish_chassis_leak_detector_volts chassis leak detector reading in volts; falls toward the lower critical threshold as moisture is detected
+# TYPE redfish_chassis_leak_detector_volts gauge
+
+# HELP redfish_chassis_leak_detector_volts_lower_threshold_critical voltage at or below which this chassis leak detector reports a critical leak
+# TYPE redfish_chassis_leak_detector_volts_lower_threshold_critical gauge
 
 # HELP redfish_chassis_model_info organization responsible for producing the chassis, the name by which the manufacturer generally refers to the chassis, and a part number and sku assigned by the organization that is responsible for producing or manufacturing the chassis
 # TYPE redfish_chassis_model_info gauge
@@ -83,7 +104,86 @@ The Chassis Collector primarily exposes health data from the Chassis API. Agains
 # TYPE redfish_chassis_state gauge
 ```
 
-Exposes no user configuration.
+Newer platforms — notably the GB200/GB300 NVL72 trays and the MGX NVSwitch tray — do not
+implement the deprecated `Thermal` and `Power` schemas at all, and express the same
+readings through `Sensors` instead. For those chassis the collector falls back to the
+`Sensors` collection, folding readings into the metric families above wherever the meaning
+is unambiguous, so a Sensors-only platform produces the same series names as one that
+implements `Thermal`/`Power`:
+
+| Redfish `ReadingType` | Metric |
+| --- | --- |
+| `Temperature` | `redfish_chassis_temperature_celsius` (+ `_sensor_health`, `_sensor_state`) |
+| `Rotational` | `redfish_chassis_fan_rpm` (+ min/max/percentage/threshold series) |
+| `Voltage` | `redfish_chassis_power_voltage_volts` (+ `_state`) |
+| anything else | `redfish_chassis_sensor_{watts,amperes,joules,hertz,percent,reading}` |
+
+`Sensors` is only consulted for a chassis that implements neither `Thermal` nor `Power`, so
+this never duplicates the legacy series. Readings are not inferred from sensor naming: fan
+PWM duty cycle and CPU core utilisation are both `ReadingType: Percent` and neither carries
+a distinguishing `PhysicalContext`, so `Percent` reaches the catch-all rather than being
+assumed to be a fan speed.
+
+#### Leak detection
+
+`redfish_chassis_leak_detector_state` is the leak signal. `..._health` describes the health
+of the detector *device*, which can remain `OK` while a leak is reported, so it must not be
+used as a leak indicator on its own.
+
+**Alert on `== 3` rather than `>= 2`.** Unlike the health encoding, values above 3 do not
+mean "worse than critical": 4 (`Unavailable`) and 5 (`Absent`) mean the detector is not
+reporting. A `> 2` expression would fire a critical leak for an absent detector. Use `== 2`
+for a warning-level leak, `== 3` for a critical leak, and `>= 4` to alert separately on the
+blind spot.
+
+Coverage varies by platform, so `..._state` is the only signal available everywhere:
+
+- **GB300 compute tray (ARS-121GL-NB3):** 4 detectors on the tray shelf chassis, each with
+  a companion `Sensor` giving `..._volts` and `..._volts_lower_threshold_critical`. These
+  are resistive moisture ropes on a voltage divider — dry reads high (~1.72 V) and water
+  pulls the voltage *down* toward the 1.65 V threshold, so the alarm is a **lower** critical
+  crossing. The threshold is only exposed on the `Sensor` resource, never in the telemetry
+  metric report, which is what allows an alert to be written relative to it.
+- **MGX NVSwitch tray (P3809):** 7 detectors (including an aggregate, `leakage_aggr`) on one
+  chassis, with six further chassis exposing an empty detector collection. Discrete only —
+  no companion voltage sensors. Note the aggregate is structurally indistinguishable from
+  the individual detectors, so an unqualified alert will fire twice for one physical leak.
+- Some BMCs advertise a `LeakDetection` link that then returns 404; this is logged at debug
+  level and emits nothing.
+
+#### Configuration
+
+```yaml
+chassis_collector:
+  # Regular expressions matched against each chassis Id. Include is applied first.
+  [ chassis_include: <regexp> ]
+  [ chassis_exclude: <regexp> ]
+
+  # Subsystem opt-outs. Every default is false, so an empty config collects everything.
+  [ disable_thermal: <bool> ]
+  [ disable_thermal_subsystem: <bool> ]   # also disables leak detection
+  [ disable_power: <bool> ]
+  [ disable_network_adapters: <bool> ]
+  [ disable_sensors: <bool> ]
+```
+
+A full chassis scrape walks every chassis and can issue a few hundred requests on a tray
+with many chassis, which at the default `max_concurrent_requests: 1` serialises. These
+options exist so a leak-focused module can be scraped on a much shorter interval than a
+full chassis scrape allows. The built-in `leak_detection` module does exactly that:
+
+```yaml
+modules:
+  leak_detection:
+    prober: chassis_collector
+    chassis_collector:
+      disable_thermal: true
+      disable_power: true
+      disable_network_adapters: true
+      # Optional, and vendor specific: on a Supermicro NVL72 tray the leak detectors live
+      # on Chassis_0, so this trims the scrape to the only chassis that matters.
+      # chassis_include: "^Chassis_[0-9]+$"
+```
 
 ### `<gpu_collector>`
 [source](../collector/gpu_collector.go)

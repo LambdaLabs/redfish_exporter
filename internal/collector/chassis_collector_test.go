@@ -1,8 +1,13 @@
 package collector
 
 import (
+	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
+	"maps"
+	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -10,91 +15,296 @@ import (
 	"github.com/LambdaLabs/redfish_exporter/internal/config"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
-	"github.com/stmcginnis/gofish"
+	"github.com/stmcginnis/gofish/schemas"
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetLeakDetectors(t *testing.T) {
+// collectedMetric is a drained prometheus.Metric flattened for assertions.
+type collectedMetric struct {
+	fqName string
+	labels map[string]string
+	value  float64
+}
+
+// drainMetrics closes ch and flattens everything on it, keyed by metric name. A metric
+// name may appear more than once when a family covers several sensors or detectors.
+func drainMetrics(t *testing.T, ch chan prometheus.Metric) map[string][]collectedMetric {
+	t.Helper()
+	close(ch)
+
+	out := map[string][]collectedMetric{}
+	for metric := range ch {
+		d := &dto.Metric{}
+		require.NoError(t, metric.Write(d))
+
+		match := fqNameRe.FindStringSubmatch(metric.Desc().String())
+		require.Len(t, match, 2, "could not extract fqName from %s", metric.Desc().String())
+
+		labels := map[string]string{}
+		for _, label := range d.Label {
+			labels[label.GetName()] = label.GetValue()
+		}
+
+		require.NotNil(t, d.Gauge, "expected gauge metric for %s", match[1])
+		out[match[1]] = append(out[match[1]], collectedMetric{
+			fqName: match[1],
+			labels: labels,
+			value:  d.Gauge.GetValue(),
+		})
+	}
+	return out
+}
+
+// requireMetric asserts exactly one sample exists for name and returns it.
+func requireMetric(t *testing.T, metrics map[string][]collectedMetric, name string) collectedMetric {
+	t.Helper()
+	samples, ok := metrics[name]
+	require.True(t, ok, "expected metric %s to be emitted, got %v", name, slices.Sorted(maps.Keys(metrics)))
+	require.Len(t, samples, 1, "expected exactly one sample for %s", name)
+	return samples[0]
+}
+
+func TestGetLeakDetection(t *testing.T) {
 	tT := map[string]struct {
-		mockSetupFn func() (*testRedfishServer, *gofish.APIClient)
-		expectedLDs int
+		setupFn                 func(*testRedfishServer)
+		expectedLDs             int
+		expectedLeakDetectionID string
+		expectNilLeakDetection  bool
 	}{
-		"happy path - data was returned in a gofish-expected manner": {
-			mockSetupFn: func() (*testRedfishServer, *gofish.APIClient) {
-				server := newTestRedfishServer(t)
-				server.addRouteFromFixture("/redfish/v1/Chassis", "chassis_collection.json")
-				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0", "chassis_main.json")
+		"canonical DMTF placement under ThermalSubsystem": {
+			setupFn: func(server *testRedfishServer) {
 				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem", "thermal_subsystem.json")
 				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection", "leak_detection.json")
 				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors", "leak_detectors_collection.json")
-				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_0_ColdPlate", "leak_detector_ok.json")
-				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_0_Manifold", "leak_detector_ok.json")
-				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_1_ColdPlate", "leak_detector_ok.json")
+				for _, id := range []string{"Chassis_0_LeakDetector_0_ColdPlate", "Chassis_0_LeakDetector_0_Manifold", "Chassis_0_LeakDetector_1_ColdPlate"} {
+					server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/"+id, "leak_detector_ok.json")
+				}
 				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_1_Manifold", "leak_detector_leak.json")
-
-				client := connectToTestServer(t, server.Server)
-
-				return server, client
 			},
-			expectedLDs: 4,
+			expectedLDs:             4,
+			expectedLeakDetectionID: "LeakDetection",
 		},
-		"happy path - OEM returned single LeakDetection in ThermalSubsystem": {
-			mockSetupFn: func() (*testRedfishServer, *gofish.APIClient) {
-				server := newTestRedfishServer(t)
-				server.addRouteFromFixture("/redfish/v1/Chassis", "chassis_collection.json")
-				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0", "chassis_main.json")
-				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem", "thermal_subsystem.json")
-				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection", "single_leak_detection.json")
-				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors", "leak_detectors_collection.json")
-				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_0_ColdPlate", "leak_detector_ok.json")
-				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_0_Manifold", "leak_detector_ok.json")
-				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_1_ColdPlate", "leak_detector_ok.json")
-				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_1_Manifold", "leak_detector_leak.json")
-
-				client := connectToTestServer(t, server.Server)
-
-				return server, client
+		// Regression test: the LeakDetection @odata.id is NOT <ThermalSubsystem>/LeakDetection.
+		// An implementation that re-derives the URL by string concatenation rather than
+		// following the advertised link finds nothing here.
+		"LeakDetection at a vendor-specific @odata.id": {
+			setupFn: func(server *testRedfishServer) {
+				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem", "thermal_subsystem_oem_leak_path.json")
+				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/Oem/Vendor/LeakDetectionSystem", "leak_detection_oem_path.json")
+				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/Oem/Vendor/LeakDetectionSystem/LeakDetectors", "leak_detectors_collection_oem_path.json")
+				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/Oem/Vendor/LeakDetectionSystem/LeakDetectors/Chassis_0_LeakDetector_0_ColdPlate", "leak_detector_ok.json")
+				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/Oem/Vendor/LeakDetectionSystem/LeakDetectors/Chassis_0_LeakDetector_1_Manifold", "leak_detector_leak.json")
 			},
-			expectedLDs: 4,
+			expectedLDs:             2,
+			expectedLeakDetectionID: "LeakDetectionSystem",
+		},
+		// Observed on the NVIDIA MGX NVSwitch tray (P3809), where 6 of its 7
+		// LeakDetection-bearing chassis expose an empty LeakDetectors collection and only
+		// one carries real detectors. The subsystem rollup is still meaningful.
+		"LeakDetection present with an empty detector collection": {
+			setupFn: func(server *testRedfishServer) {
+				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem", "thermal_subsystem.json")
+				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection", "leak_detection.json")
+				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors", "leak_detectors_collection_empty.json")
+			},
+			expectedLDs:             0,
+			expectedLeakDetectionID: "LeakDetection",
+		},
+		// Observed on SYS-A21GE-NBRT: ThermalSubsystem advertises LeakDetection but the
+		// GET returns 404. This must degrade quietly rather than fail the scrape.
+		"LeakDetection advertised but returns 404": {
+			setupFn: func(server *testRedfishServer) {
+				server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem", "thermal_subsystem.json")
+				server.addErrorRoute("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection", http.StatusNotFound)
+			},
+			expectedLDs:            0,
+			expectNilLeakDetection: true,
 		},
 	}
 
 	for tName, test := range tT {
 		t.Run(tName, func(t *testing.T) {
-			srv, client := test.mockSetupFn()
-			require.NotNil(t, srv)
-			require.NotNil(t, client)
+			server := newTestRedfishServer(t)
+			server.addRouteFromFixture("/redfish/v1/Chassis", "chassis_collection.json")
+			server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0", "chassis_main.json")
+			test.setupFn(server)
+
+			client := connectToTestServer(t, server.Server)
 			t.Cleanup(func() {
 				client.Logout()
-				srv.Close()
+				server.Close()
 			})
 
-			service := client.GetService()
-			chassis, err := service.Chassis()
+			chassis, err := client.GetService().Chassis()
 			require.NoError(t, err)
 			require.NotEmpty(t, chassis, "Expected at least one chassis")
 
-			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			logger := NewTestLogger(t, slog.LevelDebug)
 			collector, err := NewChassisCollector(t.Name(), client, logger, config.DefaultChassisCollector)
 			require.NoError(t, err)
 			thermalSubsystem, err := chassis[0].ThermalSubsystem()
 			require.NoError(t, err)
 
-			detectors := collector.getLeakDetectors(thermalSubsystem, logger)
+			leakDetection, detectors := collector.getLeakDetection(thermalSubsystem, logger)
 
-			require.Equal(t, test.expectedLDs, len(detectors))
+			require.Len(t, detectors, test.expectedLDs)
+			if test.expectNilLeakDetection {
+				require.Nil(t, leakDetection)
+				return
+			}
+			require.NotNil(t, leakDetection)
+			require.Equal(t, test.expectedLeakDetectionID, leakDetection.ID)
 		})
 	}
 }
 
 func TestParseLeakDetector(t *testing.T) {
+	tT := map[string]struct {
+		fixture               string
+		expectedState         float64
+		expectedHealth        float64
+		expectedDetectorState string
+	}{
+		"detector reporting no leak": {
+			fixture:               "leak_detector_ok.json",
+			expectedState:         1,
+			expectedHealth:        1,
+			expectedDetectorState: "OK",
+		},
+		"detector reporting a critical leak": {
+			fixture:               "leak_detector_leak.json",
+			expectedState:         3,
+			expectedHealth:        3,
+			expectedDetectorState: "Critical",
+		},
+	}
+
+	for tName, test := range tT {
+		t.Run(tName, func(t *testing.T) {
+			var detector schemas.LeakDetector
+			loadTestDataInto(t, test.fixture, &detector)
+			require.Equal(t, test.expectedDetectorState, string(detector.DetectorState),
+				"fixture must use a DetectorState value from the Redfish enum")
+
+			metricsCh := make(chan prometheus.Metric, 32)
+			parseLeakDetector(metricsCh, "test_chassis", "LeakDetection", &detector)
+			metrics := drainMetrics(t, metricsCh)
+
+			state := requireMetric(t, metrics, "redfish_chassis_leak_detector_state")
+			require.Equal(t, test.expectedState, state.value)
+			require.Equal(t, "test_chassis", state.labels["chassis_id"])
+			require.Equal(t, "LeakDetection", state.labels["leak_detection_id"])
+			require.Equal(t, detector.ID, state.labels["leak_detector_id"])
+			require.Equal(t, "leak_detector", state.labels["resource"])
+
+			require.Equal(t, test.expectedHealth, requireMetric(t, metrics, "redfish_chassis_leak_detector_health").value)
+
+			info := requireMetric(t, metrics, "redfish_chassis_leak_detector_info")
+			require.Equal(t, float64(1), info.value)
+			require.Equal(t, "Moisture", info.labels["leak_detector_type"])
+			require.Equal(t, "CoolingSubsystem", info.labels["physical_context"])
+		})
+	}
+}
+
+// TestParseLeakDetectorEnabled covers firmware that omits the Enabled property. gofish
+// types it as a plain bool, so reporting it unconditionally would label every healthy
+// detector on a GB300 tray as disabled.
+func TestParseLeakDetectorEnabled(t *testing.T) {
+	t.Run("omitted by firmware is not reported", func(t *testing.T) {
+		// The real ARS-121GL-NB3 detector body: no Enabled property.
+		raw := []byte(`{
+			"Id": "Chassis_0_LeakDetector_0_ColdPlate",
+			"Name": "Chassis 0 LeakDetector 0 ColdPlate",
+			"LeakDetectorType": "Moisture",
+			"DetectorState": "OK",
+			"Status": {"Health": "OK", "State": "Enabled"}
+		}`)
+		var detector schemas.LeakDetector
+		require.NoError(t, json.Unmarshal(raw, &detector))
+		require.Equal(t, raw, []byte(detector.RawData), "gofish should retain the raw payload")
+
+		_, reported := leakDetectorEnabled(&detector)
+		require.False(t, reported, "an absent Enabled property must not be reported")
+
+		ch := make(chan prometheus.Metric, 32)
+		parseLeakDetector(ch, "Chassis_0", "LeakDetection", &detector)
+		metrics := drainMetrics(t, ch)
+		require.NotContains(t, metrics, "redfish_chassis_leak_detector_enabled")
+		// The leak signal itself must still be emitted.
+		require.Equal(t, float64(1), requireMetric(t, metrics, "redfish_chassis_leak_detector_state").value)
+	})
+
+	t.Run("explicitly disabled is reported as zero", func(t *testing.T) {
+		raw := []byte(`{
+			"Id": "Chassis_0_LeakDetector_0_ColdPlate",
+			"DetectorState": "Unavailable",
+			"Enabled": false,
+			"Status": {"Health": "OK", "State": "Disabled"}
+		}`)
+		var detector schemas.LeakDetector
+		require.NoError(t, json.Unmarshal(raw, &detector))
+
+		enabled, reported := leakDetectorEnabled(&detector)
+		require.True(t, reported)
+		require.False(t, enabled)
+
+		ch := make(chan prometheus.Metric, 32)
+		parseLeakDetector(ch, "Chassis_0", "LeakDetection", &detector)
+		metrics := drainMetrics(t, ch)
+		require.Equal(t, float64(0), requireMetric(t, metrics, "redfish_chassis_leak_detector_enabled").value)
+		// A disabled detector reports Unavailable, which must not read as worse than Critical.
+		require.Equal(t, float64(4), requireMetric(t, metrics, "redfish_chassis_leak_detector_state").value)
+	})
+
+	t.Run("explicitly enabled is reported as one", func(t *testing.T) {
+		var detector schemas.LeakDetector
+		loadTestDataInto(t, "leak_detector_ok.json", &detector)
+
+		enabled, reported := leakDetectorEnabled(&detector)
+		require.True(t, reported)
+		require.True(t, enabled)
+
+		ch := make(chan prometheus.Metric, 32)
+		parseLeakDetector(ch, "Chassis_0", "LeakDetection", &detector)
+		metrics := drainMetrics(t, ch)
+		require.Equal(t, float64(1), requireMetric(t, metrics, "redfish_chassis_leak_detector_enabled").value)
+	})
+}
+
+// TestParseLeakDetectorUnavailableIsNotWorseThanCritical documents why alert expressions
+// on leak_detector_state must use equality: Unavailable and Absent sort above Critical.
+func TestParseLeakDetectorUnavailableIsNotWorseThanCritical(t *testing.T) {
+	for state, want := range map[schemas.DetectorState]float64{
+		schemas.OKDetectorState:          1,
+		schemas.WarningDetectorState:     2,
+		schemas.CriticalDetectorState:    3,
+		schemas.UnavailableDetectorState: 4,
+		schemas.AbsentDetectorState:      5,
+	} {
+		got, ok := parseDetectorState(state)
+		require.True(t, ok, "state %q should map to a value", state)
+		require.Equal(t, want, got, "state %q", state)
+	}
+
+	_, ok := parseDetectorState(schemas.DetectorState("LeakDetected"))
+	require.False(t, ok, "a value outside the Redfish enum must not be emitted")
+}
+
+// TestGetChassisSensorsUsesExpand asserts the collector asks the BMC to inline sensor
+// bodies. Without $expand, gofish issues one request per sensor, which on a tray with a
+// few hundred sensors and max_concurrent_requests=1 serialises into a very long scrape.
+func TestGetChassisSensorsUsesExpand(t *testing.T) {
 	server := newTestRedfishServer(t)
 	server.addRouteFromFixture("/redfish/v1/Chassis", "chassis_collection.json")
 	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0", "chassis_main.json")
-	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem", "thermal_subsystem.json")
-	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection", "single_leak_detection.json")
-	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors", "leak_detectors_single.json")
-	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_0_ColdPlate", "leak_detector_ok.json")
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/Sensors", "chassis_sensors_expanded.json")
+
+	var expandedRequests int
+	server.mux.HandleFunc("/redfish/v1/Chassis/Chassis_0/Sensors/", func(w http.ResponseWriter, r *http.Request) {
+		expandedRequests++
+		w.WriteHeader(http.StatusInternalServerError)
+	})
 
 	client := connectToTestServer(t, server.Server)
 	t.Cleanup(func() {
@@ -102,46 +312,177 @@ func TestParseLeakDetector(t *testing.T) {
 		server.Close()
 	})
 
-	service := client.GetService()
-	chassis, err := service.Chassis()
+	chassis, err := client.GetService().Chassis()
 	require.NoError(t, err)
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	collector, err := NewChassisCollector(t.Name(), client, logger, config.DefaultChassisCollector)
-	require.NoError(t, err)
-	thermalSubsystem, err := chassis[0].ThermalSubsystem()
+	collector, err := NewChassisCollector(t.Name(), client, NewTestLogger(t, slog.LevelDebug), config.DefaultChassisCollector)
 	require.NoError(t, err)
 
-	detectors := collector.getLeakDetectors(thermalSubsystem, logger)
-	require.Greater(t, len(detectors), 0)
+	sensors, err := collector.getChassisSensors(context.Background(), chassis[0], NewTestLogger(t, slog.LevelDebug))
+	require.NoError(t, err)
+	require.Len(t, sensors, 6, "all sensors should arrive from the single expanded request")
+	require.Zero(t, expandedRequests, "no per-sensor requests should be issued when $expand is honoured")
+}
 
-	metricsCh := make(chan prometheus.Metric, 10)
+func TestParseChassisSensor(t *testing.T) {
+	var collection sensorCollection
+	loadTestDataInto(t, "chassis_sensors_expanded.json", &collection)
+	require.Len(t, collection.Members, 6)
 
-	parseLeakDetector(metricsCh, "test_chassis", detectors[0])
-	close(metricsCh)
-
-	for metric := range metricsCh {
-		dto := &dto.Metric{}
-		require.NoError(t, metric.Write(dto))
-
-		// Verify the metric has the expected labels and value
-		require.Len(t, dto.Label, 4, "Expected 4 labels")
-
-		// Check labels
-		labelMap := make(map[string]string)
-		for _, label := range dto.Label {
-			labelMap[label.GetName()] = label.GetValue()
-		}
-
-		require.Equal(t, "test_chassis", labelMap["chassis_id"])
-		require.Equal(t, "LeakDetection", labelMap["leak_detection_id"])
-		require.Equal(t, "Chassis_0_LeakDetector_0_ColdPlate", labelMap["leak_detector_id"])
-		require.Equal(t, "leak_detector", labelMap["resource"])
-
-		// Check gauge value
-		require.NotNil(t, dto.Gauge, "Expected gauge metric")
-		require.Equal(t, float64(1), dto.Gauge.GetValue())
+	byID := map[string]*schemas.Sensor{}
+	for _, sensor := range collection.Members {
+		byID[sensor.ID] = sensor
 	}
+
+	// Mirrors the collect loop: leak detectors are enumerated from ThermalSubsystem
+	// before the Sensors pass, so their companion voltage sensors are recognised.
+	leakDetectorIDs := map[string]string{"Chassis_0_LeakDetector_0_ColdPlate": "LeakDetection"}
+
+	t.Run("leak detector voltage is correlated by detector id", func(t *testing.T) {
+		ch := make(chan prometheus.Metric, 32)
+		parseChassisSensor(ch, "Chassis_0", byID["Chassis_0_LeakDetector_0_ColdPlate"], leakDetectorIDs)
+		metrics := drainMetrics(t, ch)
+
+		volts := requireMetric(t, metrics, "redfish_chassis_leak_detector_volts")
+		require.InDelta(t, 1.724, volts.value, 1e-9)
+		require.Equal(t, "leak_detector", volts.labels["resource"])
+		require.Equal(t, "Chassis_0_LeakDetector_0_ColdPlate", volts.labels["leak_detector_id"])
+
+		// The threshold is only available from the Sensor resource, never from the
+		// telemetry metric report, which is why the alert can be written relative to it.
+		threshold := requireMetric(t, metrics, "redfish_chassis_leak_detector_volts_lower_threshold_critical")
+		require.InDelta(t, 1.65, threshold.value, 1e-9)
+
+		// A leak sensor must not also appear as a generic chassis voltage.
+		require.NotContains(t, metrics, "redfish_chassis_power_voltage_volts")
+	})
+
+	t.Run("temperature folds into the existing chassis family", func(t *testing.T) {
+		ch := make(chan prometheus.Metric, 32)
+		parseChassisSensor(ch, "Chassis_0", byID["Chassis_0_Front_IO_Temp_0"], leakDetectorIDs)
+		metrics := drainMetrics(t, ch)
+
+		celsius := requireMetric(t, metrics, "redfish_chassis_temperature_celsius")
+		require.InDelta(t, 27.5, celsius.value, 1e-9)
+		require.Equal(t, "temperature", celsius.labels["resource"])
+		require.Equal(t, "Chassis 0 Front IO Temp 0", celsius.labels["sensor"])
+		require.Equal(t, "Chassis_0_Front_IO_Temp_0", celsius.labels["sensor_id"])
+		require.Equal(t, float64(1), requireMetric(t, metrics, "redfish_chassis_temperature_sensor_health").value)
+	})
+
+	t.Run("rotational folds into the existing fan family with thresholds", func(t *testing.T) {
+		ch := make(chan prometheus.Metric, 32)
+		parseChassisSensor(ch, "Chassis_0", byID["Chassis_0_FAN_1_FRONT"], leakDetectorIDs)
+		metrics := drainMetrics(t, ch)
+
+		rpm := requireMetric(t, metrics, "redfish_chassis_fan_rpm")
+		require.InDelta(t, 8623.0, rpm.value, 1e-9)
+		require.Equal(t, "fan", rpm.labels["resource"])
+		require.Equal(t, "rpm", rpm.labels["fan_unit"])
+
+		// The existing ChassisFanCritical alert compares these two series directly, so a
+		// Sensors-only platform must populate both for that alert to work there.
+		require.InDelta(t, 2204.0, requireMetric(t, metrics, "redfish_chassis_fan_rpm_lower_threshold_critical").value, 1e-9)
+		require.InDelta(t, 23.056, requireMetric(t, metrics, "redfish_chassis_fan_rpm_percentage").value, 0.001)
+	})
+
+	// Fan PWM duty cycle and CPU core utilisation are both ReadingType "Percent" and
+	// neither carries a distinguishing PhysicalContext, so Percent must not be assumed
+	// to be a fan speed.
+	t.Run("percent is not assumed to be a fan speed", func(t *testing.T) {
+		ch := make(chan prometheus.Metric, 32)
+		parseChassisSensor(ch, "Chassis_0", byID["Chassis_0_FAN_1_PWM"], leakDetectorIDs)
+		metrics := drainMetrics(t, ch)
+
+		require.NotContains(t, metrics, "redfish_chassis_fan_rpm_percentage")
+		percent := requireMetric(t, metrics, "redfish_chassis_sensor_percent")
+		require.InDelta(t, 29.803921, percent.value, 1e-5)
+		require.Equal(t, "%", percent.labels["sensor_units"])
+	})
+
+	t.Run("power and unrecognised reading types reach a catch-all", func(t *testing.T) {
+		ch := make(chan prometheus.Metric, 32)
+		parseChassisSensor(ch, "Chassis_0", byID["Chassis_0_TotalHSC_Power_0"], leakDetectorIDs)
+		metrics := drainMetrics(t, ch)
+		require.InDelta(t, 1171.349692, requireMetric(t, metrics, "redfish_chassis_sensor_watts").value, 1e-6)
+
+		// Altitude has no dedicated metric; it must still be emitted rather than dropped.
+		ch = make(chan prometheus.Metric, 32)
+		parseChassisSensor(ch, "Chassis_0", byID["Chassis_0_Altitude_0"], leakDetectorIDs)
+		metrics = drainMetrics(t, ch)
+		reading := requireMetric(t, metrics, "redfish_chassis_sensor_reading")
+		require.InDelta(t, 132.0, reading.value, 1e-9)
+		require.Equal(t, "m", reading.labels["sensor_units"])
+	})
+}
+
+func TestChassisCollectorFiltering(t *testing.T) {
+	t.Run("include and exclude patterns", func(t *testing.T) {
+		tT := map[string]struct {
+			include, exclude string
+			chassisID        string
+			wantSkip         bool
+		}{
+			"no filters collects everything":   {chassisID: "HGX_GPU_0", wantSkip: false},
+			"include matches":                  {include: "^Chassis_[0-9]+$", chassisID: "Chassis_0", wantSkip: false},
+			"include does not match":           {include: "^Chassis_[0-9]+$", chassisID: "HGX_GPU_0", wantSkip: true},
+			"exclude matches":                  {exclude: "^HGX_", chassisID: "HGX_GPU_0", wantSkip: true},
+			"exclude does not match":           {exclude: "^HGX_", chassisID: "Chassis_0", wantSkip: false},
+			"exclude takes effect via include": {include: "^Chassis_", exclude: "_1$", chassisID: "Chassis_1", wantSkip: true},
+		}
+		for tName, test := range tT {
+			t.Run(tName, func(t *testing.T) {
+				collector, err := NewChassisCollector(t.Name(), nil, NewTestLogger(t, slog.LevelWarn), config.ChassisCollectorConfig{
+					ChassisInclude: test.include,
+					ChassisExclude: test.exclude,
+				})
+				require.NoError(t, err)
+				require.Equal(t, test.wantSkip, collector.skipChassis(test.chassisID))
+			})
+		}
+	})
+
+	t.Run("an invalid pattern is reported at construction", func(t *testing.T) {
+		_, err := NewChassisCollector(t.Name(), nil, NewTestLogger(t, slog.LevelWarn), config.ChassisCollectorConfig{
+			ChassisInclude: "([unclosed",
+		})
+		require.ErrorContains(t, err, "invalid chassis_include pattern")
+
+		_, err = NewChassisCollector(t.Name(), nil, NewTestLogger(t, slog.LevelWarn), config.ChassisCollectorConfig{
+			ChassisExclude: "([unclosed",
+		})
+		require.ErrorContains(t, err, "invalid chassis_exclude pattern")
+	})
+
+	// The zero-value config must be a no-op so that existing deployments, which pass
+	// chassis_collector: {}, keep collecting every subsystem.
+	t.Run("zero value config disables nothing", func(t *testing.T) {
+		cfg := config.DefaultChassisCollector
+		require.False(t, cfg.DisableThermal)
+		require.False(t, cfg.DisableThermalSubsystem)
+		require.False(t, cfg.DisablePower)
+		require.False(t, cfg.DisableNetworkAdapters)
+		require.False(t, cfg.DisableSensors)
+		require.Empty(t, cfg.ChassisInclude)
+		require.Empty(t, cfg.ChassisExclude)
+	})
+}
+
+func TestParseLeakDetection(t *testing.T) {
+	var leakDetection schemas.LeakDetection
+	loadTestDataInto(t, "leak_detection.json", &leakDetection)
+
+	metricsCh := make(chan prometheus.Metric, 8)
+	parseLeakDetection(metricsCh, "test_chassis", "LeakDetection", &leakDetection)
+	metrics := drainMetrics(t, metricsCh)
+
+	health := requireMetric(t, metrics, "redfish_chassis_leak_detection_health")
+	require.Equal(t, float64(1), health.value)
+	require.Equal(t, "leak_detection", health.labels["resource"])
+	require.Equal(t, "test_chassis", health.labels["chassis_id"])
+	require.Equal(t, "LeakDetection", health.labels["leak_detection_id"])
+
+	require.Equal(t, float64(1), requireMetric(t, metrics, "redfish_chassis_leak_detection_state").value)
 }
 
 // TestCollectTotalGPUPower tests the collection of total GPU power metric
