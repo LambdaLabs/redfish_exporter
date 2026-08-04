@@ -318,10 +318,104 @@ func TestGetChassisSensorsUsesExpand(t *testing.T) {
 	collector, err := NewChassisCollector(t.Name(), client, NewTestLogger(t, slog.LevelDebug), config.DefaultChassisCollector)
 	require.NoError(t, err)
 
-	sensors, err := collector.getChassisSensors(context.Background(), chassis[0], NewTestLogger(t, slog.LevelDebug))
+	sensors, err := collector.getChassisSensors(context.Background(), chassis[0], nil, NewTestLogger(t, slog.LevelDebug))
 	require.NoError(t, err)
 	require.Len(t, sensors, 6, "all sensors should arrive from the single expanded request")
 	require.Zero(t, expandedRequests, "no per-sensor requests should be issued when $expand is honoured")
+}
+
+// TestGetChassisSensorsBoundedWhenExpandIgnored covers a BMC that answers the Sensors
+// collection with link-only members. Fanning out to one request per sensor there would
+// multiply request load against the BMCs least able to absorb it, so only the named
+// sensors — the leak detectors — are fetched and the bulk telemetry is skipped.
+func TestGetChassisSensorsBoundedWhenExpandIgnored(t *testing.T) {
+	server := newTestRedfishServer(t)
+	server.addRouteFromFixture("/redfish/v1/Chassis", "chassis_collection.json")
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0", "chassis_main.json")
+
+	// Link-only members, as a BMC that ignores $expand would return.
+	server.addRoute("/redfish/v1/Chassis/Chassis_0/Sensors", map[string]any{
+		"@odata.id":           "/redfish/v1/Chassis/Chassis_0/Sensors",
+		"@odata.type":         "#SensorCollection.SensorCollection",
+		"Name":                "Sensor Collection",
+		"Members@odata.count": 3,
+		"Members": []map[string]string{
+			{"@odata.id": "/redfish/v1/Chassis/Chassis_0/Sensors/Chassis_0_LeakDetector_0_ColdPlate"},
+			{"@odata.id": "/redfish/v1/Chassis/Chassis_0/Sensors/Chassis_0_FAN_1_FRONT"},
+			{"@odata.id": "/redfish/v1/Chassis/Chassis_0/Sensors/Chassis_0_Front_IO_Temp_0"},
+		},
+	})
+
+	var perSensorRequests []string
+	for _, id := range []string{"Chassis_0_LeakDetector_0_ColdPlate", "Chassis_0_FAN_1_FRONT", "Chassis_0_Front_IO_Temp_0"} {
+		sensorID := id
+		server.mux.HandleFunc("/redfish/v1/Chassis/Chassis_0/Sensors/"+sensorID, func(w http.ResponseWriter, r *http.Request) {
+			perSensorRequests = append(perSensorRequests, sensorID)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"@odata.id":"/redfish/v1/Chassis/Chassis_0/Sensors/` + sensorID + `","Id":"` + sensorID + `","Name":"` + sensorID + `","ReadingType":"Voltage","Reading":1.7,"Thresholds":{"LowerCritical":{"Reading":1.65}}}`))
+		})
+	}
+
+	client := connectToTestServer(t, server.Server)
+	t.Cleanup(func() {
+		client.Logout()
+		server.Close()
+	})
+
+	chassis, err := client.GetService().Chassis()
+	require.NoError(t, err)
+
+	collector, err := NewChassisCollector(t.Name(), client, NewTestLogger(t, slog.LevelDebug), config.DefaultChassisCollector)
+	require.NoError(t, err)
+
+	required := map[string]string{"Chassis_0_LeakDetector_0_ColdPlate": "LeakDetection"}
+	sensors, err := collector.getChassisSensors(context.Background(), chassis[0], required, NewTestLogger(t, slog.LevelDebug))
+	require.NoError(t, err)
+
+	require.Len(t, sensors, 1, "only the required sensor should be fetched")
+	require.Equal(t, "Chassis_0_LeakDetector_0_ColdPlate", sensors[0].ID)
+	require.Equal(t, []string{"Chassis_0_LeakDetector_0_ColdPlate"}, perSensorRequests,
+		"the fan and temperature sensors must not be fetched individually")
+}
+
+// TestChassisAdvertisesThermalOrPower pins the feature detection to the advertised links.
+// Deriving it from whether a fetch returned data made every chassis look modern as soon as
+// Thermal or Power was disabled by configuration, pulling in whole Sensors collections.
+func TestChassisAdvertisesThermalOrPower(t *testing.T) {
+	tT := map[string]struct {
+		raw  string
+		want bool
+	}{
+		"legacy chassis linking Thermal and Power": {
+			raw:  `{"Id":"1","Thermal":{"@odata.id":"/redfish/v1/Chassis/1/Thermal"},"Power":{"@odata.id":"/redfish/v1/Chassis/1/Power"}}`,
+			want: true,
+		},
+		"Thermal only": {
+			raw:  `{"Id":"1","Thermal":{"@odata.id":"/redfish/v1/Chassis/1/Thermal"}}`,
+			want: true,
+		},
+		// The real ARS-121GL-NB3 tray shelf: ThermalSubsystem and Sensors, no Thermal/Power.
+		"NVL72 tray chassis": {
+			raw:  `{"Id":"Chassis_0","ThermalSubsystem":{"@odata.id":"/redfish/v1/Chassis/Chassis_0/ThermalSubsystem"},"Sensors":{"@odata.id":"/redfish/v1/Chassis/Chassis_0/Sensors"},"PowerSubsystem":{"@odata.id":"/redfish/v1/Chassis/Chassis_0/PowerSubsystem"}}`,
+			want: false,
+		},
+		"empty link objects do not count": {
+			raw:  `{"Id":"1","Thermal":{},"Power":{}}`,
+			want: false,
+		},
+	}
+
+	for tName, test := range tT {
+		t.Run(tName, func(t *testing.T) {
+			var chassis schemas.Chassis
+			require.NoError(t, json.Unmarshal([]byte(test.raw), &chassis))
+			require.Equal(t, test.want, chassisAdvertisesThermalOrPower(&chassis))
+		})
+	}
+
+	// A chassis with no retained payload is treated conservatively as legacy, so the
+	// Sensors fallback is suppressed rather than issuing a request per chassis.
+	require.True(t, chassisAdvertisesThermalOrPower(&schemas.Chassis{}))
 }
 
 func TestParseChassisSensor(t *testing.T) {

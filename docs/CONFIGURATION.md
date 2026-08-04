@@ -118,11 +118,22 @@ implements `Thermal`/`Power`:
 | `Voltage` | `redfish_chassis_power_voltage_volts` (+ `_state`) |
 | anything else | `redfish_chassis_sensor_{watts,amperes,joules,hertz,percent,reading}` |
 
-`Sensors` is only consulted for a chassis that implements neither `Thermal` nor `Power`, so
-this never duplicates the legacy series. Readings are not inferred from sensor naming: fan
-PWM duty cycle and CPU core utilisation are both `ReadingType: Percent` and neither carries
-a distinguishing `PhysicalContext`, so `Percent` reaches the catch-all rather than being
-assumed to be a fan speed.
+`Sensors` is only consulted for a chassis that advertises neither `Thermal` nor `Power` — or
+that carries leak detectors, whose voltages live there — so this never duplicates the legacy
+series. Readings are not inferred from sensor naming: fan PWM duty cycle and CPU core
+utilisation are both `ReadingType: Percent` and neither carries a distinguishing
+`PhysicalContext`, so `Percent` reaches the catch-all rather than being assumed to be a fan
+speed.
+
+The collection is fetched with `$expand` so the BMC inlines every member body, costing one
+request per chassis rather than one per sensor. Measured against captured data, this adds
+**14–18 requests per scrape** (roughly 12–14% more than before) on both a GB300 tray and an
+H100, partly offset by a duplicate `LeakDetection` request this release also removes.
+
+A BMC that does not honour `$expand` is **not** fanned out to one request per sensor — that
+would multiply load against the BMCs least able to absorb it. Only the leak detector sensors
+are then fetched individually and the bulk sensor telemetry is skipped with a warning, so
+request count stays flat and the safety-relevant readings still arrive.
 
 #### Leak detection
 

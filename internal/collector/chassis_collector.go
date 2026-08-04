@@ -243,12 +243,16 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 			ChassisModelLabelValues := []string{"chassis", chassisID, chassisManufacturer, chassisModel, chassisPartNumber, chassisSKU}
 			ch <- prometheus.MustNewConstMetric(c.metrics["chassis_model_info"].desc, prometheus.GaugeValue, 1, ChassisModelLabelValues...)
 
-			// legacyThermalOrPower records whether this chassis implements either of the
-			// deprecated Thermal/Power schemas. Newer platforms (for example an NVL72
-			// tray, where no chassis implements either) express the same readings through
-			// the Sensors collection instead, which is collected below only when these
-			// are absent so the two paths never emit duplicate series.
-			legacyThermalOrPower := false
+			// Whether this chassis advertises either of the deprecated Thermal/Power
+			// schemas. Newer platforms (for example an NVL72 tray, where no chassis
+			// implements either) express the same readings through Sensors instead, which is
+			// collected below only when these are absent so the two paths never emit
+			// duplicate series.
+			//
+			// Read from the advertised links rather than from whether a fetch returned data,
+			// so that disabling Thermal or Power by configuration does not make every
+			// chassis look like a modern one and pull in its whole Sensors collection.
+			legacyThermalOrPower := chassisAdvertisesThermalOrPower(chassis)
 
 			chassisThermal, err := c.chassisThermal(chassis)
 			if err != nil {
@@ -256,7 +260,6 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 			} else if chassisThermal == nil {
 				chassisLogger.Debug("no thermal data found", slog.String("operation", "chassis.Thermal()"))
 			} else {
-				legacyThermalOrPower = true
 				// process temperature and fans
 				chassisTemperatures := chassisThermal.Temperatures
 				chassisFans := chassisThermal.Fans
@@ -326,7 +329,6 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 			} else if chassisPowerInfo == nil {
 				chassisLogger.Debug("no power data found", slog.String("operation", "chassis.Power()"))
 			} else {
-				legacyThermalOrPower = true
 				egPower := newRecoverGroup(ctx)
 
 				// power voltages
@@ -358,10 +360,12 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 			}
 
 			// Sensors carry the readings that Thermal/Power would have provided on older
-			// platforms, plus the analog side of the leak detectors. Only consulted when
-			// the legacy schemas are absent, so this is a no-op on existing hardware.
-			if !c.config.DisableSensors && !legacyThermalOrPower {
-				sensors, err := c.getChassisSensors(ctx, chassis, chassisLogger)
+			// platforms, plus the analog side of the leak detectors. Consulted when the
+			// legacy schemas are absent, so this is a no-op on existing hardware, and
+			// additionally on any chassis carrying leak detectors so their voltages and
+			// thresholds are picked up even where Thermal/Power do exist.
+			if !c.config.DisableSensors && (!legacyThermalOrPower || len(leakDetectorIDs) > 0) {
+				sensors, err := c.getChassisSensors(ctx, chassis, leakDetectorIDs, chassisLogger)
 				if err != nil {
 					chassisLogger.Error("error getting sensors from chassis", slog.String("operation", "chassis.Sensors()"), slog.Any("error", err))
 				} else if len(sensors) == 0 {
@@ -468,37 +472,95 @@ type sensorCollection struct {
 	Members []*schemas.Sensor `json:"Members"`
 }
 
-// getChassisSensors returns the chassis Sensors collection.
+// chassisAdvertisesThermalOrPower reports whether the chassis links either of the
+// deprecated Thermal or Power resources.
 //
-// It asks the BMC to inline the member bodies with $expand, because a single NVL72 tray
-// carries a few hundred sensors across its chassis and gofish's typed accessor issues one
-// request per member — which, with max_concurrent_requests defaulting to 1, serialises
-// into an unacceptably long scrape. If $expand is unsupported or returns nothing usable,
-// it falls back to the typed accessor.
-func (c *ChassisCollector) getChassisSensors(ctx context.Context, chassis *schemas.Chassis, logger *slog.Logger) ([]*schemas.Sensor, error) {
+// This reads the advertised links from the chassis payload rather than inferring from a
+// fetch, so the answer does not change when a subsystem is disabled by configuration. A
+// chassis whose payload cannot be inspected is treated as advertising them, which is the
+// conservative answer: it suppresses the Sensors fallback rather than risking an
+// unnecessary request per chassis.
+func chassisAdvertisesThermalOrPower(chassis *schemas.Chassis) bool {
+	if len(chassis.RawData) == 0 {
+		return true
+	}
+	var raw struct {
+		Thermal *struct {
+			ODataID string `json:"@odata.id"`
+		} `json:"Thermal"`
+		Power *struct {
+			ODataID string `json:"@odata.id"`
+		} `json:"Power"`
+	}
+	if err := json.Unmarshal(chassis.RawData, &raw); err != nil {
+		return true
+	}
+	return (raw.Thermal != nil && raw.Thermal.ODataID != "") || (raw.Power != nil && raw.Power.ODataID != "")
+}
+
+// getChassisSensors returns sensors for a chassis in a single request.
+//
+// The whole collection is requested with $expand so the BMC inlines every member body. This
+// matters for request load: a single NVL72 tray carries a few hundred sensors across its
+// chassis, and gofish's typed accessor issues one request per member, which with
+// max_concurrent_requests defaulting to 1 serialises into a very long scrape.
+//
+// If the BMC does not honour $expand there is deliberately no fan-out to one request per
+// sensor. Doing so would multiply this collector's request count against the very BMCs least
+// able to absorb it. Instead only the named sensors are fetched individually — the leak
+// detectors, whose readings are safety relevant and few in number — and the bulk sensor
+// telemetry is skipped with a warning.
+func (c *ChassisCollector) getChassisSensors(ctx context.Context, chassis *schemas.Chassis, required map[string]string, logger *slog.Logger) ([]*schemas.Sensor, error) {
+	rfClient := c.redfishClient.WithContext(ctx)
 	sensorsPath := chassis.ODataID + "/Sensors"
 
-	rfClient := c.redfishClient.WithContext(ctx)
 	response, err := rfClient.Get(sensorsPath + `?$expand=.($levels=1)`)
-	if err == nil {
-		defer response.Body.Close() //nolint:errcheck
-		body, readErr := io.ReadAll(response.Body)
-		if readErr == nil {
-			var agg sensorCollection
-			if jsonErr := json.Unmarshal(body, &agg); jsonErr == nil && len(agg.Members) > 0 {
-				// A BMC that ignores $expand returns link-only members, which unmarshal
-				// into Sensors with no Id. Treat that as unsupported and fall back.
-				if agg.Members[0] != nil && agg.Members[0].ID != "" {
-					return agg.Members, nil
-				}
-				logger.Debug("BMC did not honour $expand on Sensors, falling back to per-sensor requests")
-			}
-		}
-	} else {
-		logger.Debug("expanded Sensors request failed, falling back to per-sensor requests", slog.Any("error", err))
+	if err != nil {
+		logger.Debug("expanded Sensors request failed", slog.Any("error", err))
+		return c.getNamedSensors(ctx, sensorsPath, required, logger), nil
+	}
+	defer response.Body.Close() //nolint:errcheck
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
 	}
 
-	return chassis.Sensors()
+	var agg sensorCollection
+	if err := json.Unmarshal(body, &agg); err != nil {
+		return nil, err
+	}
+	// A BMC that ignores $expand answers with link-only members, which unmarshal into
+	// Sensors carrying no Id.
+	if len(agg.Members) > 0 && agg.Members[0] != nil && agg.Members[0].ID != "" {
+		return agg.Members, nil
+	}
+	if len(agg.Members) > 0 {
+		logger.Warn("BMC did not honour $expand on Sensors; collecting required sensors only",
+			slog.String("sensors", sensorsPath),
+			slog.Int("skipped", len(agg.Members)),
+		)
+	}
+	return c.getNamedSensors(ctx, sensorsPath, required, logger), nil
+}
+
+// getNamedSensors fetches individually named sensors, one request each. Callers must keep
+// the set small.
+func (c *ChassisCollector) getNamedSensors(ctx context.Context, sensorsPath string, required map[string]string, logger *slog.Logger) []*schemas.Sensor {
+	if len(required) == 0 {
+		return nil
+	}
+	client := c.redfishClient.WithContext(ctx).GetService().GetClient()
+	sensors := make([]*schemas.Sensor, 0, len(required))
+	for sensorID := range required {
+		sensor, err := schemas.GetSensor(client, sensorsPath+"/"+sensorID)
+		if err != nil {
+			logger.Debug("could not get named sensor", slog.String("sensor_id", sensorID), slog.Any("error", err))
+			continue
+		}
+		sensors = append(sensors, sensor)
+	}
+	return sensors
 }
 
 // getLeakDetection returns the chassis LeakDetection resource and its detectors.
