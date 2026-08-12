@@ -138,159 +138,164 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 		return
 	}
 	// get a list of chassis from service
-	if chassises, err := service.Chassis(); err != nil {
+	chassises, err := service.Chassis()
+	if err != nil {
+		// A collection error means some member failed, not that none of them arrived:
+		// gofish still returns the chassis it did fetch. Discarding those made one flaky
+		// chassis out of forty silently zero the whole chassis scrape, which reads as a
+		// host with no chassis rather than as a host with a problem.
 		logger.Error("error getting chassis from service", slog.String("operation", "service.Chassis()"), slog.Any("error", err))
-	} else {
-		// process the chassises
-		for _, chassis := range chassises {
-			if ctx.Err() != nil {
-				c.logger.With("error", ctx.Err()).Warn("skipping further collection")
-				continue
-			}
-			chassisLogger := logger.With(slog.String("Chassis", chassis.ID))
-			chassisLogger.Info("collector scrape started")
-			chassisID := chassis.ID
-			chassisStatus := chassis.Status
-			chassisStatusState := chassisStatus.State
-			chassisStatusHealth := chassisStatus.Health
-			chassisStatusHealthRollup := chassisStatus.HealthRollup
-			ChassisLabelValues := []string{"chassis", chassisID}
-			if chassisStatusHealthValue, ok := parseCommonStatusHealth(chassisStatusHealth); ok {
-				ch <- prometheus.MustNewConstMetric(c.metrics["chassis_health"].desc, prometheus.GaugeValue, chassisStatusHealthValue, ChassisLabelValues...)
-			}
-			if chassisStatusHealthRollupValue, ok := parseCommonStatusHealth(chassisStatusHealthRollup); ok {
-				ch <- prometheus.MustNewConstMetric(c.metrics["chassis_health_rollup"].desc, prometheus.GaugeValue, chassisStatusHealthRollupValue, ChassisLabelValues...)
-			}
-			if chassisStatusStateValue, ok := parseCommonStatusState(chassisStatusState); ok {
-				ch <- prometheus.MustNewConstMetric(c.metrics["chassis_state"].desc, prometheus.GaugeValue, chassisStatusStateValue, ChassisLabelValues...)
-			}
+	}
 
-			chassisManufacturer := chassis.Manufacturer
-			chassisModel := chassis.Model
-			chassisPartNumber := chassis.PartNumber
-			chassisSKU := chassis.SKU
-			ChassisModelLabelValues := []string{"chassis", chassisID, chassisManufacturer, chassisModel, chassisPartNumber, chassisSKU}
-			ch <- prometheus.MustNewConstMetric(c.metrics["chassis_model_info"].desc, prometheus.GaugeValue, 1, ChassisModelLabelValues...)
-
-			chassisThermal, err := chassis.Thermal()
-			if err != nil {
-				chassisLogger.Error("error getting thermal data from chassis", slog.String("operation", "chassis.Thermal()"), slog.Any("error", err))
-			} else if chassisThermal == nil {
-				chassisLogger.Info("no thermal data found", slog.String("operation", "chassis.Thermal()"))
-			} else {
-				// process temperature and fans
-				chassisTemperatures := chassisThermal.Temperatures
-				chassisFans := chassisThermal.Fans
-				eg := newRecoverGroup(ctx)
-				for _, chassisTemperature := range chassisTemperatures {
-					eg.Go(func() error {
-						parseChassisTemperature(ch, chassisID, chassisTemperature)
-						return nil
-					})
-				}
-				for _, chassisFan := range chassisFans {
-					eg.Go(func() error {
-						parseChassisFan(ch, chassisID, chassisFan)
-						return nil
-					})
-				}
-				if err := eg.Wait(); err != nil {
-					chassisLogger.Error("goroutine error", slog.Any("error", err))
-				}
-			}
-			chassisThermalSubsystem, err := chassis.ThermalSubsystem()
-			if err != nil {
-				chassisLogger.Error("error getting thermal subsystem from chassis", slog.String("operation", "chassis.ThermalSubsystem()"), slog.Any("error", err))
-			} else if chassisThermalSubsystem == nil {
-				chassisLogger.Info("no thermal subsystem found", slog.String("operation", "chassis.ThermalSubsystem()"))
-			} else {
-				// NOTE: Handles some odd (maybe even buggy) OEM implementations of LeakDeteactor
-				leakDetectors := c.getLeakDetectors(chassisThermalSubsystem, chassisLogger)
-
-				if len(leakDetectors) > 0 {
-					egLD := newRecoverGroup(ctx)
-					for _, ld := range leakDetectors {
-						egLD.Go(func() error {
-							parseLeakDetector(ch, chassisID, ld)
-							return nil
-						})
-					}
-					if err := egLD.Wait(); err != nil {
-						chassisLogger.Error("goroutine error", slog.Any("error", err))
-					}
-				} else {
-					chassisLogger.Info("no leak detectors found")
-				}
-			}
-
-			chassisPowerInfo, err := chassis.Power()
-			if err != nil {
-				chassisLogger.Error("error getting power data from chassis", slog.String("operation", "chassis.Power()"), slog.Any("error", err))
-			} else if chassisPowerInfo == nil {
-				chassisLogger.Info("no power data found", slog.String("operation", "chassis.Power()"))
-			} else {
-				egPower := newRecoverGroup(ctx)
-
-				// power voltages
-				for _, chassisPowerInfoVoltage := range chassisPowerInfo.Voltages {
-					egPower.Go(func() error {
-						parseChassisPowerInfoVoltage(ch, chassisID, chassisPowerInfoVoltage)
-						return nil
-					})
-				}
-
-				// power control
-				for _, chassisPowerInfoPowerControl := range chassisPowerInfo.PowerControl {
-					egPower.Go(func() error {
-						parseChassisPowerInfoPowerControl(ch, chassisID, chassisPowerInfoPowerControl)
-						return nil
-					})
-				}
-
-				// powerSupply
-				for _, chassisPowerInfoPowerSupply := range chassisPowerInfo.PowerSupplies {
-					egPower.Go(func() error {
-						parseChassisPowerInfoPowerSupply(ch, chassisID, chassisPowerInfoPowerSupply)
-						return nil
-					})
-				}
-				if err := egPower.Wait(); err != nil {
-					chassisLogger.Error("goroutine error", slog.Any("error", err))
-				}
-			}
-
-			// process NetworkAdapter
-			networkAdapters, err := chassis.NetworkAdapters()
-			if err != nil {
-				chassisLogger.Error("error getting network adapters data from chassis", slog.String("operation", "chassis.NetworkAdapters()"), slog.Any("error", err))
-			} else if networkAdapters == nil {
-				chassisLogger.Info("no network adapters data found", slog.String("operation", "chassis.NetworkAdapters()"))
-			} else {
-				egNA := newRecoverGroup(ctx)
-				for _, networkAdapter := range networkAdapters {
-					egNA.Go(func() error {
-						return parseNetworkAdapter(ctx, ch, chassisID, networkAdapter)
-					})
-				}
-				if err := egNA.Wait(); err != nil {
-					chassisLogger.Error("error getting network ports from network adapter", slog.String("operation", "chassis.NetworkAdapters()"), slog.Any("error", err))
-				}
-			}
-
-			physicalSecurity := chassis.PhysicalSecurity
-			if physicalSecurity != (schemas.PhysicalSecurity{}) {
-				physicalSecurityIntrusionSensor := physicalSecurity.IntrusionSensor
-				physicalSecurityIntrusionSensorNumber := fmt.Sprint(physicalSecurity.IntrusionSensorNumber) //nolint:staticcheck
-				physicalSecurityIntrusionSensorReArmMethod := string(physicalSecurity.IntrusionSensorReArm)
-
-				if phySecIntrusionSensor, ok := parsePhySecIntrusionSensor(physicalSecurityIntrusionSensor); ok {
-					ChassisPhysicalSecurityLabelValues := []string{"physical_security", chassisID, physicalSecurityIntrusionSensorNumber, physicalSecurityIntrusionSensorReArmMethod}
-					ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_physical_security_sensor_state"].desc, prometheus.GaugeValue, phySecIntrusionSensor, ChassisPhysicalSecurityLabelValues...)
-				}
-			}
-
-			chassisLogger.Info("collector scrape completed")
+	// process the chassises
+	for _, chassis := range chassises {
+		if ctx.Err() != nil {
+			c.logger.With("error", ctx.Err()).Warn("skipping further collection")
+			continue
 		}
+		chassisLogger := logger.With(slog.String("Chassis", chassis.ID))
+		chassisLogger.Info("collector scrape started")
+		chassisID := chassis.ID
+		chassisStatus := chassis.Status
+		chassisStatusState := chassisStatus.State
+		chassisStatusHealth := chassisStatus.Health
+		chassisStatusHealthRollup := chassisStatus.HealthRollup
+		ChassisLabelValues := []string{"chassis", chassisID}
+		if chassisStatusHealthValue, ok := parseCommonStatusHealth(chassisStatusHealth); ok {
+			ch <- prometheus.MustNewConstMetric(c.metrics["chassis_health"].desc, prometheus.GaugeValue, chassisStatusHealthValue, ChassisLabelValues...)
+		}
+		if chassisStatusHealthRollupValue, ok := parseCommonStatusHealth(chassisStatusHealthRollup); ok {
+			ch <- prometheus.MustNewConstMetric(c.metrics["chassis_health_rollup"].desc, prometheus.GaugeValue, chassisStatusHealthRollupValue, ChassisLabelValues...)
+		}
+		if chassisStatusStateValue, ok := parseCommonStatusState(chassisStatusState); ok {
+			ch <- prometheus.MustNewConstMetric(c.metrics["chassis_state"].desc, prometheus.GaugeValue, chassisStatusStateValue, ChassisLabelValues...)
+		}
+
+		chassisManufacturer := chassis.Manufacturer
+		chassisModel := chassis.Model
+		chassisPartNumber := chassis.PartNumber
+		chassisSKU := chassis.SKU
+		ChassisModelLabelValues := []string{"chassis", chassisID, chassisManufacturer, chassisModel, chassisPartNumber, chassisSKU}
+		ch <- prometheus.MustNewConstMetric(c.metrics["chassis_model_info"].desc, prometheus.GaugeValue, 1, ChassisModelLabelValues...)
+
+		chassisThermal, err := chassis.Thermal()
+		if err != nil {
+			chassisLogger.Error("error getting thermal data from chassis", slog.String("operation", "chassis.Thermal()"), slog.Any("error", err))
+		} else if chassisThermal == nil {
+			chassisLogger.Info("no thermal data found", slog.String("operation", "chassis.Thermal()"))
+		} else {
+			// process temperature and fans
+			chassisTemperatures := chassisThermal.Temperatures
+			chassisFans := chassisThermal.Fans
+			eg := newRecoverGroup(ctx)
+			for _, chassisTemperature := range chassisTemperatures {
+				eg.Go(func() error {
+					parseChassisTemperature(ch, chassisID, chassisTemperature)
+					return nil
+				})
+			}
+			for _, chassisFan := range chassisFans {
+				eg.Go(func() error {
+					parseChassisFan(ch, chassisID, chassisFan)
+					return nil
+				})
+			}
+			if err := eg.Wait(); err != nil {
+				chassisLogger.Error("goroutine error", slog.Any("error", err))
+			}
+		}
+		chassisThermalSubsystem, err := chassis.ThermalSubsystem()
+		if err != nil {
+			chassisLogger.Error("error getting thermal subsystem from chassis", slog.String("operation", "chassis.ThermalSubsystem()"), slog.Any("error", err))
+		} else if chassisThermalSubsystem == nil {
+			chassisLogger.Info("no thermal subsystem found", slog.String("operation", "chassis.ThermalSubsystem()"))
+		} else {
+			// NOTE: Handles some odd (maybe even buggy) OEM implementations of LeakDeteactor
+			leakDetectors := c.getLeakDetectors(chassisThermalSubsystem, chassisLogger)
+
+			if len(leakDetectors) > 0 {
+				egLD := newRecoverGroup(ctx)
+				for _, ld := range leakDetectors {
+					egLD.Go(func() error {
+						parseLeakDetector(ch, chassisID, ld)
+						return nil
+					})
+				}
+				if err := egLD.Wait(); err != nil {
+					chassisLogger.Error("goroutine error", slog.Any("error", err))
+				}
+			} else {
+				chassisLogger.Info("no leak detectors found")
+			}
+		}
+
+		chassisPowerInfo, err := chassis.Power()
+		if err != nil {
+			chassisLogger.Error("error getting power data from chassis", slog.String("operation", "chassis.Power()"), slog.Any("error", err))
+		} else if chassisPowerInfo == nil {
+			chassisLogger.Info("no power data found", slog.String("operation", "chassis.Power()"))
+		} else {
+			egPower := newRecoverGroup(ctx)
+
+			// power voltages
+			for _, chassisPowerInfoVoltage := range chassisPowerInfo.Voltages {
+				egPower.Go(func() error {
+					parseChassisPowerInfoVoltage(ch, chassisID, chassisPowerInfoVoltage)
+					return nil
+				})
+			}
+
+			// power control
+			for _, chassisPowerInfoPowerControl := range chassisPowerInfo.PowerControl {
+				egPower.Go(func() error {
+					parseChassisPowerInfoPowerControl(ch, chassisID, chassisPowerInfoPowerControl)
+					return nil
+				})
+			}
+
+			// powerSupply
+			for _, chassisPowerInfoPowerSupply := range chassisPowerInfo.PowerSupplies {
+				egPower.Go(func() error {
+					parseChassisPowerInfoPowerSupply(ch, chassisID, chassisPowerInfoPowerSupply)
+					return nil
+				})
+			}
+			if err := egPower.Wait(); err != nil {
+				chassisLogger.Error("goroutine error", slog.Any("error", err))
+			}
+		}
+
+		// process NetworkAdapter
+		networkAdapters, err := chassis.NetworkAdapters()
+		if err != nil {
+			chassisLogger.Error("error getting network adapters data from chassis", slog.String("operation", "chassis.NetworkAdapters()"), slog.Any("error", err))
+		} else if networkAdapters == nil {
+			chassisLogger.Info("no network adapters data found", slog.String("operation", "chassis.NetworkAdapters()"))
+		} else {
+			egNA := newRecoverGroup(ctx)
+			for _, networkAdapter := range networkAdapters {
+				egNA.Go(func() error {
+					return parseNetworkAdapter(ctx, ch, chassisID, networkAdapter)
+				})
+			}
+			if err := egNA.Wait(); err != nil {
+				chassisLogger.Error("error getting network ports from network adapter", slog.String("operation", "chassis.NetworkAdapters()"), slog.Any("error", err))
+			}
+		}
+
+		physicalSecurity := chassis.PhysicalSecurity
+		if physicalSecurity != (schemas.PhysicalSecurity{}) {
+			physicalSecurityIntrusionSensor := physicalSecurity.IntrusionSensor
+			physicalSecurityIntrusionSensorNumber := fmt.Sprint(physicalSecurity.IntrusionSensorNumber) //nolint:staticcheck
+			physicalSecurityIntrusionSensorReArmMethod := string(physicalSecurity.IntrusionSensorReArm)
+
+			if phySecIntrusionSensor, ok := parsePhySecIntrusionSensor(physicalSecurityIntrusionSensor); ok {
+				ChassisPhysicalSecurityLabelValues := []string{"physical_security", chassisID, physicalSecurityIntrusionSensorNumber, physicalSecurityIntrusionSensorReArmMethod}
+				ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_physical_security_sensor_state"].desc, prometheus.GaugeValue, phySecIntrusionSensor, ChassisPhysicalSecurityLabelValues...)
+			}
+		}
+
+		chassisLogger.Info("collector scrape completed")
 	}
 
 	c.collectorScrapeStatus.WithLabelValues("chassis").Set(float64(1))

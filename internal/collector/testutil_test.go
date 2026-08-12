@@ -83,6 +83,25 @@ func (m *testRedfishServer) addRouteFromFixture(path string, fixtureFile string)
 	m.addRoute(path, data)
 }
 
+// addErrorRoute registers a route that responds with the given HTTP status and a Redfish
+// error body. Used to reproduce BMCs that advertise a resource which then does not exist.
+func (m *testRedfishServer) addErrorRoute(path string, status int) {
+	m.mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+		m.requests = append(m.requests, r.Method+" "+r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		body := map[string]any{
+			"error": map[string]any{
+				"code":    "Base.v1_10_3.GeneralError",
+				"message": "A general error has occurred. See ExtendedInfo for more information.",
+			},
+		}
+		if err := json.NewEncoder(w).Encode(body); err != nil {
+			m.t.Errorf("Failed to encode error response: %v", err)
+		}
+	})
+}
+
 // loadFixture loads a JSON fixture and returns it
 func (m *testRedfishServer) loadFixture(fixtureFile string) map[string]interface{} {
 	return loadTestData(m.t, fixtureFile)

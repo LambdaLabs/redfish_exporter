@@ -1,8 +1,12 @@
 package collector
 
 import (
+	"context"
 	"io"
 	"log/slog"
+	"maps"
+	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -13,6 +17,91 @@ import (
 	"github.com/stmcginnis/gofish"
 	"github.com/stretchr/testify/require"
 )
+
+// collectedMetric is a drained prometheus.Metric flattened for assertions.
+type collectedMetric struct {
+	fqName string
+	labels map[string]string
+	value  float64
+}
+
+// drainMetrics closes ch and flattens everything on it, keyed by metric name. A metric
+// name may appear more than once when a family covers several sensors or detectors.
+func drainMetrics(t *testing.T, ch chan prometheus.Metric) map[string][]collectedMetric {
+	t.Helper()
+	close(ch)
+
+	out := map[string][]collectedMetric{}
+	for metric := range ch {
+		d := &dto.Metric{}
+		require.NoError(t, metric.Write(d))
+
+		match := fqNameRe.FindStringSubmatch(metric.Desc().String())
+		require.Len(t, match, 2, "could not extract fqName from %s", metric.Desc().String())
+
+		labels := map[string]string{}
+		for _, label := range d.Label {
+			labels[label.GetName()] = label.GetValue()
+		}
+
+		require.NotNil(t, d.Gauge, "expected gauge metric for %s", match[1])
+		out[match[1]] = append(out[match[1]], collectedMetric{
+			fqName: match[1],
+			labels: labels,
+			value:  d.Gauge.GetValue(),
+		})
+	}
+	return out
+}
+
+// requireMetric asserts exactly one sample exists for name and returns it.
+//
+//nolint:unused // part of the drainMetrics harness; its first callers land with the Sensors and telemetry tests.
+func requireMetric(t *testing.T, metrics map[string][]collectedMetric, name string) collectedMetric {
+	t.Helper()
+	samples, ok := metrics[name]
+	require.True(t, ok, "expected metric %s to be emitted, got %v", name, slices.Sorted(maps.Keys(metrics)))
+	require.Len(t, samples, 1, "expected exactly one sample for %s", name)
+	return samples[0]
+}
+
+// TestCollectSurvivesOneUnreachableChassis pins the behaviour that a single failing member
+// of the chassis collection must not discard the members that did answer.
+func TestCollectSurvivesOneUnreachableChassis(t *testing.T) {
+	server := newTestRedfishServer(t)
+	server.addRoute("/redfish/v1/Chassis", map[string]any{
+		"@odata.id":   "/redfish/v1/Chassis",
+		"@odata.type": "#ChassisCollection.ChassisCollection",
+		"Members": []map[string]string{
+			{"@odata.id": "/redfish/v1/Chassis/Chassis_0"},
+			{"@odata.id": "/redfish/v1/Chassis/Chassis_1"},
+		},
+	})
+	server.addRoute("/redfish/v1/Chassis/Chassis_0", map[string]any{
+		"@odata.id":   "/redfish/v1/Chassis/Chassis_0",
+		"@odata.type": "#Chassis.v1_22_0.Chassis",
+		"Id":          "Chassis_0",
+		"Status":      map[string]any{"Health": "OK", "State": "Enabled"},
+	})
+	server.addErrorRoute("/redfish/v1/Chassis/Chassis_1", http.StatusInternalServerError)
+
+	client := connectToTestServer(t, server.Server)
+	t.Cleanup(func() {
+		client.Logout()
+		server.Close()
+	})
+
+	collector, err := NewChassisCollector(t.Name(), client, NewTestLogger(t, slog.LevelDebug), config.DefaultChassisCollector)
+	require.NoError(t, err)
+
+	ch := make(chan prometheus.Metric, 128)
+	collector.CollectWithContext(context.Background(), ch)
+	metrics := drainMetrics(t, ch)
+
+	health := metrics["redfish_chassis_health"]
+	require.Len(t, health, 1, "the healthy chassis must still be collected")
+	require.Equal(t, "Chassis_0", health[0].labels["chassis_id"])
+}
 
 func TestGetLeakDetectors(t *testing.T) {
 	tT := map[string]struct {
