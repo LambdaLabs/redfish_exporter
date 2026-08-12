@@ -16,7 +16,8 @@ const (
 	CommonIntrusionSensorHelp = "1(Normal),2(TamperingDetected),3(HardwareIntrusion)"
 	// CommonDetectorStateHelp describes leak detector states. NOTE: unlike the health
 	// encoding, values above 3 do NOT mean "worse than critical" - 4/5 indicate the
-	// detector is not reporting. Alert on == 3 for a leak, >= 4 for a blind spot.
+	// detector is not reporting, and only exist from LeakDetector v1_6_0 (see
+	// parseDetectorState). Alert on == 3 for a leak, never >= 2.
 	CommonDetectorStateHelp = "1(OK),2(Warning),3(Critical),4(Unavailable),5(Absent)"
 )
 

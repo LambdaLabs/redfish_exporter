@@ -76,7 +76,7 @@ The Chassis Collector primarily exposes health data from the Chassis API. Agains
 # HELP redfish_chassis_leak_detection_state state of the chassis leak detection subsystem as a whole,1(Enabled),2(Disabled),...
 # TYPE redfish_chassis_leak_detection_state gauge
 
-# HELP redfish_chassis_leak_detector_enabled whether this chassis leak detector is enabled, 1(enabled),0(disabled); a disabled detector reports Unavailable state and does not trigger events
+# HELP redfish_chassis_leak_detector_enabled whether this chassis leak detector is enabled, 1(enabled),0(disabled); a disabled detector does not trigger events
 # TYPE redfish_chassis_leak_detector_enabled gauge
 
 # HELP redfish_chassis_leak_detector_health chassis leak detector health state,1(OK),2(Warning),3(Critical)
@@ -163,14 +163,37 @@ request count stays flat and the safety-relevant readings still arrive.
 
 `redfish_chassis_leak_detector_state` is the signal to alert on. A `Critical` state is a
 detector *trip* rather than a confirmed leak — see the classification below — but every trip
-warrants a response. `..._health` describes the health of the detector *device*, which can
-remain `OK` while a trip is reported, so it must not be used as a leak indicator on its own.
+warrants a response.
 
-**Alert on `== 3` rather than `>= 2`.** Unlike the health encoding, values above 3 do not
-mean "worse than critical": 4 (`Unavailable`) and 5 (`Absent`) mean the detector is not
-reporting. A `> 2` expression would fire a critical trip for an absent detector. Use `== 2`
-for a warning-level trip, `== 3` for a critical one, and `>= 4` to alert separately on the
-blind spot.
+`..._health` carries the same value today, and that is not a coincidence. Every detector on
+every platform we have captured is `LeakDetector.v1_1_0`, where `DetectorState` is a `$ref`
+to `Resource.Health`, so the two share a single `OK`/`Warning`/`Critical` enum. Either metric
+detects a trip, and both did on the three GB300 trays we captured with a tripped detector.
+
+Both are emitted because the schema separates them later. From `v1_3_0` `DetectorState` only
+*should* equate to `Health`; `v1_6_0` narrows that to "when the detector is enabled and
+functional" and adds that a detector fault — a short, a disconnected cable — is reported
+through `Status.Conditions`. So `Health` is the rollup that goes non-OK for a leak *or* a
+fault, while `DetectorState` is the leak-specific reading. Prefer `..._state` for leak
+alerting so the distinction lands correctly on firmware that implements it.
+
+**Alert on `== 3`, never `>= 2`.** Unlike the health encoding, values above 3 do not mean
+"worse than critical": 4 (`Unavailable`) and 5 (`Absent`) mean the detector is not reporting,
+so a `> 2` expression would fire a critical leak for an absent detector. Use `== 2` for a
+warning-level trip and `== 3` for a critical one.
+
+Note that 4 and 5 only exist from `LeakDetector.v1_6_0`, so on current firmware they are
+unreachable and a `>= 4` blind-spot alert cannot fire. The mapping is there so that firmware
+gaining those values later is handled correctly rather than silently misread. The same
+applies to `redfish_chassis_leak_detector_enabled`: `Enabled` arrives in `v1_3_0` and is
+absent everywhere today, so the series is not emitted at all rather than defaulting to 0.
+
+**A faulted detector is currently invisible on the switch trays.** `Status.Conditions` needs
+Resource `v1_11_0` and appears in no captured payload, so a trip and a broken detector cannot
+be told apart from the state and health metrics alone. On a compute tray the companion
+voltage covers this: a disconnected or shorted rope reads *high*, crossing
+`..._volts_upper_threshold_critical`. The MGX switch tray's detectors have no companion
+sensors, so that check has nothing to read and a dead detector looks like a healthy one.
 
 **Alert on `..._state`; classify with `..._volts`.** Across five captured GB300 trays,
 three show a detector reporting `DetectorState: Critical` while its companion voltage sits

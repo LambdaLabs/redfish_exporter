@@ -118,11 +118,25 @@ func createChassisMetricMap() map[string]Metric {
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "log_service_health_state", fmt.Sprintf("chassis log service health state,%s", CommonHealthHelp), ChassisLogServiceLabelNames)
 
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_health", fmt.Sprintf("chassis leak detector health state,%s", CommonHealthHelp), ChassisLeakDetectorLabelNames)
-	// leak_detector_state is the actual leak signal. leak_detector_health above describes
-	// the health of the detector device itself, which can remain OK while a leak is
-	// reported, so it must not be used as a leak indicator on its own.
+	// leak_detector_state and leak_detector_health carry the same value on every detector we
+	// have captured, including three GB300 trays with a tripped detector. That is not a
+	// coincidence: all of them are LeakDetector v1_1_0, where DetectorState is a $ref to
+	// Resource.Health, so the two share one enum of OK/Warning/Critical. Either metric
+	// detects a trip today, which is how leak detection already works on NVL72.
+	//
+	// They are both emitted because the schema separates them later. From v1_3_0
+	// DetectorState only "should equate" to Health, and v1_6_0 narrows that to when the
+	// detector is enabled and functional -- a detector fault is where they part company,
+	// with Status.Conditions carrying the fault type. Health is the rollup that goes
+	// non-OK for a leak *or* a fault; DetectorState is the leak-specific reading.
+	//
+	// Neither distinction is observable on our hardware yet: Conditions needs Resource
+	// v1_11_0 and appears in no captured payload. So a trip and a faulted detector are
+	// currently indistinguishable from these two metrics alone -- see leak_detector_volts
+	// below, which is the only fault check we have, and only where a companion sensor exists.
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_state", fmt.Sprintf("chassis leak detector state; this is the signal to alert on, and a Critical state is a detector trip that the companion voltage classifies as wet or as contamination,%s", CommonDetectorStateHelp), ChassisLeakDetectorLabelNames)
-	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_enabled", "whether this chassis leak detector is enabled, 1(enabled),0(disabled); a disabled detector reports Unavailable state and does not trigger events", ChassisLeakDetectorLabelNames)
+	// Enabled arrives in LeakDetector v1_3_0, so this is absent on all current hardware.
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_enabled", "whether this chassis leak detector is enabled, 1(enabled),0(disabled); a disabled detector does not trigger events", ChassisLeakDetectorLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_info", "chassis leak detector type and physical location, always 1", ChassisLeakDetectorInfoLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detection_health", fmt.Sprintf("health of the chassis leak detection subsystem as a whole,%s", CommonHealthHelp), ChassisLeakDetectionLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detection_state", fmt.Sprintf("state of the chassis leak detection subsystem as a whole,%s", CommonStateHelp), ChassisLeakDetectionLabelNames)
