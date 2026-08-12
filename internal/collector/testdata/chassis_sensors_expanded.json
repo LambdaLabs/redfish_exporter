@@ -18,6 +18,9 @@
       "Thresholds": {
         "LowerCritical": {
           "Reading": 1.65
+        },
+        "UpperCritical": {
+          "Reading": 2.0
         }
       },
       "Status": {

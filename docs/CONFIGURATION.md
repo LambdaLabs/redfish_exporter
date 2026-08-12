@@ -94,6 +94,9 @@ The Chassis Collector primarily exposes health data from the Chassis API. Agains
 # HELP redfish_chassis_leak_detector_volts_lower_threshold_critical voltage at or below which this chassis leak detector reports a critical leak
 # TYPE redfish_chassis_leak_detector_volts_lower_threshold_critical gauge
 
+# HELP redfish_chassis_leak_detector_volts_upper_threshold_critical voltage at or above which this chassis leak detector is considered faulty, typically an open or shorted sense line rather than a leak
+# TYPE redfish_chassis_leak_detector_volts_upper_threshold_critical gauge
+
 # HELP redfish_chassis_model_info organization responsible for producing the chassis, the name by which the manufacturer generally refers to the chassis, and a part number and sku assigned by the organization that is responsible for producing or manufacturing the chassis
 # TYPE redfish_chassis_model_info gauge
 
@@ -118,17 +121,38 @@ implements `Thermal`/`Power`:
 | `Voltage` | `redfish_chassis_power_voltage_volts` (+ `_state`) |
 | anything else | `redfish_chassis_sensor_{watts,amperes,joules,hertz,percent,reading}` |
 
-`Sensors` is only consulted for a chassis that advertises neither `Thermal` nor `Power` — or
-that carries leak detectors, whose voltages live there — so this never duplicates the legacy
-series. Readings are not inferred from sensor naming: fan PWM duty cycle and CPU core
-utilisation are both `ReadingType: Percent` and neither carries a distinguishing
-`PhysicalContext`, so `Percent` reaches the catch-all rather than being assumed to be a fan
-speed.
+`Sensors` is consulted for two distinct reasons, and the reason decides what is emitted:
+
+- **Standing in for the legacy schemas**, on a chassis advertising neither `Thermal` nor
+  `Power`. The whole collection is emitted.
+- **For the leak detectors alone**, on a chassis that carries them, since their voltages
+  live nowhere else. Only those sensors are emitted — otherwise a chassis implementing
+  `Thermal` *and* leak detection would publish its temperatures twice under the same series
+  name, which fails the whole scrape at registration.
+
+A chassis advertising no `Sensors` collection is never asked for one. This matters more
+than it sounds: the `ERoT`/`IRoT` roots are roughly a third of the chassis on an NVL72 tray
+or an HGX baseboard, and synthesising `<chassis>/Sensors` for them would cost a 404 apiece
+on every scrape.
+
+Readings are not inferred from sensor naming: fan PWM duty cycle and CPU core utilisation
+are both `ReadingType: Percent` and neither carries a distinguishing `PhysicalContext`, so
+`Percent` reaches the catch-all rather than being assumed to be a fan speed. Sensors that
+are simply not wanted are dropped by `sensor_exclude` (below) rather than by a rule in the
+collector.
 
 The collection is fetched with `$expand` so the BMC inlines every member body, costing one
-request per chassis rather than one per sensor. Measured against captured data, this adds
-**14–18 requests per scrape** (roughly 12–14% more than before) on both a GB300 tray and an
-H100, partly offset by a duplicate `LeakDetection` request this release also removes.
+request per chassis rather than one per sensor. Measured against captured BMC dumps, the net
+change in requests per scrape is **−2 to +2** — the new `Sensors` requests are paid for by a
+duplicate `LeakDetection` request this release also removes:
+
+| Platform | before | after |
+| --- | --- | --- |
+| SYS-A21GE-NBRT (B200, 38 chassis) | 115 | 114 |
+| SYS-821GE-TNHR (H100/H200, 41) | 118–119 | 117–118 |
+| ARS-121GL-NB3 (GB300 tray, 42) | 124 | 124 |
+| N5500_LD (MGX NVSwitch tray, 12) | 48 | 48 |
+| GH200 (4) | 20 | 22 |
 
 A BMC that does not honour `$expand` is **not** fanned out to one request per sensor — that
 would multiply load against the BMCs least able to absorb it. Only the leak detector sensors
@@ -147,14 +171,33 @@ reporting. A `> 2` expression would fire a critical leak for an absent detector.
 for a warning-level leak, `== 3` for a critical leak, and `>= 4` to alert separately on the
 blind spot.
 
+**Corroborate `..._state` with `..._volts` where both exist.** Across five captured GB300
+trays, three show a detector reporting `DetectorState: Critical` while its companion voltage
+sits at a nominal ~1.72 V, a different detector on each node. Whether that is a latching
+state or a spurious one, an alert on `..._state == 3` alone will either misfire or stay
+stuck. Where a voltage is published, require both:
+
+```promql
+redfish_chassis_leak_detector_state == 3
+  and on (instance, chassis_id, leak_detector_id)
+    redfish_chassis_leak_detector_volts <= redfish_chassis_leak_detector_volts_lower_threshold_critical
+```
+
+On platforms with no companion voltage the discrete state is all there is, so alert on it
+directly and accept the false-positive rate.
+
 Coverage varies by platform, so `..._state` is the only signal available everywhere:
 
 - **GB300 compute tray (ARS-121GL-NB3):** 4 detectors on the tray shelf chassis, each with
-  a companion `Sensor` giving `..._volts` and `..._volts_lower_threshold_critical`. These
-  are resistive moisture ropes on a voltage divider — dry reads high (~1.72 V) and water
-  pulls the voltage *down* toward the 1.65 V threshold, so the alarm is a **lower** critical
-  crossing. The threshold is only exposed on the `Sensor` resource, never in the telemetry
-  metric report, which is what allows an alert to be written relative to it.
+  a companion `Sensor` giving `..._volts` and its thresholds. These are resistive moisture
+  ropes on a voltage divider — dry reads high (~1.72 V) and water pulls the voltage *down*
+  toward the lower critical threshold, so the leak alarm is a **lower** critical crossing.
+  The threshold value is firmware-dependent (1.3 V and 1.65 V both appear across captured
+  trays), which is why it is exported as a metric rather than written into an alert. It is
+  only exposed on the `Sensor` resource, never in the telemetry metric report.
+  `..._volts_upper_threshold_critical` (2.0 V where reported) is *not* a wetter-still
+  reading: an open or shorted sense line reads high, so crossing it means the detector has
+  stopped being able to see a leak.
 - **MGX NVSwitch tray (P3809):** 7 detectors (including an aggregate, `leakage_aggr`) on one
   chassis, with six further chassis exposing an empty detector collection. Discrete only —
   no companion voltage sensors. Note the aggregate is structurally indistinguishable from
@@ -170,18 +213,32 @@ chassis_collector:
   [ chassis_include: <regexp> ]
   [ chassis_exclude: <regexp> ]
 
+  # Regular expression matched against each Sensor Id. Matching sensors emit no metrics.
+  # Trims series count, not request count: the collection arrives in one request either
+  # way. Leak detector sensors are never excluded by this pattern.
+  [ sensor_exclude: <regexp> ]
+
   # Subsystem opt-outs. Every default is false, so an empty config collects everything.
   [ disable_thermal: <bool> ]
   [ disable_thermal_subsystem: <bool> ]   # also disables leak detection
   [ disable_power: <bool> ]
   [ disable_network_adapters: <bool> ]
-  [ disable_sensors: <bool> ]
+  [ disable_sensors: <bool> ]             # also drops the leak detector voltages
 ```
 
-A full chassis scrape walks every chassis and can issue a few hundred requests on a tray
-with many chassis, which at the default `max_concurrent_requests: 1` serialises. These
-options exist so a leak-focused module can be scraped on a much shorter interval than a
-full chassis scrape allows. The built-in `leak_detection` module does exactly that:
+The shipped `chassis_collector` module sets `sensor_exclude: "_CoreUtil_[0-9]+$"`. A GB300
+tray publishes 144 per-core CPU utilisation sensors, which is more series than the rest of
+the chassis collector produces for that tray combined, and the same data is available in-band
+from `node_exporter` at higher resolution. The telemetry collector already declines the
+identical sensors; expressing it as configuration keeps the judgement visible and lets a
+deployment that wants them override it. A config that sets `chassis_collector: {}` collects
+everything, including those.
+
+##### Scraping leak detection on a short interval
+
+A full chassis scrape walks every chassis and can issue over a hundred requests on a tray
+with many chassis, which at the default `max_concurrent_requests: 1` serialises. The
+built-in `leak_detection` module trims that to what a leak alert needs:
 
 ```yaml
 modules:
@@ -191,10 +248,30 @@ modules:
       disable_thermal: true
       disable_power: true
       disable_network_adapters: true
-      # Optional, and vendor specific: on a Supermicro NVL72 tray the leak detectors live
-      # on Chassis_0, so this trims the scrape to the only chassis that matters.
+      # Optional, and vendor specific. Worth setting: it is the difference between
+      # walking every chassis and walking only the one that carries detectors.
+      # Supermicro NVL72 compute tray:
       # chassis_include: "^Chassis_[0-9]+$"
+      # MGX NVSwitch tray:
+      # chassis_include: "^MGX_BMC_[0-9]+$"
 ```
+
+Setting `disable_thermal` and `disable_power` together does more than skip those two
+fetches: it also narrows the `Sensors` pass to the leak detectors. Without that, on exactly
+the liquid-cooled platforms this module targets — where no chassis implements either legacy
+schema — `Sensors` would stand in for what was just disabled and the module would cost
+almost as much as a full scrape.
+
+Measured requests per scrape, against captured dumps:
+
+| | full chassis scrape | `leak_detection` | + `chassis_include` |
+| --- | --- | --- | --- |
+| ARS-121GL-NB3 (GB300 tray) | 124 | 78 | 51 |
+| N5500_LD (MGX NVSwitch tray) | 48 | 42 | 24 |
+| SYS-A21GE-NBRT (B200) | 114 | 63 | — |
+
+The floor is one request per chassis plus one for the collection — 43 on a GB300 tray — since
+the chassis bodies are fetched before `chassis_include` can filter them.
 
 ### `<gpu_collector>`
 [source](../collector/gpu_collector.go)
@@ -459,13 +536,23 @@ rather than by substring because substrings are ambiguous here: `ProcessorPortGP
 and `ProcessorPortMetrics` are different reports, and a bare `ProcessorMetrics` is a
 substring of `CpuProcessorMetrics`.
 
-**A report with no handler is reported, not silently dropped.** It logs at warn level and
-emits `redfish_telemetry_unhandled_report{report_id="..."}` carrying the number of discarded
-metric values. A non-zero value means a platform is publishing telemetry this exporter does
-not parse — the usual cause of an unnoticed coverage gap on new hardware. Known unhandled
-reports at time of writing include `HGX_NVSwitchPortMetrics`, `HGX_NVSwitchMetrics`,
-`HGX_PCIeRetimerMetrics`, `HGX_PCIeRetimerPortMetrics`, `HGX_NetworkAdapterPortMetrics` and
-the `{Min,Max,Avg}PowerConsumption{Hour,Day,Week}` rollups.
+**A report with no handler is reported, not silently dropped.** It emits
+`redfish_telemetry_unhandled_report{report_id="..."}` carrying the number of discarded metric
+values. A non-zero value means a platform is publishing telemetry this exporter does not
+parse — the usual cause of an unnoticed coverage gap on new hardware. That metric is the
+alertable form; the collector additionally logs one warn line per scrape naming every
+unhandled report at once, rather than one line each, since an HGX baseboard has around
+sixteen of them on every scrape and that is a standing property of the platform rather than
+an incident.
+
+Known unhandled reports at time of writing: `HGX_NVSwitchPortMetrics` (3,552 metric values
+on a B200 — per-NVLink CRC, replay, recovery and training errors), `HGX_NVSwitchMetrics`
+(NVSwitch PCIe and lifetime ECC counters), `HGX_PCIeRetimerMetrics`,
+`HGX_PCIeRetimerPortMetrics`, `HGX_NetworkAdapterPortMetrics`, and the
+`{Min,Max,Avg}PowerConsumption{Hour,Day,Week}` rollups. NVSwitch chassis temperature and
+power are unaffected by this — they come from the chassis collector's `Sensors` pass, which
+is the only source at all on the dedicated MGX NVSwitch tray since that BMC exposes no
+`TelemetryService`.
 
 Against a Lambda lab system, the collector yields the following timeseries:
 

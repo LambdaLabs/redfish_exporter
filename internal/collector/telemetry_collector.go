@@ -388,6 +388,8 @@ func (t *TelemetryCollector) collect(ctx context.Context, ch chan<- prometheus.M
 
 	// Process each metric report
 	eg := newRecoverGroup(ctx)
+	var unhandled []string
+	unhandledValues := 0
 	for _, report := range metricReports {
 		if ctx.Err() != nil {
 			t.logger.With("error", ctx.Err(), "collector", "telemetry").Debug("skipping further collection")
@@ -398,10 +400,8 @@ func (t *TelemetryCollector) collect(ctx context.Context, ch chan<- prometheus.M
 			// Report IDs vary by platform and firmware, and an unrecognised report used to
 			// be discarded with no trace at all. Surface it so new hardware does not
 			// silently lose telemetry.
-			t.logger.Warn("no handler for metric report, telemetry is being discarded",
-				slog.String("report_id", report.ID),
-				slog.Int("metric_count", len(report.MetricValues)),
-			)
+			unhandled = append(unhandled, report.ID)
+			unhandledValues += len(report.MetricValues)
 			ch <- prometheus.MustNewConstMetric(
 				t.metrics["telemetry_unhandled_report"].desc,
 				prometheus.GaugeValue,
@@ -414,6 +414,18 @@ func (t *TelemetryCollector) collect(ctx context.Context, ch chan<- prometheus.M
 			handler(ch, report, systemMap)
 			return nil
 		})
+	}
+
+	// One line for the whole scrape rather than one per report. Unhandled reports are a
+	// standing property of a platform, not an incident: an HGX baseboard has around
+	// sixteen, so logging each of them every scrape buries real warnings fleet-wide. The
+	// per-report detail lives in telemetry_unhandled_report, which is the alertable form.
+	if len(unhandled) > 0 {
+		t.logger.Warn("no handler for metric reports, telemetry is being discarded",
+			slog.String("report_ids", strings.Join(unhandled, ",")),
+			slog.Int("report_count", len(unhandled)),
+			slog.Int("metric_count", unhandledValues),
+		)
 	}
 
 	if err := eg.Wait(); err != nil {

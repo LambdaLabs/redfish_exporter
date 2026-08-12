@@ -318,10 +318,54 @@ func TestGetChassisSensorsUsesExpand(t *testing.T) {
 	collector, err := NewChassisCollector(t.Name(), client, NewTestLogger(t, slog.LevelDebug), config.DefaultChassisCollector)
 	require.NoError(t, err)
 
-	sensors, err := collector.getChassisSensors(context.Background(), chassis[0], nil, NewTestLogger(t, slog.LevelDebug))
+	links := chassisAdvertisedLinks(chassis[0])
+	sensors, err := collector.getChassisSensors(context.Background(), links.sensorsPath(chassis[0]), nil, NewTestLogger(t, slog.LevelDebug))
 	require.NoError(t, err)
 	require.Len(t, sensors, 6, "all sensors should arrive from the single expanded request")
 	require.Zero(t, expandedRequests, "no per-sensor requests should be issued when $expand is honoured")
+}
+
+// TestGetChassisSensorsSkipsChassisWithoutSensors covers the ERoT/IRoT chassis that make up
+// roughly a third of an NVL72 tray or HGX baseboard: they advertise no Sensors collection,
+// and synthesising "<chassis>/Sensors" for them cost a 404 on every scrape.
+func TestGetChassisSensorsSkipsChassisWithoutSensors(t *testing.T) {
+	server := newTestRedfishServer(t)
+	server.addRoute("/redfish/v1/Chassis", map[string]any{
+		"@odata.id":   "/redfish/v1/Chassis",
+		"@odata.type": "#ChassisCollection.ChassisCollection",
+		"Members": []map[string]string{
+			{"@odata.id": "/redfish/v1/Chassis/HGX_ERoT_NVSwitch_0"},
+		},
+	})
+	// A real ERoT root: no Thermal, no Power, and no Sensors either.
+	server.addRoute("/redfish/v1/Chassis/HGX_ERoT_NVSwitch_0", map[string]any{
+		"@odata.id":   "/redfish/v1/Chassis/HGX_ERoT_NVSwitch_0",
+		"@odata.type": "#Chassis.v1_22_0.Chassis",
+		"Id":          "HGX_ERoT_NVSwitch_0",
+		"ChassisType": "Component",
+		"Status":      map[string]any{"Health": "OK", "State": "Enabled"},
+	})
+
+	var sensorRequests int
+	server.mux.HandleFunc("/redfish/v1/Chassis/HGX_ERoT_NVSwitch_0/Sensors", func(w http.ResponseWriter, r *http.Request) {
+		sensorRequests++
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	client := connectToTestServer(t, server.Server)
+	t.Cleanup(func() {
+		client.Logout()
+		server.Close()
+	})
+
+	collector, err := NewChassisCollector(t.Name(), client, NewTestLogger(t, slog.LevelDebug), config.DefaultChassisCollector)
+	require.NoError(t, err)
+
+	ch := make(chan prometheus.Metric, 64)
+	collector.CollectWithContext(context.Background(), ch)
+	drainMetrics(t, ch)
+
+	require.Zero(t, sensorRequests, "a chassis advertising no Sensors collection must not be asked for one")
 }
 
 // TestGetChassisSensorsBoundedWhenExpandIgnored covers a BMC that answers the Sensors
@@ -369,7 +413,8 @@ func TestGetChassisSensorsBoundedWhenExpandIgnored(t *testing.T) {
 	require.NoError(t, err)
 
 	required := map[string]string{"Chassis_0_LeakDetector_0_ColdPlate": "LeakDetection"}
-	sensors, err := collector.getChassisSensors(context.Background(), chassis[0], required, NewTestLogger(t, slog.LevelDebug))
+	links := chassisAdvertisedLinks(chassis[0])
+	sensors, err := collector.getChassisSensors(context.Background(), links.sensorsPath(chassis[0]), required, NewTestLogger(t, slog.LevelDebug))
 	require.NoError(t, err)
 
 	require.Len(t, sensors, 1, "only the required sensor should be fetched")
@@ -378,30 +423,38 @@ func TestGetChassisSensorsBoundedWhenExpandIgnored(t *testing.T) {
 		"the fan and temperature sensors must not be fetched individually")
 }
 
-// TestChassisAdvertisesThermalOrPower pins the feature detection to the advertised links.
-// Deriving it from whether a fetch returned data made every chassis look modern as soon as
-// Thermal or Power was disabled by configuration, pulling in whole Sensors collections.
-func TestChassisAdvertisesThermalOrPower(t *testing.T) {
+// TestChassisAdvertisedLinks pins the feature detection to the advertised links. Deriving
+// it from whether a fetch returned data made every chassis look modern as soon as Thermal
+// or Power was disabled by configuration, pulling in whole Sensors collections.
+func TestChassisAdvertisedLinks(t *testing.T) {
 	tT := map[string]struct {
-		raw  string
-		want bool
+		raw         string
+		wantLegacy  bool
+		wantSensors string
 	}{
 		"legacy chassis linking Thermal and Power": {
-			raw:  `{"Id":"1","Thermal":{"@odata.id":"/redfish/v1/Chassis/1/Thermal"},"Power":{"@odata.id":"/redfish/v1/Chassis/1/Power"}}`,
-			want: true,
+			raw:        `{"Id":"1","Thermal":{"@odata.id":"/redfish/v1/Chassis/1/Thermal"},"Power":{"@odata.id":"/redfish/v1/Chassis/1/Power"}}`,
+			wantLegacy: true,
 		},
 		"Thermal only": {
-			raw:  `{"Id":"1","Thermal":{"@odata.id":"/redfish/v1/Chassis/1/Thermal"}}`,
-			want: true,
+			raw:        `{"Id":"1","Thermal":{"@odata.id":"/redfish/v1/Chassis/1/Thermal"}}`,
+			wantLegacy: true,
 		},
 		// The real ARS-121GL-NB3 tray shelf: ThermalSubsystem and Sensors, no Thermal/Power.
 		"NVL72 tray chassis": {
-			raw:  `{"Id":"Chassis_0","ThermalSubsystem":{"@odata.id":"/redfish/v1/Chassis/Chassis_0/ThermalSubsystem"},"Sensors":{"@odata.id":"/redfish/v1/Chassis/Chassis_0/Sensors"},"PowerSubsystem":{"@odata.id":"/redfish/v1/Chassis/Chassis_0/PowerSubsystem"}}`,
-			want: false,
+			raw:         `{"Id":"Chassis_0","ThermalSubsystem":{"@odata.id":"/redfish/v1/Chassis/Chassis_0/ThermalSubsystem"},"Sensors":{"@odata.id":"/redfish/v1/Chassis/Chassis_0/Sensors"},"PowerSubsystem":{"@odata.id":"/redfish/v1/Chassis/Chassis_0/PowerSubsystem"}}`,
+			wantLegacy:  false,
+			wantSensors: "/redfish/v1/Chassis/Chassis_0/Sensors",
+		},
+		// An ERoT root. No Sensors link means there is no collection to request.
+		"root of trust chassis": {
+			raw:         `{"Id":"HGX_ERoT_NVSwitch_0","@odata.id":"/redfish/v1/Chassis/HGX_ERoT_NVSwitch_0"}`,
+			wantLegacy:  false,
+			wantSensors: "",
 		},
 		"empty link objects do not count": {
-			raw:  `{"Id":"1","Thermal":{},"Power":{}}`,
-			want: false,
+			raw:        `{"Id":"1","Thermal":{},"Power":{},"Sensors":{}}`,
+			wantLegacy: false,
 		},
 	}
 
@@ -409,13 +462,18 @@ func TestChassisAdvertisesThermalOrPower(t *testing.T) {
 		t.Run(tName, func(t *testing.T) {
 			var chassis schemas.Chassis
 			require.NoError(t, json.Unmarshal([]byte(test.raw), &chassis))
-			require.Equal(t, test.want, chassisAdvertisesThermalOrPower(&chassis))
+			links := chassisAdvertisedLinks(&chassis)
+			require.Equal(t, test.wantLegacy, links.legacyThermalOrPower())
+			require.Equal(t, test.wantSensors, links.sensorsPath(&chassis))
 		})
 	}
 
 	// A chassis with no retained payload is treated conservatively as legacy, so the
-	// Sensors fallback is suppressed rather than issuing a request per chassis.
-	require.True(t, chassisAdvertisesThermalOrPower(&schemas.Chassis{}))
+	// Sensors fallback is suppressed rather than issuing a request per chassis. Its leak
+	// detectors are still reachable at the conventional path.
+	opaque := chassisAdvertisedLinks(&schemas.Chassis{})
+	require.True(t, opaque.legacyThermalOrPower())
+	require.Equal(t, "/Sensors", opaque.sensorsPath(&schemas.Chassis{}))
 }
 
 func TestParseChassisSensor(t *testing.T) {
@@ -444,11 +502,36 @@ func TestParseChassisSensor(t *testing.T) {
 
 		// The threshold is only available from the Sensor resource, never from the
 		// telemetry metric report, which is why the alert can be written relative to it.
+		// Firmware disagrees about the value — 1.3 V and 1.65 V both appear across
+		// captured ARS-121GL-NB3 trays — so it has to be read, not assumed.
 		threshold := requireMetric(t, metrics, "redfish_chassis_leak_detector_volts_lower_threshold_critical")
 		require.InDelta(t, 1.65, threshold.value, 1e-9)
 
+		// The upper bound is the open/short indicator: a disconnected sense line reads
+		// high, which is a detector that can no longer see a leak.
+		upper := requireMetric(t, metrics, "redfish_chassis_leak_detector_volts_upper_threshold_critical")
+		require.InDelta(t, 2.0, upper.value, 1e-9)
+
 		// A leak sensor must not also appear as a generic chassis voltage.
 		require.NotContains(t, metrics, "redfish_chassis_power_voltage_volts")
+	})
+
+	// Firmware that reports only one bound must leave the other absent. Defaulting it to
+	// zero would turn "reading <= lower_threshold" into a comparison that can never fire,
+	// which reads as a healthy alert rather than as a missing one.
+	t.Run("an unreported threshold is omitted rather than zeroed", func(t *testing.T) {
+		var sensor schemas.Sensor
+		require.NoError(t, json.Unmarshal([]byte(`{
+			"Id":"leakage1","Name":"leakage1","ReadingType":"Voltage","Reading":1.7
+		}`), &sensor))
+
+		ch := make(chan prometheus.Metric, 32)
+		parseChassisSensor(ch, "MGX_BMC_0", &sensor, map[string]string{"leakage1": "LeakDetection"})
+		metrics := drainMetrics(t, ch)
+
+		require.Contains(t, metrics, "redfish_chassis_leak_detector_volts")
+		require.NotContains(t, metrics, "redfish_chassis_leak_detector_volts_lower_threshold_critical")
+		require.NotContains(t, metrics, "redfish_chassis_leak_detector_volts_upper_threshold_critical")
 	})
 
 	t.Run("temperature folds into the existing chassis family", func(t *testing.T) {
@@ -510,6 +593,140 @@ func TestParseChassisSensor(t *testing.T) {
 	})
 }
 
+// newLeakChassisServer wires a chassis that carries both leak detectors and a full Sensors
+// collection, which is the shape of an ARS-121GL-NB3 tray shelf. withThermal additionally
+// gives it the deprecated Thermal schema, which no captured tray has but a CDU or rack
+// manager plausibly would.
+func newLeakChassisServer(t *testing.T, withThermal bool) *testRedfishServer {
+	t.Helper()
+	server := newTestRedfishServer(t)
+	server.addRouteFromFixture("/redfish/v1/Chassis", "chassis_collection.json")
+
+	chassis := server.loadFixture("chassis_main.json")
+	if withThermal {
+		chassis["Thermal"] = map[string]string{"@odata.id": "/redfish/v1/Chassis/Chassis_0/Thermal"}
+		server.addRoute("/redfish/v1/Chassis/Chassis_0/Thermal", map[string]any{
+			"@odata.id":   "/redfish/v1/Chassis/Chassis_0/Thermal",
+			"@odata.type": "#Thermal.v1_7_1.Thermal",
+			"Id":          "Thermal",
+			"Temperatures": []map[string]any{{
+				"MemberId":       "0",
+				"Name":           "Chassis 0 Front IO Temp 0",
+				"ReadingCelsius": 27.5,
+				"Status":         map[string]any{"Health": "OK", "State": "Enabled"},
+			}},
+		})
+	}
+	server.addRoute("/redfish/v1/Chassis/Chassis_0", chassis)
+
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem", "thermal_subsystem.json")
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection", "leak_detection.json")
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors", "leak_detectors_collection.json")
+	for _, id := range []string{"Chassis_0_LeakDetector_0_ColdPlate", "Chassis_0_LeakDetector_0_Manifold", "Chassis_0_LeakDetector_1_ColdPlate", "Chassis_0_LeakDetector_1_Manifold"} {
+		server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/"+id, "leak_detector_ok.json")
+	}
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/Sensors", "chassis_sensors_expanded.json")
+	return server
+}
+
+// collectChassis runs a full chassis collection against a wired-up test server.
+func collectChassis(t *testing.T, server *testRedfishServer, cfg config.ChassisCollectorConfig) map[string][]collectedMetric {
+	t.Helper()
+	client := connectToTestServer(t, server.Server)
+	t.Cleanup(func() {
+		client.Logout()
+		server.Close()
+	})
+
+	collector, err := NewChassisCollector(t.Name(), client, NewTestLogger(t, slog.LevelDebug), cfg)
+	require.NoError(t, err)
+
+	ch := make(chan prometheus.Metric, 512)
+	collector.CollectWithContext(context.Background(), ch)
+	return drainMetrics(t, ch)
+}
+
+func TestChassisCollectorSensorScope(t *testing.T) {
+	// A chassis with no Thermal or Power is the reason the Sensors pass exists: it stands
+	// in for both, so everything in the collection is emitted.
+	t.Run("a sensors-only chassis emits the whole collection", func(t *testing.T) {
+		metrics := collectChassis(t, newLeakChassisServer(t, false), config.DefaultChassisCollector)
+
+		require.Contains(t, metrics, "redfish_chassis_temperature_celsius")
+		require.Contains(t, metrics, "redfish_chassis_fan_rpm")
+		require.Contains(t, metrics, "redfish_chassis_sensor_watts")
+		require.Len(t, metrics["redfish_chassis_leak_detector_volts"], 1)
+		require.Len(t, metrics["redfish_chassis_leak_detector_state"], 4)
+	})
+
+	// Disabling both deprecated schemas is what makes the leak_detection module cheap. On
+	// these platforms no chassis implements either, so without this the Sensors pass would
+	// stand in for what was just turned off and the disables would save almost nothing.
+	t.Run("disabling thermal and power narrows the pass to leak detectors", func(t *testing.T) {
+		metrics := collectChassis(t, newLeakChassisServer(t, false), config.DefaultModuleConfig["leak_detection"].ChassisCollector)
+
+		require.Len(t, metrics["redfish_chassis_leak_detector_volts"], 1,
+			"the leak detector voltage is the whole point of the module and must survive")
+		require.Len(t, metrics["redfish_chassis_leak_detector_state"], 4)
+
+		for _, bulk := range []string{
+			"redfish_chassis_temperature_celsius",
+			"redfish_chassis_fan_rpm",
+			"redfish_chassis_sensor_watts",
+			"redfish_chassis_sensor_percent",
+		} {
+			require.NotContains(t, metrics, bulk, "bulk sensor telemetry must not come back under a different schema")
+		}
+	})
+
+	// A chassis implementing Thermal *and* leak detection consults Sensors only for the
+	// detectors. Emitting the rest would publish its temperatures twice under the same
+	// series name, which fails the whole scrape at registration.
+	t.Run("a legacy chassis with leak detectors emits no duplicate thermal series", func(t *testing.T) {
+		metrics := collectChassis(t, newLeakChassisServer(t, true), config.DefaultChassisCollector)
+
+		require.Len(t, metrics["redfish_chassis_temperature_celsius"], 1,
+			"the Thermal reading must not be republished from Sensors")
+		require.Len(t, metrics["redfish_chassis_leak_detector_volts"], 1,
+			"the leak detector voltage is only available from Sensors and must still arrive")
+		require.NotContains(t, metrics, "redfish_chassis_sensor_watts")
+	})
+}
+
+func TestChassisCollectorSensorExclude(t *testing.T) {
+	t.Run("excluded sensors emit nothing", func(t *testing.T) {
+		metrics := collectChassis(t, newLeakChassisServer(t, false), config.ChassisCollectorConfig{
+			SensorExclude: "_PWM$",
+		})
+		require.NotContains(t, metrics, "redfish_chassis_sensor_percent")
+		require.Contains(t, metrics, "redfish_chassis_sensor_watts")
+	})
+
+	// A pattern broad enough to catch a leak detector must not silence it. The Sensors
+	// collection is consulted for those detectors in the first place, and losing a safety
+	// signal to a series-trimming pattern is not a tradeoff worth offering.
+	t.Run("leak detectors are never excluded", func(t *testing.T) {
+		metrics := collectChassis(t, newLeakChassisServer(t, false), config.ChassisCollectorConfig{
+			SensorExclude: ".",
+		})
+		require.Len(t, metrics["redfish_chassis_leak_detector_volts"], 1)
+		require.NotContains(t, metrics, "redfish_chassis_temperature_celsius")
+	})
+
+	// The shipped default declines per-core CPU utilisation, which a GB300 tray publishes
+	// 144 of. The telemetry collector declines the identical sensors; the two collectors
+	// must not disagree about the same hardware.
+	t.Run("the shipped default declines per-core utilisation", func(t *testing.T) {
+		collector, err := NewChassisCollector(t.Name(), nil, NewTestLogger(t, slog.LevelWarn), config.DefaultChassisCollector)
+		require.NoError(t, err)
+
+		require.True(t, collector.skipSensor("ProcessorModule_0_CPU_0_CoreUtil_0"))
+		require.True(t, collector.skipSensor("ProcessorModule_1_CPU_0_CoreUtil_71"))
+		require.False(t, collector.skipSensor("ProcessorModule_0_CPU_0_CpuFreq_0"))
+		require.False(t, collector.skipSensor("Chassis_0_FAN_1_PWM"))
+	})
+}
+
 func TestChassisCollectorFiltering(t *testing.T) {
 	t.Run("include and exclude patterns", func(t *testing.T) {
 		tT := map[string]struct {
@@ -546,12 +763,17 @@ func TestChassisCollectorFiltering(t *testing.T) {
 			ChassisExclude: "([unclosed",
 		})
 		require.ErrorContains(t, err, "invalid chassis_exclude pattern")
+
+		_, err = NewChassisCollector(t.Name(), nil, NewTestLogger(t, slog.LevelWarn), config.ChassisCollectorConfig{
+			SensorExclude: "([unclosed",
+		})
+		require.ErrorContains(t, err, "invalid sensor_exclude pattern")
 	})
 
 	// The zero-value config must be a no-op so that existing deployments, which pass
-	// chassis_collector: {}, keep collecting every subsystem.
+	// chassis_collector: {}, keep collecting every subsystem and every sensor.
 	t.Run("zero value config disables nothing", func(t *testing.T) {
-		cfg := config.DefaultChassisCollector
+		var cfg config.ChassisCollectorConfig
 		require.False(t, cfg.DisableThermal)
 		require.False(t, cfg.DisableThermalSubsystem)
 		require.False(t, cfg.DisablePower)
@@ -559,6 +781,16 @@ func TestChassisCollectorFiltering(t *testing.T) {
 		require.False(t, cfg.DisableSensors)
 		require.Empty(t, cfg.ChassisInclude)
 		require.Empty(t, cfg.ChassisExclude)
+		require.Empty(t, cfg.SensorExclude)
+	})
+
+	// The shipped default is not the zero value: it carries a sensor_exclude. Any
+	// behaviour it turns on has to be visible in configuration rather than hidden in the
+	// collector, so this pins which fields it actually sets.
+	t.Run("the shipped default only sets sensor_exclude", func(t *testing.T) {
+		cfg := config.DefaultChassisCollector
+		require.Equal(t, config.DefaultSensorExclude, cfg.SensorExclude)
+		require.Equal(t, config.ChassisCollectorConfig{SensorExclude: config.DefaultSensorExclude}, cfg)
 	})
 }
 

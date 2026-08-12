@@ -45,6 +45,7 @@ type ChassisCollector struct {
 	config                config.ChassisCollectorConfig
 	chassisInclude        *regexp.Regexp
 	chassisExclude        *regexp.Regexp
+	sensorExclude         *regexp.Regexp
 	metrics               map[string]Metric
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
@@ -60,6 +61,13 @@ func (c *ChassisCollector) skipChassis(chassisID string) bool {
 		return true
 	}
 	return false
+}
+
+// skipSensor reports whether a Sensor Id is filtered out by the configured pattern. An
+// unset pattern never filters. Callers must exempt leak detector sensors before consulting
+// this; see config.ChassisCollectorConfig.SensorExclude.
+func (c *ChassisCollector) skipSensor(sensorID string) bool {
+	return c.sensorExclude != nil && c.sensorExclude.MatchString(sensorID)
 }
 
 func createChassisMetricMap() map[string]Metric {
@@ -123,6 +131,10 @@ func createChassisMetricMap() map[string]Metric {
 	// the voltage down, so the alarm is a LOWER critical crossing.
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_volts", "chassis leak detector reading in volts; falls toward the lower critical threshold as moisture is detected", ChassisLeakDetectorLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_volts_lower_threshold_critical", "voltage at or below which this chassis leak detector reports a critical leak", ChassisLeakDetectorLabelNames)
+	// The upper threshold is not a wetter-still reading: a rope that is disconnected or
+	// shorted to the rail reads high, so crossing it means the detector has stopped being
+	// able to see a leak rather than that it has seen one.
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_volts_upper_threshold_critical", "voltage at or above which this chassis leak detector is considered faulty, typically an open or shorted sense line rather than a leak", ChassisLeakDetectorLabelNames)
 
 	// Catch-all metrics for Sensors whose ReadingType has no exact equivalent among the
 	// curated families above, so that a reading is never silently dropped. Sensors whose
@@ -143,26 +155,37 @@ func createChassisMetricMap() map[string]Metric {
 	return chassisMetrics
 }
 
+// compileFilter compiles an optional filter pattern, naming it in any error so a bad
+// pattern points at the configuration key that carries it. An empty pattern yields nil,
+// which every filter treats as "does not filter".
+func compileFilter(name, pattern string) (*regexp.Regexp, error) {
+	if pattern == "" {
+		return nil, nil
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s pattern %q: %w", name, pattern, err)
+	}
+	return re, nil
+}
+
 // NewChassisCollector returns a collector that collecting chassis statistics
 func NewChassisCollector(collectorName string, redfishClient *gofish.APIClient, logger *slog.Logger, config config.ChassisCollectorConfig) (*ChassisCollector, error) {
 	// get service from redfish client
 
-	// Compile the chassis filters up front so a bad pattern is reported at collector
-	// construction rather than silently filtering nothing on every scrape.
-	var chassisInclude, chassisExclude *regexp.Regexp
-	if config.ChassisInclude != "" {
-		re, err := regexp.Compile(config.ChassisInclude)
-		if err != nil {
-			return nil, fmt.Errorf("invalid chassis_include pattern %q: %w", config.ChassisInclude, err)
-		}
-		chassisInclude = re
+	// Compile the filters up front so a bad pattern is reported at collector construction
+	// rather than silently filtering nothing on every scrape.
+	chassisInclude, err := compileFilter("chassis_include", config.ChassisInclude)
+	if err != nil {
+		return nil, err
 	}
-	if config.ChassisExclude != "" {
-		re, err := regexp.Compile(config.ChassisExclude)
-		if err != nil {
-			return nil, fmt.Errorf("invalid chassis_exclude pattern %q: %w", config.ChassisExclude, err)
-		}
-		chassisExclude = re
+	chassisExclude, err := compileFilter("chassis_exclude", config.ChassisExclude)
+	if err != nil {
+		return nil, err
+	}
+	sensorExclude, err := compileFilter("sensor_exclude", config.SensorExclude)
+	if err != nil {
+		return nil, err
 	}
 
 	return &ChassisCollector{
@@ -171,6 +194,7 @@ func NewChassisCollector(collectorName string, redfishClient *gofish.APIClient, 
 		config:         config,
 		chassisInclude: chassisInclude,
 		chassisExclude: chassisExclude,
+		sensorExclude:  sensorExclude,
 		logger:         logger,
 		collectorScrapeStatus: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -243,16 +267,12 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 			ChassisModelLabelValues := []string{"chassis", chassisID, chassisManufacturer, chassisModel, chassisPartNumber, chassisSKU}
 			ch <- prometheus.MustNewConstMetric(c.metrics["chassis_model_info"].desc, prometheus.GaugeValue, 1, ChassisModelLabelValues...)
 
-			// Whether this chassis advertises either of the deprecated Thermal/Power
-			// schemas. Newer platforms (for example an NVL72 tray, where no chassis
-			// implements either) express the same readings through Sensors instead, which is
-			// collected below only when these are absent so the two paths never emit
-			// duplicate series.
-			//
-			// Read from the advertised links rather than from whether a fetch returned data,
-			// so that disabling Thermal or Power by configuration does not make every
-			// chassis look like a modern one and pull in its whole Sensors collection.
-			legacyThermalOrPower := chassisAdvertisesThermalOrPower(chassis)
+			// The subordinate resources this chassis actually advertises. Newer platforms
+			// (for example an NVL72 tray, where no chassis implements Thermal or Power)
+			// express the same readings through Sensors instead, which is collected below
+			// only when the legacy schemas are absent so the two paths never emit duplicate
+			// series.
+			links := chassisAdvertisedLinks(chassis)
 
 			chassisThermal, err := c.chassisThermal(chassis)
 			if err != nil {
@@ -360,26 +380,38 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 			}
 
 			// Sensors carry the readings that Thermal/Power would have provided on older
-			// platforms, plus the analog side of the leak detectors. Consulted when the
-			// legacy schemas are absent, so this is a no-op on existing hardware, and
-			// additionally on any chassis carrying leak detectors so their voltages and
-			// thresholds are picked up even where Thermal/Power do exist.
-			if !c.config.DisableSensors && (!legacyThermalOrPower || len(leakDetectorIDs) > 0) {
-				sensors, err := c.getChassisSensors(ctx, chassis, leakDetectorIDs, chassisLogger)
+			// platforms, plus the analog side of the leak detectors.
+			//
+			// bulkSensors distinguishes the two reasons to consult the collection. Standing
+			// in for the legacy schemas means emitting everything; being consulted for the
+			// leak detectors alone means emitting only those, which keeps a chassis that
+			// implements Thermal *and* leak detection from publishing its temperatures
+			// twice under the same series name.
+			//
+			// An operator who disabled both deprecated schemas has opted out of bulk
+			// thermal and power data, not asked for it back under a different schema.
+			optedOutOfBulk := c.config.DisableThermal && c.config.DisablePower
+			bulkSensors := !links.legacyThermalOrPower() && !optedOutOfBulk
+			if !c.config.DisableSensors && (bulkSensors || len(leakDetectorIDs) > 0) {
+				sensorsPath := links.sensorsPath(chassis)
+				sensors, err := c.getChassisSensors(ctx, sensorsPath, leakDetectorIDs, chassisLogger)
 				if err != nil {
 					chassisLogger.Error("error getting sensors from chassis", slog.String("operation", "chassis.Sensors()"), slog.Any("error", err))
 				} else if len(sensors) == 0 {
 					chassisLogger.Debug("no sensors found", slog.String("operation", "chassis.Sensors()"))
 				} else {
-					egSensors := newRecoverGroup(ctx)
+					// Parsing a sensor is a handful of channel sends, so this stays a plain
+					// loop; a goroutine per sensor would be several hundred per tray to save
+					// nothing.
 					for _, sensor := range sensors {
-						egSensors.Go(func() error {
-							parseChassisSensor(ch, chassisID, sensor, leakDetectorIDs)
-							return nil
-						})
-					}
-					if err := egSensors.Wait(); err != nil {
-						chassisLogger.Error("goroutine error", slog.Any("error", err))
+						if sensor == nil {
+							continue
+						}
+						_, isLeakDetector := leakDetectorIDs[sensor.ID]
+						if !isLeakDetector && (!bulkSensors || c.skipSensor(sensor.ID)) {
+							continue
+						}
+						parseChassisSensor(ch, chassisID, sensor, leakDetectorIDs)
 					}
 				}
 			}
@@ -472,30 +504,69 @@ type sensorCollection struct {
 	Members []*schemas.Sensor `json:"Members"`
 }
 
-// chassisAdvertisesThermalOrPower reports whether the chassis links either of the
-// deprecated Thermal or Power resources.
+// chassisLinks are the subordinate resource URIs advertised by a chassis payload.
 //
-// This reads the advertised links from the chassis payload rather than inferring from a
-// fetch, so the answer does not change when a subsystem is disabled by configuration. A
-// chassis whose payload cannot be inspected is treated as advertising them, which is the
-// conservative answer: it suppresses the Sensors fallback rather than risking an
-// unnecessary request per chassis.
-func chassisAdvertisesThermalOrPower(chassis *schemas.Chassis) bool {
+// gofish parses the same links but keeps them unexported, so they are re-read from the raw
+// payload here. Reading the advertised links rather than inferring from a fetch means the
+// answers do not change when a subsystem is disabled by configuration, and that a resource
+// the chassis never advertises is never requested.
+type chassisLinks struct {
+	thermal string
+	power   string
+	sensors string
+	// opaque records that the payload could not be inspected at all, which every field
+	// being empty would otherwise be indistinguishable from.
+	opaque bool
+}
+
+// chassisAdvertisedLinks extracts the links this collector decides on from a chassis.
+func chassisAdvertisedLinks(chassis *schemas.Chassis) chassisLinks {
 	if len(chassis.RawData) == 0 {
-		return true
+		return chassisLinks{opaque: true}
 	}
 	var raw struct {
-		Thermal *struct {
-			ODataID string `json:"@odata.id"`
-		} `json:"Thermal"`
-		Power *struct {
-			ODataID string `json:"@odata.id"`
-		} `json:"Power"`
+		Thermal odataLink `json:"Thermal"`
+		Power   odataLink `json:"Power"`
+		Sensors odataLink `json:"Sensors"`
 	}
 	if err := json.Unmarshal(chassis.RawData, &raw); err != nil {
-		return true
+		return chassisLinks{opaque: true}
 	}
-	return (raw.Thermal != nil && raw.Thermal.ODataID != "") || (raw.Power != nil && raw.Power.ODataID != "")
+	return chassisLinks{
+		thermal: raw.Thermal.ODataID,
+		power:   raw.Power.ODataID,
+		sensors: raw.Sensors.ODataID,
+	}
+}
+
+// odataLink is a Redfish reference object, which is absent, empty, or carries a URI.
+type odataLink struct {
+	ODataID string `json:"@odata.id"`
+}
+
+// legacyThermalOrPower reports whether the chassis links either of the deprecated Thermal
+// or Power resources.
+//
+// A chassis whose payload could not be inspected is treated as advertising them, which is
+// the conservative answer: it suppresses the Sensors fallback rather than risking an
+// unnecessary request per chassis.
+func (l chassisLinks) legacyThermalOrPower() bool {
+	return l.opaque || l.thermal != "" || l.power != ""
+}
+
+// sensorsPath returns the advertised Sensors collection URI, or "" when this chassis has
+// no Sensors resource to request.
+//
+// Synthesising "<chassis>/Sensors" instead would 404 once per scrape on every chassis that
+// has none, and roughly a third of the chassis on an NVL72 tray or an HGX baseboard are
+// ERoT/IRoT roots in exactly that position. An opaque payload falls back to the
+// conventional path so that a leak detector's companion sensor is still reachable in the
+// degraded case.
+func (l chassisLinks) sensorsPath(chassis *schemas.Chassis) string {
+	if l.opaque {
+		return chassis.ODataID + "/Sensors"
+	}
+	return l.sensors
 }
 
 // getChassisSensors returns sensors for a chassis in a single request.
@@ -510,9 +581,11 @@ func chassisAdvertisesThermalOrPower(chassis *schemas.Chassis) bool {
 // able to absorb it. Instead only the named sensors are fetched individually — the leak
 // detectors, whose readings are safety relevant and few in number — and the bulk sensor
 // telemetry is skipped with a warning.
-func (c *ChassisCollector) getChassisSensors(ctx context.Context, chassis *schemas.Chassis, required map[string]string, logger *slog.Logger) ([]*schemas.Sensor, error) {
+func (c *ChassisCollector) getChassisSensors(ctx context.Context, sensorsPath string, required map[string]string, logger *slog.Logger) ([]*schemas.Sensor, error) {
+	if sensorsPath == "" {
+		return nil, nil
+	}
 	rfClient := c.redfishClient.WithContext(ctx)
-	sensorsPath := chassis.ODataID + "/Sensors"
 
 	response, err := rfClient.Get(sensorsPath + `?$expand=.($levels=1)`)
 	if err != nil {
@@ -658,9 +731,21 @@ func parseChassisFan(ch chan<- prometheus.Metric, chassisID string, chassisFan s
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_upper_threshold_fatal"].desc, prometheus.GaugeValue, chassisFanRPMUpperFatalThreshold, chassisFanLabelvalues...)
 }
 
-// thresholdReading flattens an optional Redfish threshold to a float.
-func thresholdReading(t schemas.Threshold) float64 {
-	return gofish.Deref(t.Reading)
+// thresholdReading flattens an optional Redfish threshold, reporting whether the firmware
+// supplied one at all.
+func thresholdReading(t schemas.Threshold) (float64, bool) {
+	if t.Reading == nil {
+		return 0, false
+	}
+	return *t.Reading, true
+}
+
+// thresholdReadingOrZero is thresholdReading for the fan families, where the Thermal path
+// has always emitted an unreported threshold as zero and the existing alerts compare the
+// two series directly. A Sensors-only platform must produce the same shape.
+func thresholdReadingOrZero(t schemas.Threshold) float64 {
+	value, _ := thresholdReading(t)
+	return value
 }
 
 // parseChassisSensor emits metrics for a single Sensor resource.
@@ -686,7 +771,16 @@ func parseChassisSensor(ch chan<- prometheus.Metric, chassisID string, sensor *s
 	if leakDetectionID, ok := leakDetectorIDs[sensor.ID]; ok {
 		labelValues := []string{"leak_detector", chassisID, leakDetectionID, sensor.ID}
 		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_leak_detector_volts"].desc, prometheus.GaugeValue, reading, labelValues...)
-		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_leak_detector_volts_lower_threshold_critical"].desc, prometheus.GaugeValue, thresholdReading(sensor.Thresholds.LowerCritical), labelValues...)
+		// An unreported threshold is left absent rather than defaulted to zero. These
+		// exist to be compared against the reading, and a fabricated 0 would make
+		// "reading <= lower" a comparison that can never fire — a blind spot that looks
+		// like a healthy alert, where a missing series is visibly missing.
+		if lower, ok := thresholdReading(sensor.Thresholds.LowerCritical); ok {
+			ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_leak_detector_volts_lower_threshold_critical"].desc, prometheus.GaugeValue, lower, labelValues...)
+		}
+		if upper, ok := thresholdReading(sensor.Thresholds.UpperCritical); ok {
+			ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_leak_detector_volts_upper_threshold_critical"].desc, prometheus.GaugeValue, upper, labelValues...)
+		}
 		return
 	}
 
@@ -721,10 +815,10 @@ func parseChassisSensor(ch chan<- prometheus.Metric, chassisID string, sensor *s
 		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_min"].desc, prometheus.GaugeValue, rpmMin, labelValues...)
 		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_max"].desc, prometheus.GaugeValue, rpmMax, labelValues...)
 		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_percentage"].desc, prometheus.GaugeValue, percentage, labelValues...)
-		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_lower_threshold_critical"].desc, prometheus.GaugeValue, thresholdReading(sensor.Thresholds.LowerCritical), labelValues...)
-		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_upper_threshold_critical"].desc, prometheus.GaugeValue, thresholdReading(sensor.Thresholds.UpperCritical), labelValues...)
-		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_lower_threshold_fatal"].desc, prometheus.GaugeValue, thresholdReading(sensor.Thresholds.LowerFatal), labelValues...)
-		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_upper_threshold_fatal"].desc, prometheus.GaugeValue, thresholdReading(sensor.Thresholds.UpperFatal), labelValues...)
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_lower_threshold_critical"].desc, prometheus.GaugeValue, thresholdReadingOrZero(sensor.Thresholds.LowerCritical), labelValues...)
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_upper_threshold_critical"].desc, prometheus.GaugeValue, thresholdReadingOrZero(sensor.Thresholds.UpperCritical), labelValues...)
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_lower_threshold_fatal"].desc, prometheus.GaugeValue, thresholdReadingOrZero(sensor.Thresholds.LowerFatal), labelValues...)
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_upper_threshold_fatal"].desc, prometheus.GaugeValue, thresholdReadingOrZero(sensor.Thresholds.UpperFatal), labelValues...)
 
 	case schemas.VoltageReadingType:
 		labelValues := []string{"power_voltage", chassisID, sensor.Name, sensor.ID}

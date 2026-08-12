@@ -10,8 +10,22 @@ import (
 )
 
 var (
+	// DefaultSensorExclude drops per-core CPU utilisation from the chassis Sensors pass.
+	//
+	// A GB300 tray publishes 144 of these (ProcessorModule_N_CPU_0_CoreUtil_M), which is
+	// more series than the rest of the chassis collector produces for that tray combined,
+	// and the same data is available in-band from node_exporter at higher resolution. The
+	// telemetry collector already declines the identical sensors for the identical reason;
+	// this keeps the two collectors from disagreeing about the same hardware.
+	//
+	// It is expressed as configuration rather than as a rule in the collector so that the
+	// judgement stays visible and overridable: the collector itself never infers meaning
+	// from a sensor's name.
+	DefaultSensorExclude = `_CoreUtil_[0-9]+$`
 	// DefaultChassisCollector is a default unless the user provides particular values.
-	DefaultChassisCollector = ChassisCollectorConfig{}
+	DefaultChassisCollector = ChassisCollectorConfig{
+		SensorExclude: DefaultSensorExclude,
+	}
 	// DefaultGPUCollector is a default unless the user provides particular values.
 	DefaultGPUCollector = GPUCollectorConfig{}
 	//DefaultJSONCollector is a default unless the user provides particular values.
@@ -58,11 +72,17 @@ var (
 		// ThermalSubsystem (leak detectors) and Sensors (their analog voltages and
 		// thresholds) are consulted.
 		//
+		// Disabling Thermal and Power together is what makes this cheap, and not only
+		// because those two fetches are skipped. On the liquid-cooled platforms this
+		// module targets no chassis implements either schema, so the Sensors pass would
+		// otherwise stand in for them on every chassis and the disables would save
+		// almost nothing; setting both instead narrows that pass to the leak detectors.
+		//
 		// Deliberately not part of the rf_exporter_default bundle, and deliberately not
 		// filtered by chassis Id — chassis naming is vendor specific. Deployments that
-		// want the minimum possible request count should set chassis_include to match
-		// only the chassis carrying leak detectors (on a Supermicro NVL72 tray that is
-		// "^Chassis_[0-9]+$").
+		// want the minimum possible request count should also set chassis_include to
+		// match only the chassis carrying leak detectors (on a Supermicro NVL72 tray
+		// that is "^Chassis_[0-9]+$", on an MGX NVSwitch tray "^MGX_BMC_[0-9]+$").
 		"leak_detection": {
 			Prober: "chassis_collector",
 			ChassisCollector: ChassisCollectorConfig{
@@ -131,6 +151,15 @@ type ChassisCollectorConfig struct {
 	// ChassisExclude, when non-empty, is a regular expression matched against each
 	// chassis Id. Matching chassis are skipped.
 	ChassisExclude string `mapstructure:"chassis_exclude"`
+	// SensorExclude, when non-empty, is a regular expression matched against each Sensor
+	// Id. Matching sensors emit no metrics. This trims series count, not request count:
+	// the collection arrives in one expanded request either way.
+	//
+	// Leak detector sensors are never excluded by this pattern. They are the reason the
+	// Sensors collection is consulted on a chassis that also implements Thermal/Power,
+	// and silently dropping a safety signal through a broad pattern is not a tradeoff
+	// worth offering.
+	SensorExclude string `mapstructure:"sensor_exclude"`
 
 	// DisableThermal skips the legacy Thermal schema (temperatures and fans).
 	DisableThermal bool `mapstructure:"disable_thermal"`
@@ -141,10 +170,15 @@ type ChassisCollectorConfig struct {
 	// DisableNetworkAdapters skips NetworkAdapters and their NetworkPorts. This is
 	// often the most expensive subsystem, at one request per adapter plus one per port.
 	DisableNetworkAdapters bool `mapstructure:"disable_network_adapters"`
-	// DisableSensors skips the Sensors collection. Sensors are only consulted for a
-	// chassis that implements neither Thermal nor Power (for example an NVL72 tray),
+	// DisableSensors skips the Sensors collection entirely, including the leak detector
+	// voltages. Sensors are only consulted for a chassis that advertises a Sensors
+	// collection and implements neither Thermal nor Power (for example an NVL72 tray),
 	// so leaving this enabled costs nothing on hardware that implements the legacy
 	// schemas and does not duplicate their metrics.
+	//
+	// Setting DisableThermal and DisablePower together also narrows the Sensors pass to
+	// the leak detectors: an operator who has opted out of bulk thermal and power data
+	// has not asked for it back under a different schema.
 	DisableSensors bool `mapstructure:"disable_sensors"`
 }
 
