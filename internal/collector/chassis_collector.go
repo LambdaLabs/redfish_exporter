@@ -622,6 +622,12 @@ type odataLink struct {
 // A chassis whose payload could not be inspected is treated as advertising them, which is
 // the conservative answer: it suppresses the Sensors fallback rather than risking an
 // unnecessary request per chassis.
+//
+// Either link is enough to suppress the fallback, not both. A chassis implementing exactly
+// one of the two and expressing the other half only through Sensors would lose that half.
+// No such chassis appears in any captured payload — every GPU platform implements both or
+// neither — and the alternative risks the duplicate series that a partial overlap would
+// produce, which fails the whole scrape rather than thinning it.
 func (l chassisLinks) legacyThermalOrPower() bool {
 	return l.opaque || l.thermal != "" || l.power != ""
 }
@@ -903,13 +909,24 @@ func parseChassisSensor(ch chan<- prometheus.Metric, chassisID string, sensor *s
 
 	case schemas.RotationalReadingType:
 		// A rotational reading is a fan tachometer. Percentage is derived the same way
-		// parseChassisFan derives it, so the two paths agree.
+		// parseChassisFan derives it — including its quirks: the reading is already a
+		// percentage when that is the unit, the upper thresholds stand in for a max the
+		// firmware did not report, and the formula is (reading + min) / max rather than
+		// the usual (reading - min) / (max - min). Reproducing it exactly is the point,
+		// so a platform that moved from Thermal to Sensors does not shift the series.
 		labelValues := []string{"fan", chassisID, sensor.Name, sensor.ID, strings.ToLower(sensor.ReadingUnits)}
 		rpmMin := gofish.Deref(sensor.ReadingRangeMin)
 		rpmMax := gofish.Deref(sensor.ReadingRangeMax)
-		percentage := float64(0)
-		if rpmMax != 0 {
-			percentage = ((reading + rpmMin) / rpmMax) * 100
+		// Thermal spells this unit "Percent" and Sensors spells it "%"; accept either, so
+		// that a firmware using the Thermal spelling in a Sensor is not scaled twice.
+		percentage := reading
+		if !strings.EqualFold(sensor.ReadingUnits, "%") && !strings.EqualFold(sensor.ReadingUnits, string(schemas.PercentReadingUnits)) {
+			upper := math.Max(thresholdReadingOrZero(sensor.Thresholds.UpperFatal), thresholdReadingOrZero(sensor.Thresholds.UpperCritical))
+			max := math.Max(rpmMax, upper)
+			percentage = 0
+			if max != 0 {
+				percentage = ((reading + rpmMin) / max) * 100
+			}
 		}
 		if health, ok := parseCommonStatusHealth(sensor.Status.Health); ok {
 			ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_health"].desc, prometheus.GaugeValue, health, labelValues...)

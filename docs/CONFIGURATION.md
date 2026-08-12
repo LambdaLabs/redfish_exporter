@@ -148,8 +148,8 @@ duplicate `LeakDetection` request this release also removes:
 
 | Platform | before | after |
 | --- | --- | --- |
-| SYS-A21GE-NBRT (B200, 38 chassis) | 115 | 114 |
-| SYS-821GE-TNHR (H100/H200, 41) | 118–119 | 117–118 |
+| SYS-A21GE-NBRT (B200, 39 chassis) | 116 | 115 |
+| SYS-821GE-TNHR (H100/H200, 43) | 118–119 | 117–118 |
 | ARS-121GL-NB3 (GB300 tray, 42) | 124 | 124 |
 | N5500_LD (MGX NVSwitch tray, 12) | 48 | 48 |
 | GH200 (4) | 20 | 22 |

@@ -698,6 +698,40 @@ func TestParseChassisSensor(t *testing.T) {
 		require.InDelta(t, 23.056, requireMetric(t, metrics, "redfish_chassis_fan_rpm_percentage").value, 0.001)
 	})
 
+	// parseChassisFan has always handled two cases beyond a plain RPM range, and the
+	// Sensors path has to reach the same numbers or a platform moving from Thermal to
+	// Sensors would shift the series under the existing alerts.
+	t.Run("rotational percentage matches the thermal path in its awkward cases", func(t *testing.T) {
+		reading := 50.0
+		max := 20000.0
+
+		t.Run("a reading already in percent is used as-is", func(t *testing.T) {
+			ch := make(chan prometheus.Metric, 32)
+			parseChassisSensor(ch, "Chassis_0", &schemas.Sensor{
+				Entity:       schemas.Entity{ID: "FAN_PCT", Name: "FAN_PCT"},
+				ReadingType:  schemas.RotationalReadingType,
+				ReadingUnits: "%",
+				Reading:      &reading,
+			}, nil)
+			metrics := drainMetrics(t, ch)
+			require.InDelta(t, 50.0, requireMetric(t, metrics, "redfish_chassis_fan_rpm_percentage").value, 1e-9)
+		})
+
+		// Some vendors report null Min/Max but do supply the upper thresholds, so those
+		// stand in for the max rather than leaving the percentage stuck at zero.
+		t.Run("an absent max falls back to the upper thresholds", func(t *testing.T) {
+			ch := make(chan prometheus.Metric, 32)
+			parseChassisSensor(ch, "Chassis_0", &schemas.Sensor{
+				Entity:      schemas.Entity{ID: "FAN_NORANGE", Name: "FAN_NORANGE"},
+				ReadingType: schemas.RotationalReadingType,
+				Reading:     &reading,
+				Thresholds:  schemas.Thresholds{UpperCritical: schemas.Threshold{Reading: &max}},
+			}, nil)
+			metrics := drainMetrics(t, ch)
+			require.InDelta(t, 0.25, requireMetric(t, metrics, "redfish_chassis_fan_rpm_percentage").value, 1e-9)
+		})
+	})
+
 	// Fan PWM duty cycle and CPU core utilisation are both ReadingType "Percent" and
 	// neither carries a distinguishing PhysicalContext, so Percent must not be assumed
 	// to be a fan speed.
