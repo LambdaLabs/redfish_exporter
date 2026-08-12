@@ -952,3 +952,176 @@ func TestParseMetricPropertyWithoutTrailingSlash(t *testing.T) {
 	require.Equal(t, "GPU_0_DRAM_0", memoryID)
 	require.Equal(t, "Oem/Nvidia/RowRemappingFailed", metricName)
 }
+
+// newTestTelemetryCollector builds a collector with no client, for the handlers that only
+// transform an already-fetched report.
+func newTestTelemetryCollector(t *testing.T) *TelemetryCollector {
+	t.Helper()
+	return &TelemetryCollector{
+		logger:  NewTestLogger(t, slog.LevelDebug),
+		metrics: createTelemetryMetricMap(),
+	}
+}
+
+// collectReport runs one handler over one report and returns the metrics it emitted.
+func collectReport(t *testing.T, handler reportHandler, report *schemas.MetricReport) map[string][]collectedMetric {
+	t.Helper()
+	ch := make(chan prometheus.Metric, 512)
+	handler(ch, report, map[string]string{})
+	return drainMetrics(t, ch)
+}
+
+// report builds a MetricReport from property/value pairs. Properties are written out in
+// full because the shape of the property string is the thing under test: every one of these
+// handlers works by finding a marker inside it, and a handler that finds nothing emits
+// nothing rather than failing.
+func report(id string, properties ...[2]string) *schemas.MetricReport {
+	values := make([]schemas.MetricValue, 0, len(properties))
+	for _, p := range properties {
+		values = append(values, schemas.MetricValue{MetricProperty: p[0], MetricValue: p[1]})
+	}
+	return &schemas.MetricReport{Entity: schemas.Entity{ID: id}, MetricValues: values}
+}
+
+// TestCollectHealthMetrics covers HGX_HealthMetrics, whose values are Redfish health
+// strings rather than numbers.
+func TestCollectHealthMetrics(t *testing.T) {
+	tc := newTestTelemetryCollector(t)
+
+	metrics := collectReport(t, tc.collectHealthMetrics, report("HGX_HealthMetrics_0",
+		[2]string{"/redfish/v1/Chassis/HGX_GPU_0#/Status/Health", "OK"},
+		[2]string{"/redfish/v1/Chassis/HGX_GPU_0#/Status/HealthRollup", "Critical"},
+	))
+
+	health := requireMetric(t, metrics, "redfish_telemetry_component_health")
+	require.Equal(t, float64(1), health.value)
+	require.Equal(t, "HGX_GPU_0", health.labels["component_id"])
+	require.Equal(t, "HGX_Baseboard_0", health.labels["system_id"])
+
+	rollup := requireMetric(t, metrics, "redfish_telemetry_component_health_rollup")
+	require.Equal(t, float64(3), rollup.value)
+
+	t.Run("values and properties it cannot map are dropped, not guessed", func(t *testing.T) {
+		metrics := collectReport(t, tc.collectHealthMetrics, report("HGX_HealthMetrics_0",
+			[2]string{"/redfish/v1/Chassis/HGX_GPU_0#/Status/State", "Enabled"},
+			[2]string{"/redfish/v1/Chassis/HGX_GPU_1#/Status/Health", "NotAHealthValue"},
+			[2]string{"/redfish/v1/Chassis/HGX_GPU_2/Status/Health", "OK"},
+		))
+		require.Empty(t, metrics)
+	})
+}
+
+// TestCollectPortGPMMetrics covers HGX_ProcessorPortGPMMetrics: the per-NVLink-port
+// breakdown of the bandwidth counters that HGX_ProcessorGPMMetrics reports per GPU.
+func TestCollectPortGPMMetrics(t *testing.T) {
+	tc := newTestTelemetryCollector(t)
+	const base = "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_1/Ports/NVLink_0/Metrics"
+
+	metrics := collectReport(t, tc.collectPortGPMMetrics, report("HGX_ProcessorPortGPMMetrics_0",
+		[2]string{base + "#/Oem/Nvidia/NVLinkDataRxBandwidthGbps", "17.5"},
+		[2]string{base + "#/Oem/Nvidia/NVLinkDataTxBandwidthGbps", "18.5"},
+		[2]string{base + "#/Oem/Nvidia/NVLinkRawRxBandwidthGbps", "19.5"},
+		[2]string{base + "#/Oem/Nvidia/NVLinkRawTxBandwidthGbps", "20.5"},
+	))
+
+	rx := requireMetric(t, metrics, "redfish_telemetry_port_nvidia_nvlink_data_rx_bandwidth_gbps")
+	require.InDelta(t, 17.5, rx.value, 1e-9)
+	require.Equal(t, "GPU_SXM_1", rx.labels["gpu_id"])
+	require.Equal(t, "NVLink_0", rx.labels["port_id"])
+
+	require.InDelta(t, 18.5, requireMetric(t, metrics, "redfish_telemetry_port_nvidia_nvlink_data_tx_bandwidth_gbps").value, 1e-9)
+	require.InDelta(t, 19.5, requireMetric(t, metrics, "redfish_telemetry_port_nvidia_nvlink_raw_rx_bandwidth_gbps").value, 1e-9)
+	require.InDelta(t, 20.5, requireMetric(t, metrics, "redfish_telemetry_port_nvidia_nvlink_raw_tx_bandwidth_gbps").value, 1e-9)
+
+	t.Run("a property with no port, or a name with no metric, is skipped", func(t *testing.T) {
+		metrics := collectReport(t, tc.collectPortGPMMetrics, report("HGX_ProcessorPortGPMMetrics_0",
+			[2]string{"/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_SXM_1/ProcessorMetrics#/Oem/Nvidia/NVLinkDataRxBandwidthGbps", "1"},
+			[2]string{base + "#/Oem/Nvidia/SomethingNewInFirmware", "2"},
+			[2]string{base + "#/Oem/Nvidia/NVLinkDataRxBandwidthGbps", "notanumber"},
+		))
+		require.Empty(t, metrics)
+	})
+}
+
+// TestCollectCPUProcessorMetrics covers HGX_CpuProcessorMetrics, which mixes two property
+// shapes in one report: bare Sensor URIs and processor-scoped properties with a fragment.
+func TestCollectCPUProcessorMetrics(t *testing.T) {
+	tc := newTestTelemetryCollector(t)
+	const sensors = "/redfish/v1/Chassis/HGX_CPU_0/Sensors/"
+	const processor = "/redfish/v1/Systems/HGX_Baseboard_0/Processors/CPU_0/ProcessorMetrics"
+
+	metrics := collectReport(t, tc.collectCPUProcessorMetrics, report("HGX_CpuProcessorMetrics_0",
+		[2]string{sensors + "ProcessorModule_0_CPU_0_CpuFreq_0", "3100"},
+		[2]string{sensors + "ProcessorModule_0_MemCntl_0_Freq_0", "2000"},
+		[2]string{sensors + "ProcessorModule_0_Vreg_0_CpuVoltage_0", "0.85"},
+		[2]string{sensors + "ProcessorModule_0_Vreg_0_SocVoltage_0", "0.75"},
+		[2]string{processor + "#/Oem/Nvidia/MemoryPageRetirementCount", "4"},
+		[2]string{processor + "#/Oem/Nvidia/EDPViolationState", "0"},
+		[2]string{processor + "#/Oem/Nvidia/PowerBreakPerformanceState", "1"},
+	))
+
+	freq := requireMetric(t, metrics, "redfish_telemetry_cpu_frequency_mhz")
+	require.InDelta(t, 3100, freq.value, 1e-9)
+	require.Equal(t, "ProcessorModule_0", freq.labels["cpu_id"])
+
+	require.InDelta(t, 2000, requireMetric(t, metrics, "redfish_telemetry_cpu_memory_controller_frequency_mhz").value, 1e-9)
+	require.InDelta(t, 4, requireMetric(t, metrics, "redfish_telemetry_cpu_memory_page_retirement_count").value, 1e-9)
+	require.InDelta(t, 0, requireMetric(t, metrics, "redfish_telemetry_cpu_edp_violation_state").value, 1e-9)
+	require.InDelta(t, 1, requireMetric(t, metrics, "redfish_telemetry_cpu_power_break_performance_state").value, 1e-9)
+
+	// Both rails land in one metric, told apart by the rail label.
+	vreg := metrics["redfish_telemetry_cpu_vreg_voltage_volts"]
+	require.Len(t, vreg, 2)
+	rails := map[string]float64{}
+	for _, sample := range vreg {
+		rails[sample.labels["rail"]] = sample.value
+	}
+	require.InDelta(t, 0.85, rails["cpu"], 1e-9)
+	require.InDelta(t, 0.75, rails["soc"], 1e-9)
+
+	// 144 of these on a GB300 tray, all declined: node_exporter already reports the same
+	// thing in-band at higher resolution.
+	t.Run("per-core utilisation is declined", func(t *testing.T) {
+		metrics := collectReport(t, tc.collectCPUProcessorMetrics, report("HGX_CpuProcessorMetrics_0",
+			[2]string{sensors + "ProcessorModule_0_CPU_0_CoreUtil_0", "12"},
+			[2]string{sensors + "ProcessorModule_0_CPU_0_CoreUtil_71", "34"},
+		))
+		require.Empty(t, metrics)
+	})
+}
+
+// TestCollectTrayPlatformEnvironmentMetrics pins that the tray-level report emits nothing.
+// Every reading it carries is already collected from the chassis Sensors collections, with
+// thresholds the report does not have; it is consumed only so it does not trip the
+// unhandled-report guard.
+func TestCollectTrayPlatformEnvironmentMetrics(t *testing.T) {
+	tc := newTestTelemetryCollector(t)
+
+	metrics := collectReport(t, tc.collectTrayPlatformEnvironmentMetrics, report("PlatformEnvironmentMetrics_0",
+		[2]string{"/redfish/v1/Chassis/Chassis_0/Sensors/Chassis_0_FAN_1_FRONT", "8623"},
+		[2]string{"/redfish/v1/Chassis/Chassis_0/Sensors/Chassis_0_LeakDetector_0_ColdPlate", "1.72"},
+	))
+
+	require.Empty(t, metrics, "the chassis collector owns these readings")
+}
+
+// TestCollectPlatformEnvironmentMetricsVoltageRegulators pins the sensors that used to fall
+// off the end of the chain. The dispatch required the infix "_CPU_", which these never
+// carry — they spell it "_Cpu" — so parseCPUSensorMetric's voltage-regulator handling was
+// unreachable on the platform that emits them.
+func TestCollectPlatformEnvironmentMetricsVoltageRegulators(t *testing.T) {
+	tc := newTestTelemetryCollector(t)
+	const sensors = "/redfish/v1/Chassis/HGX_CPU_0/Sensors/"
+
+	ch := make(chan prometheus.Metric, 64)
+	tc.collectPlatformEnvironmentMetrics(ch, report("HGX_PlatformEnvironmentMetrics_0",
+		[2]string{sensors + "ProcessorModule_0_Vreg_0_CpuPower_0", "310.5"},
+		[2]string{sensors + "ProcessorModule_0_Vreg_0_SocPower_0", "95.25"},
+	), map[string]string{})
+	metrics := drainMetrics(t, ch)
+
+	cpu := requireMetric(t, metrics, "redfish_telemetry_cpu_vreg_cpu_power_watts")
+	require.InDelta(t, 310.5, cpu.value, 1e-9)
+	require.Equal(t, "CPU_0", cpu.labels["cpu_id"])
+	require.InDelta(t, 95.25, requireMetric(t, metrics, "redfish_telemetry_cpu_vreg_soc_power_watts").value, 1e-9)
+}
