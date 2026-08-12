@@ -4,7 +4,10 @@
   "Id": "Chassis_0_LeakDetector_1_Manifold",
   "Name": "Chassis 0 LeakDetector 1 Manifold",
   "LeakDetectorType": "Moisture",
-  "DetectorState": "LeakDetected",
+  "DetectorState": "Critical",
+  "Enabled": true,
+  "PhysicalContext": "CoolingSubsystem",
+  "PhysicalSubContext": "Input",
   "Status": {
     "Health": "Critical",
     "State": "Enabled"

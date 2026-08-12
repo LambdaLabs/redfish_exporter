@@ -5,6 +5,9 @@
   "Name": "Chassis 0 LeakDetector 0 ColdPlate",
   "LeakDetectorType": "Moisture",
   "DetectorState": "OK",
+  "Enabled": true,
+  "PhysicalContext": "CoolingSubsystem",
+  "PhysicalSubContext": "Input",
   "Status": {
     "Health": "OK",
     "State": "Enabled"

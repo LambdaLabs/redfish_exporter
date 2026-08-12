@@ -10,6 +10,15 @@ import (
 )
 
 var (
+	// DefaultSensorExclude drops per-core CPU utilisation from the chassis Sensors pass.
+	//
+	// A GB300 tray publishes 144 of these (ProcessorModule_N_CPU_0_CoreUtil_M), more series
+	// than the rest of the chassis collector produces for that tray combined, and
+	// node_exporter already reports the same thing in-band at higher resolution.
+	//
+	// Expressed as configuration rather than a rule in the collector, which never infers
+	// meaning from a sensor's name. Set `sensor_exclude: ""` to collect them.
+	DefaultSensorExclude = `_CoreUtil_[0-9]+$`
 	// DefaultChassisCollector is a default unless the user provides particular values.
 	DefaultChassisCollector = ChassisCollectorConfig{}
 	// DefaultGPUCollector is a default unless the user provides particular values.
@@ -51,6 +60,27 @@ var (
 		"telemetry_collector": {
 			Prober:             "telemetry_collector",
 			TelemetryCollector: DefaultTelemetryCollector,
+		},
+		// leak_detection is a chassis_collector narrowed to coolant leak monitoring, so
+		// that leak state can be scraped on a much shorter interval than a full chassis
+		// scrape allows. See docs/CONFIGURATION.md.
+		//
+		// Disabling Thermal and Power together is load-bearing rather than incidental:
+		// on the liquid-cooled platforms this targets no chassis implements either, so
+		// the Sensors pass would otherwise stand in for what was just disabled. Setting
+		// both narrows that pass to the leak detectors.
+		//
+		// Deliberately not in the rf_exporter_default bundle, and deliberately unfiltered
+		// — chassis naming is vendor specific. Set chassis_include to match only the
+		// chassis carrying detectors ("^Chassis_[0-9]+$" on a Supermicro NVL72 tray,
+		// "^MGX_BMC_[0-9]+$" on an MGX NVSwitch tray) for a large further saving.
+		"leak_detection": {
+			Prober: "chassis_collector",
+			ChassisCollector: ChassisCollectorConfig{
+				DisableThermal:         true,
+				DisablePower:           true,
+				DisableNetworkAdapters: true,
+			},
 		},
 	}
 	DefaultRedfishConfig = RedfishClientConfig{
@@ -100,8 +130,57 @@ func unmarshalViperConfig(v *viper.Viper) (*Config, error) {
 	return config, config.Validate()
 }
 
-// ChassisCollectorConfig is a prober configuration.
-type ChassisCollectorConfig struct{}
+// ChassisCollectorConfig is a prober configuration. See docs/CONFIGURATION.md.
+//
+// Every field's zero value preserves the collector's historical behaviour, which keeps
+// `chassis_collector: {}` a no-op. SensorExclude is the exception; see below.
+type ChassisCollectorConfig struct {
+	// ChassisInclude, when non-empty, is a regular expression matched against each
+	// chassis Id. Only matching chassis are collected. Applied before ChassisExclude.
+	ChassisInclude string `mapstructure:"chassis_include"`
+	// ChassisExclude, when non-empty, is a regular expression matched against each
+	// chassis Id. Matching chassis are skipped.
+	ChassisExclude string `mapstructure:"chassis_exclude"`
+	// SensorExclude is a regular expression matched against each Sensor Id. Matching
+	// sensors emit no metrics.
+	//
+	// It is a pointer because an absent key and an empty pattern have to mean different
+	// things: absent is "whatever ships by default", empty is "exclude nothing". Read it
+	// through SensorExcludePattern rather than directly.
+	//
+	// Leak detector sensors are never excluded by it. Silently dropping a safety signal
+	// through a broad pattern is not a tradeoff worth offering.
+	SensorExclude *string `mapstructure:"sensor_exclude"`
+
+	// DisableThermal skips the legacy Thermal schema (temperatures and fans).
+	DisableThermal bool `mapstructure:"disable_thermal"`
+	// DisableThermalSubsystem skips ThermalSubsystem, and with it leak detection.
+	DisableThermalSubsystem bool `mapstructure:"disable_thermal_subsystem"`
+	// DisablePower skips the legacy Power schema (voltages and power supplies).
+	DisablePower bool `mapstructure:"disable_power"`
+	// DisableNetworkAdapters skips NetworkAdapters and their NetworkPorts. This is
+	// often the most expensive subsystem, at one request per adapter plus one per port.
+	DisableNetworkAdapters bool `mapstructure:"disable_network_adapters"`
+	// DisableSensors skips the Sensors collection entirely, including the leak detector
+	// voltages.
+	//
+	// Setting DisableThermal and DisablePower together instead narrows the Sensors pass
+	// to the leak detectors: an operator who has opted out of bulk thermal and power data
+	// has not asked for it back under a different schema.
+	DisableSensors bool `mapstructure:"disable_sensors"`
+}
+
+// SensorExcludePattern returns the sensor exclusion pattern in effect, substituting
+// DefaultSensorExclude when the key was not configured at all.
+//
+// Defaulting here rather than at unmarshal time means every construction path agrees: a
+// module parsed from YAML, a built-in module and a zero-value struct all behave the same.
+func (c ChassisCollectorConfig) SensorExcludePattern() string {
+	if c.SensorExclude == nil {
+		return DefaultSensorExclude
+	}
+	return *c.SensorExclude
+}
 
 // GPUCollectorConfig is a prober configuration.
 type GPUCollectorConfig struct{}

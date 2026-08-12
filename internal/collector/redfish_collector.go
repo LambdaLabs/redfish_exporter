@@ -3,10 +3,13 @@ package collector
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
+	"path"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -199,6 +202,49 @@ func newRedfishClient(ctx context.Context, host string, username string, passwor
 	return redfishClient, nil
 }
 
+// memberCollection is the shape of any Redfish collection read for its member links alone.
+type memberCollection struct {
+	Members []odataLink `json:"Members"`
+}
+
+// collectionMemberURIs returns a collection's member URIs without fetching the members.
+//
+// gofish's typed collection accessors fetch every member body, which is the right default
+// but the wrong one when the caller is about to discard most of them. Reading the links
+// first costs the same single request and lets the caller decide what is worth fetching.
+func collectionMemberURIs(client *gofish.APIClient, uri string) ([]string, error) {
+	if uri == "" {
+		return nil, nil
+	}
+	response, err := client.Get(uri)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close() //nolint:errcheck
+
+	var collection memberCollection
+	if err := json.NewDecoder(response.Body).Decode(&collection); err != nil {
+		return nil, err
+	}
+
+	uris := make([]string, 0, len(collection.Members))
+	for _, member := range collection.Members {
+		if member.ODataID != "" {
+			uris = append(uris, member.ODataID)
+		}
+	}
+	return uris, nil
+}
+
+// resourceIDFromURI returns the trailing path segment of a Redfish resource URI.
+//
+// By convention that segment is the resource's Id, which is what makes it usable as a
+// pre-filter before the body is fetched. It is only a convention, so callers that filter on
+// it must still apply the authoritative check against the fetched Id.
+func resourceIDFromURI(uri string) string {
+	return path.Base(strings.TrimSuffix(uri, "/"))
+}
+
 func parseCommonStatusHealth(status schemas.Health) (float64, bool) {
 	if bytes.Equal([]byte(status), []byte("OK")) {
 		return float64(1), true
@@ -206,6 +252,33 @@ func parseCommonStatusHealth(status schemas.Health) (float64, bool) {
 		return float64(2), true
 	} else if bytes.Equal([]byte(status), []byte("Critical")) {
 		return float64(3), true
+	}
+	return float64(0), false
+}
+
+// parseDetectorState maps a Redfish LeakDetector DetectorState to a numeric gauge value.
+//
+// OK/Warning/Critical intentionally share the encoding used by parseCommonStatusHealth,
+// which is more than a convention: through LeakDetector v1_5_0, DetectorState is a $ref to
+// Resource.Health and those three are the only values it can take.
+//
+// Unavailable and Absent arrive with v1_6_0's own enum and extend past Critical, so they
+// cannot be reached on any hardware we have captured. They are mapped anyway, and alert
+// expressions MUST use explicit equality (== 3) rather than the ">= 2"/"> 2" idiom used for
+// health metrics elsewhere, so that firmware gaining those values later does not silently
+// start reporting an absent detector as a critical leak.
+func parseDetectorState(state schemas.DetectorState) (float64, bool) {
+	switch state {
+	case schemas.OKDetectorState:
+		return float64(1), true
+	case schemas.WarningDetectorState:
+		return float64(2), true
+	case schemas.CriticalDetectorState:
+		return float64(3), true
+	case schemas.UnavailableDetectorState:
+		return float64(4), true
+	case schemas.AbsentDetectorState:
+		return float64(5), true
 	}
 	return float64(0), false
 }

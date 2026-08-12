@@ -1,8 +1,8 @@
 package collector
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -52,27 +52,44 @@ const (
 	sensorInfixTemp0           = "_Temp_0"
 	sensorInfixTotalGPUPower   = "TotalGPU_Power"
 
-	// Report ID patterns
-	reportIDProcessorGPMMetrics   = "HGX_ProcessorGPMMetrics"
-	reportIDProcessorMetrics      = "HGX_ProcessorMetrics"
-	reportIDProcessorResetMetrics = "HGX_ProcessorResetMetrics"
-	reportIDProcessorPortMetrics  = "HGX_ProcessorPortMetrics"
-	reportIDMemoryMetrics         = "HGX_MemoryMetrics"
-	reportIDPlatformEnvMetrics    = "HGX_PlatformEnvironmentMetrics"
+	// Report ID patterns, matched against a report ID normalized by
+	// normalizeReportID: the trailing instance index is removed, but the HGX_ prefix is
+	// significant and is NOT stripped.
+	//
+	// These are matched exactly rather than by substring. Substring matching is ambiguous
+	// here — "HGX_ProcessorMetrics" is contained in neither "HGX_ProcessorResetMetrics" nor
+	// "HGX_ProcessorPortMetrics", but a bare "ProcessorMetrics" would be contained in
+	// "HGX_CpuProcessorMetrics", which would route CPU data into the GPU parser.
+	reportIDProcessorGPMMetrics     = "HGX_ProcessorGPMMetrics"
+	reportIDProcessorMetrics        = "HGX_ProcessorMetrics"
+	reportIDProcessorResetMetrics   = "HGX_ProcessorResetMetrics"
+	reportIDProcessorPortMetrics    = "HGX_ProcessorPortMetrics"
+	reportIDProcessorPortGPMMetrics = "HGX_ProcessorPortGPMMetrics"
+	reportIDCpuProcessorMetrics     = "HGX_CpuProcessorMetrics"
+	reportIDHealthMetrics           = "HGX_HealthMetrics"
+	reportIDMemoryMetrics           = "HGX_MemoryMetrics"
+	reportIDPlatformEnvMetrics      = "HGX_PlatformEnvironmentMetrics"
+	// reportIDTrayPlatformEnvMetrics is the tray-level counterpart of
+	// reportIDPlatformEnvMetrics, reported without the HGX_ prefix on NVL72 trays. It is a
+	// distinct report covering tray infrastructure (fans, PDB, leak detectors, NIC and SSD
+	// temperatures) rather than the GPU baseboard, and its sensor IDs are unprefixed.
+	reportIDTrayPlatformEnvMetrics = "PlatformEnvironmentMetrics"
 
 	// ISO8601 duration prefix
 	iso8601DurationPrefix = "P"
 )
 
 var (
-	telemetryBaseLabels     = []string{"system_id", "gpu_id"}
-	telemetryMemoryLabels   = []string{"system_id", "gpu_id", "memory_id"}
-	telemetryPortLabels     = []string{"system_id", "gpu_id", "port_id"}
-	telemetryInstanceLabels = []string{"system_id", "gpu_id", "instance_id"}
-	telemetryCPULabels      = []string{"system_id", "cpu_id"}
-	telemetryAmbientLabels  = []string{"system_id", "location_id", "sensor_id"}
-	telemetryBMCLabels      = []string{"system_id"}
-	telemetryMetrics        = createTelemetryMetricMap()
+	telemetryBaseLabels      = []string{"system_id", "gpu_id"}
+	telemetryMemoryLabels    = []string{"system_id", "gpu_id", "memory_id"}
+	telemetryPortLabels      = []string{"system_id", "gpu_id", "port_id"}
+	telemetryInstanceLabels  = []string{"system_id", "gpu_id", "instance_id"}
+	telemetryCPULabels       = []string{"system_id", "cpu_id"}
+	telemetryAmbientLabels   = []string{"system_id", "location_id", "sensor_id"}
+	telemetryBMCLabels       = []string{"system_id"}
+	telemetryComponentLabels = []string{"system_id", "component_id"}
+	telemetryCPUVregLabels   = []string{"system_id", "cpu_id", "rail"}
+	telemetryMetrics         = createTelemetryMetricMap()
 
 	// GPM instance metrics - these are the only metrics that have per-instance values
 	gpmInstanceMetrics = map[string]bool{
@@ -227,6 +244,28 @@ func createTelemetryMetricMap() map[string]Metric {
 
 	// 'Meta' metrics about the collector/collection process
 	addToMetricMap(metrics, TelemetrySubsystem, "collection_stale_reports_last", "Quantity of stale reports discovered on the last collection loop", []string{})
+	// Non-zero means a platform is publishing telemetry this exporter does not parse.
+	addToMetricMap(metrics, TelemetrySubsystem, "unhandled_report", "Number of metric values in a metric report that no handler claimed, and which were therefore discarded", []string{"report_id"})
+
+	// Component health, reported as a metric report rather than per-resource status.
+	addToMetricMap(metrics, TelemetrySubsystem, "component_health", fmt.Sprintf("health of a component reported via TelemetryService,%s", CommonHealthHelp), telemetryComponentLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "component_health_rollup", fmt.Sprintf("health rollup of a component reported via TelemetryService,%s", CommonHealthHelp), telemetryComponentLabels)
+
+	// Per-NVLink-port bandwidth. The GPU-level aggregates of these four live in
+	// HGX_ProcessorGPMMetrics and are emitted as nvidia_nvlink_*; these are the per-port
+	// breakdown from HGX_ProcessorPortGPMMetrics, so they carry the port label set.
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_nvlink_data_rx_bandwidth_gbps", "Per-port NVLink data RX bandwidth in Gbps (NVIDIA OEM)", telemetryPortLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_nvlink_data_tx_bandwidth_gbps", "Per-port NVLink data TX bandwidth in Gbps (NVIDIA OEM)", telemetryPortLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_nvlink_raw_rx_bandwidth_gbps", "Per-port NVLink raw RX bandwidth in Gbps (NVIDIA OEM)", telemetryPortLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "port_nvidia_nvlink_raw_tx_bandwidth_gbps", "Per-port NVLink raw TX bandwidth in Gbps (NVIDIA OEM)", telemetryPortLabels)
+
+	// CPU (Grace) metrics from HGX_CpuProcessorMetrics.
+	addToMetricMap(metrics, TelemetrySubsystem, "cpu_frequency_mhz", "CPU core frequency in MHz", telemetryCPULabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "cpu_memory_controller_frequency_mhz", "CPU memory controller frequency in MHz", telemetryCPULabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "cpu_vreg_voltage_volts", "CPU voltage regulator output in volts", telemetryCPUVregLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "cpu_memory_page_retirement_count", "Number of retired memory pages (NVIDIA OEM)", telemetryCPULabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "cpu_edp_violation_state", "Whether the CPU is in an electrical design point violation state, 1(violating),0(nominal) (NVIDIA OEM)", telemetryCPULabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "cpu_power_break_performance_state", "Whether the CPU is in a power-break performance state, 1(active),0(nominal) (NVIDIA OEM)", telemetryCPULabels)
 
 	return metrics
 }
@@ -331,50 +370,339 @@ func (t *TelemetryCollector) collect(ctx context.Context, ch chan<- prometheus.M
 		}
 	}
 
+	// Staleness is counted across every report rather than inside a single handler, so the
+	// total stays a single label-less series no matter how many reports a platform exposes.
+	staleValues := 0.0
+	for _, report := range metricReports {
+		for _, metricValue := range report.MetricValues {
+			if metricValueIsStale(metricValue) {
+				staleValues++
+			}
+		}
+	}
+	ch <- prometheus.MustNewConstMetric(
+		t.metrics["telemetry_collection_stale_reports_last"].desc,
+		prometheus.GaugeValue,
+		staleValues,
+	)
+
 	// Process each metric report
 	eg := newRecoverGroup(ctx)
+	var unhandled []string
+	unhandledValues := 0
 	for _, report := range metricReports {
 		if ctx.Err() != nil {
 			t.logger.With("error", ctx.Err(), "collector", "telemetry").Debug("skipping further collection")
 			continue
 		}
-		if strings.Contains(report.ID, reportIDProcessorGPMMetrics) {
-			eg.Go(func() error {
-				t.collectGPMMetrics(ch, report, systemMap)
-				return nil
-			})
-		} else if strings.Contains(report.ID, reportIDProcessorMetrics) && !strings.Contains(report.ID, reportIDProcessorResetMetrics) && !strings.Contains(report.ID, reportIDProcessorPortMetrics) {
-			eg.Go(func() error {
-				t.collectProcessorMetrics(ch, report, systemMap)
-				return nil
-			})
-		} else if strings.Contains(report.ID, reportIDMemoryMetrics) {
-			eg.Go(func() error {
-				t.collectMemoryMetrics(ch, report, systemMap)
-				return nil
-			})
-		} else if strings.Contains(report.ID, reportIDProcessorResetMetrics) {
-			eg.Go(func() error {
-				t.collectResetMetrics(ch, report, systemMap)
-				return nil
-			})
-		} else if strings.Contains(report.ID, reportIDProcessorPortMetrics) {
-			eg.Go(func() error {
-				t.collectPortMetrics(ch, report, systemMap)
-				return nil
-			})
-		} else if strings.Contains(report.ID, reportIDPlatformEnvMetrics) {
-			eg.Go(func() error {
-				t.collectPlatformEnvironmentMetrics(ch, report, systemMap)
-				return nil
-			})
+		handler, known := t.reportHandlers()[normalizeReportID(report.ID)]
+		if !known {
+			// Report IDs vary by platform and firmware, and an unrecognised report used to
+			// be discarded with no trace at all. Surface it so new hardware does not
+			// silently lose telemetry.
+			unhandled = append(unhandled, report.ID)
+			unhandledValues += len(report.MetricValues)
+			ch <- prometheus.MustNewConstMetric(
+				t.metrics["telemetry_unhandled_report"].desc,
+				prometheus.GaugeValue,
+				float64(len(report.MetricValues)),
+				report.ID,
+			)
+			continue
 		}
+		eg.Go(func() error {
+			handler(ch, report, systemMap)
+			return nil
+		})
+	}
+
+	// One line for the whole scrape rather than one per report. Unhandled reports are a
+	// standing property of a platform, not an incident: an HGX baseboard has around
+	// sixteen, so logging each of them every scrape buries real warnings fleet-wide. The
+	// per-report detail lives in telemetry_unhandled_report, which is the alertable form.
+	if len(unhandled) > 0 {
+		t.logger.Warn("no handler for metric reports, telemetry is being discarded",
+			slog.String("report_ids", strings.Join(unhandled, ",")),
+			slog.Int("report_count", len(unhandled)),
+			slog.Int("metric_count", unhandledValues),
+		)
 	}
 
 	if err := eg.Wait(); err != nil {
 		t.logger.Error("goroutine error", slog.Any("error", err))
 	}
 	t.collectorScrapeStatus.WithLabelValues("telemetry").Set(float64(1))
+}
+
+// segmentAfter extracts the path segment immediately following marker in path.
+//
+// The segment may be terminated by a '/' or by the end of the string. That second case is
+// load-bearing: properties are split on "#/" before reaching here, so a property such as
+// ".../Processors/GPU_0#/Oem/Nvidia/Foo" leaves "GPU_0" with no trailing slash. Requiring
+// one silently discarded every such value.
+func segmentAfter(path, marker string) string {
+	idx := strings.Index(path, marker)
+	if idx == -1 {
+		return ""
+	}
+	remainder := path[idx+len(marker):]
+	if endIdx := strings.Index(remainder, "/"); endIdx != -1 {
+		return remainder[:endIdx]
+	}
+	return remainder
+}
+
+// metricValueIsStale reports whether a metric value should be ignored because the BMC
+// flagged it stale or could not produce a reading.
+//
+// The OEM block is unmarshalled rather than substring-matched. A byte match on
+// `"MetricValueStale": true` depends on the BMC's exact JSON whitespace, so firmware
+// emitting compact JSON would silently pass every stale value through as fresh.
+func metricValueIsStale(metricValue schemas.MetricValue) bool {
+	if metricValue.MetricValue == "nan" {
+		return true
+	}
+	if len(metricValue.OEM) == 0 {
+		return false
+	}
+	var oem struct {
+		Nvidia struct {
+			MetricValueStale *bool `json:"MetricValueStale"`
+		} `json:"Nvidia"`
+	}
+	if err := json.Unmarshal(metricValue.OEM, &oem); err != nil {
+		return false
+	}
+	return oem.Nvidia.MetricValueStale != nil && *oem.Nvidia.MetricValueStale
+}
+
+// reportHandler processes one MetricReport.
+type reportHandler func(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string)
+
+// reportHandlers maps a normalized report ID to its handler. Keys are matched exactly, so
+// adding a report can never change how an existing one is routed.
+func (t *TelemetryCollector) reportHandlers() map[string]reportHandler {
+	return map[string]reportHandler{
+		reportIDProcessorGPMMetrics:     t.collectGPMMetrics,
+		reportIDProcessorMetrics:        t.collectProcessorMetrics,
+		reportIDProcessorResetMetrics:   t.collectResetMetrics,
+		reportIDProcessorPortMetrics:    t.collectPortMetrics,
+		reportIDProcessorPortGPMMetrics: t.collectPortGPMMetrics,
+		reportIDCpuProcessorMetrics:     t.collectCPUProcessorMetrics,
+		reportIDHealthMetrics:           t.collectHealthMetrics,
+		reportIDMemoryMetrics:           t.collectMemoryMetrics,
+		reportIDPlatformEnvMetrics:      t.collectPlatformEnvironmentMetrics,
+		reportIDTrayPlatformEnvMetrics:  t.collectTrayPlatformEnvironmentMetrics,
+	}
+}
+
+// normalizeReportID strips the trailing instance index from a metric report ID, so that
+// "HGX_ProcessorMetrics_0" and "HGX_ProcessorMetrics_1" share a handler.
+//
+// Only a trailing _<digits> group is removed. IDs whose final segment is not numeric are
+// returned unchanged, which keeps "HGX_ProcessorPortGPMMetrics" distinct from
+// "HGX_ProcessorPortMetrics" instead of relying on substring tests to tell them apart.
+func normalizeReportID(id string) string {
+	idx := strings.LastIndex(id, "_")
+	if idx <= 0 || idx == len(id)-1 {
+		return id
+	}
+	for _, r := range id[idx+1:] {
+		if r < '0' || r > '9' {
+			return id
+		}
+	}
+	return id[:idx]
+}
+
+// collectHealthMetrics processes an HGX_HealthMetrics report, which reports component
+// Status/Health and Status/HealthRollup as string metric values rather than numbers.
+// Properties are chassis-scoped, e.g. /redfish/v1/Chassis/HGX_CPU_0#/Status/Health.
+func (t *TelemetryCollector) collectHealthMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string) {
+	t.logger.Debug("processing health metric report",
+		slog.String("report_id", report.ID),
+		slog.Int("metric_count", len(report.MetricValues)),
+	)
+
+	for _, metricValue := range report.MetricValues {
+		parts := strings.Split(metricValue.MetricProperty, "#/")
+		if len(parts) != 2 {
+			continue
+		}
+		componentID := parts[0][strings.LastIndex(parts[0], "/")+1:]
+		if componentID == "" {
+			continue
+		}
+
+		var metricKey string
+		switch parts[1] {
+		case "Status/Health":
+			metricKey = "telemetry_component_health"
+		case "Status/HealthRollup":
+			metricKey = "telemetry_component_health_rollup"
+		default:
+			continue
+		}
+
+		// Values here are Redfish health strings, not numbers.
+		value, ok := parseCommonStatusHealth(schemas.Health(metricValue.MetricValue))
+		if !ok {
+			t.logger.Debug("unmappable health value in health metric report",
+				slog.String("component", componentID),
+				slog.String("value", metricValue.MetricValue),
+			)
+			continue
+		}
+
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics[metricKey].desc,
+			prometheus.GaugeValue,
+			value,
+			extractSystemIDFromChassis(componentID), componentID,
+		)
+	}
+}
+
+// collectPortGPMMetrics processes an HGX_ProcessorPortGPMMetrics report: per-NVLink-port
+// bandwidth. The same four metric names also appear GPU-aggregated in
+// HGX_ProcessorGPMMetrics; this is the per-port breakdown.
+func (t *TelemetryCollector) collectPortGPMMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string) {
+	t.logger.Debug("processing port GPM metric report",
+		slog.String("report_id", report.ID),
+		slog.Int("metric_count", len(report.MetricValues)),
+	)
+
+	nameToMetric := map[string]string{
+		"Oem/Nvidia/NVLinkDataRxBandwidthGbps": "telemetry_port_nvidia_nvlink_data_rx_bandwidth_gbps",
+		"Oem/Nvidia/NVLinkDataTxBandwidthGbps": "telemetry_port_nvidia_nvlink_data_tx_bandwidth_gbps",
+		"Oem/Nvidia/NVLinkRawRxBandwidthGbps":  "telemetry_port_nvidia_nvlink_raw_rx_bandwidth_gbps",
+		"Oem/Nvidia/NVLinkRawTxBandwidthGbps":  "telemetry_port_nvidia_nvlink_raw_tx_bandwidth_gbps",
+	}
+
+	systemID := extractSystemIDFromReport(report)
+	for _, metricValue := range report.MetricValues {
+		gpuID, portID, metricName := parsePortMetricProperty(metricValue.MetricProperty)
+		if gpuID == "" || portID == "" {
+			continue
+		}
+		metricKey, known := nameToMetric[metricName]
+		if !known {
+			continue
+		}
+		value, err := parseMetricValue(metricValue.MetricValue)
+		if err != nil {
+			continue
+		}
+		ch <- prometheus.MustNewConstMetric(
+			t.metrics[metricKey].desc,
+			prometheus.GaugeValue,
+			value,
+			systemID, gpuID, portID,
+		)
+	}
+}
+
+// collectCPUProcessorMetrics processes an HGX_CpuProcessorMetrics report.
+//
+// This report mixes two property shapes: processor-scoped properties with a #/ fragment,
+// and bare Sensor URIs. Per-core utilisation (ProcessorModule_N_CPU_0_CoreUtil_M, 144
+// sensors on a GB300 tray) is deliberately not emitted: it is available in-band from
+// node_exporter at higher resolution, and would add more series than the rest of this
+// collector combined for no diagnostic gain.
+func (t *TelemetryCollector) collectCPUProcessorMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string) {
+	t.logger.Debug("processing CPU processor metric report",
+		slog.String("report_id", report.ID),
+		slog.Int("metric_count", len(report.MetricValues)),
+	)
+
+	systemID := extractSystemIDFromReport(report)
+
+	for _, metricValue := range report.MetricValues {
+		value, err := parseMetricValue(metricValue.MetricValue)
+		if err != nil {
+			continue
+		}
+
+		// Sensor-shaped property: the whole MetricProperty is a Sensor URI.
+		if !strings.Contains(metricValue.MetricProperty, "#/") {
+			chassisID, sensorID := parseSensorPath(metricValue.MetricProperty)
+			if chassisID == "" || sensorID == "" {
+				continue
+			}
+			cpuID := cpuIDFromSensorID(sensorID)
+			if cpuID == "" {
+				continue
+			}
+			switch {
+			case strings.Contains(sensorID, "_CoreUtil_"):
+				// Intentionally skipped; see the function comment.
+				continue
+			case strings.Contains(sensorID, "_CpuFreq_"):
+				ch <- prometheus.MustNewConstMetric(t.metrics["telemetry_cpu_frequency_mhz"].desc, prometheus.GaugeValue, value, systemID, cpuID)
+			case strings.Contains(sensorID, "_MemCntl_") && strings.Contains(sensorID, "_Freq_"):
+				ch <- prometheus.MustNewConstMetric(t.metrics["telemetry_cpu_memory_controller_frequency_mhz"].desc, prometheus.GaugeValue, value, systemID, cpuID)
+			case strings.Contains(sensorID, "_CpuVoltage_"):
+				ch <- prometheus.MustNewConstMetric(t.metrics["telemetry_cpu_vreg_voltage_volts"].desc, prometheus.GaugeValue, value, systemID, cpuID, "cpu")
+			case strings.Contains(sensorID, "_SocVoltage_"):
+				ch <- prometheus.MustNewConstMetric(t.metrics["telemetry_cpu_vreg_voltage_volts"].desc, prometheus.GaugeValue, value, systemID, cpuID, "soc")
+			}
+			continue
+		}
+
+		// Processor-scoped property, e.g.
+		// /redfish/v1/Systems/HGX_Baseboard_0/Processors/CPU_0/ProcessorMetrics#/Oem/Nvidia/...
+		cpuID, metricName := parseMetricProperty(metricValue.MetricProperty)
+		if cpuID == "" {
+			continue
+		}
+		switch metricName {
+		case "Oem/Nvidia/MemoryPageRetirementCount":
+			ch <- prometheus.MustNewConstMetric(t.metrics["telemetry_cpu_memory_page_retirement_count"].desc, prometheus.GaugeValue, value, systemID, cpuID)
+		case "Oem/Nvidia/EDPViolationState":
+			ch <- prometheus.MustNewConstMetric(t.metrics["telemetry_cpu_edp_violation_state"].desc, prometheus.GaugeValue, value, systemID, cpuID)
+		case "Oem/Nvidia/PowerBreakPerformanceState":
+			ch <- prometheus.MustNewConstMetric(t.metrics["telemetry_cpu_power_break_performance_state"].desc, prometheus.GaugeValue, value, systemID, cpuID)
+		}
+	}
+}
+
+// cpuIDFromSensorID derives a CPU identifier from sensor IDs shaped like
+// "ProcessorModule_0_CPU_0_CpuFreq_0" or "ProcessorModule_1_Vreg_0_SocVoltage_0",
+// returning "ProcessorModule_0" style module scope since a module carries one CPU.
+func cpuIDFromSensorID(sensorID string) string {
+	if !strings.HasPrefix(sensorID, sensorPrefixProcessorModule) {
+		return ""
+	}
+	parts := strings.Split(sensorID, "_")
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[0] + "_" + parts[1]
+}
+
+// collectTrayPlatformEnvironmentMetrics handles the tray-level PlatformEnvironmentMetrics
+// report (no HGX_ prefix), seen on NVL72 trays.
+//
+// Its readings are deliberately not emitted. Every sensor it carries — tray fans, PDB
+// rails, NIC and SSD temperatures, and the coolant leak detectors — is already collected
+// from the chassis Sensors collections by the chassis collector, which additionally
+// provides each reading's thresholds. Emitting them again would duplicate several hundred
+// series per tray with strictly less information.
+//
+// The report is still consumed so that its staleness is observable and so it does not trip
+// the unhandled-report guard.
+func (t *TelemetryCollector) collectTrayPlatformEnvironmentMetrics(ch chan<- prometheus.Metric, report *schemas.MetricReport, systemMap map[string]string) {
+	staleReports := 0.0
+	for _, metricValue := range report.MetricValues {
+		if metricValueIsStale(metricValue) {
+			staleReports++
+		}
+	}
+	t.logger.Debug("tray platform environment report consumed for staleness only",
+		slog.String("report_id", report.ID),
+		slog.Int("metric_count", len(report.MetricValues)),
+		slog.Float64("stale", staleReports),
+	)
 }
 
 // collectProcessorMetrics processes a single HGX_ProcessorMetrics report
@@ -437,16 +765,7 @@ func parseMetricProperty(property string) (gpuID string, metricName string) {
 	resourcePath := parts[0]
 	metricName = parts[1]
 
-	// Extract GPU ID from resource path
-	// Look for pattern: /Processors/GPU_SXM_X/
-	if idx := strings.Index(resourcePath, "/Processors/"); idx != -1 {
-		remainder := resourcePath[idx+len("/Processors/"):]
-		if endIdx := strings.Index(remainder, "/"); endIdx != -1 {
-			gpuID = remainder[:endIdx]
-		}
-	}
-
-	return gpuID, metricName
+	return segmentAfter(resourcePath, "/Processors/"), metricName
 }
 
 // parseMetricValue converts a metric value string to float64
@@ -686,23 +1005,7 @@ func parseMemoryMetricProperty(property string) (systemID string, memoryID strin
 	resourcePath := parts[0]
 	metricName = parts[1]
 
-	// Extract system ID: /Systems/SYSTEM_ID/
-	if idx := strings.Index(resourcePath, "/Systems/"); idx != -1 {
-		remainder := resourcePath[idx+len("/Systems/"):]
-		if endIdx := strings.Index(remainder, "/"); endIdx != -1 {
-			systemID = remainder[:endIdx]
-		}
-	}
-
-	// Extract memory ID: /Memory/MEMORY_ID/
-	if idx := strings.Index(resourcePath, "/Memory/"); idx != -1 {
-		remainder := resourcePath[idx+len("/Memory/"):]
-		if endIdx := strings.Index(remainder, "/"); endIdx != -1 {
-			memoryID = remainder[:endIdx]
-		}
-	}
-
-	return systemID, memoryID, metricName
+	return segmentAfter(resourcePath, "/Systems/"), segmentAfter(resourcePath, "/Memory/"), metricName
 }
 
 // extractGPUIDFromMemoryID extracts GPU ID from memory ID
@@ -837,16 +1140,7 @@ func parseResetMetricProperty(property string) (gpuID string, metricName string)
 	resourcePath := parts[0]
 	metricName = parts[1]
 
-	// Extract GPU ID from resource path
-	// Look for pattern: /Processors/GPU_SXM_X/
-	if idx := strings.Index(resourcePath, "/Processors/"); idx != -1 {
-		remainder := resourcePath[idx+len("/Processors/"):]
-		if endIdx := strings.Index(remainder, "/"); endIdx != -1 {
-			gpuID = remainder[:endIdx]
-		}
-	}
-
-	return gpuID, metricName
+	return segmentAfter(resourcePath, "/Processors/"), metricName
 }
 
 // emitResetMetrics emits Prometheus metrics for GPU reset events
@@ -1019,23 +1313,7 @@ func parsePortMetricProperty(property string) (gpuID string, portID string, metr
 	resourcePath := parts[0]
 	metricName = parts[1]
 
-	// Extract GPU ID from resource path: /Processors/GPU_SXM_X/
-	if idx := strings.Index(resourcePath, "/Processors/"); idx != -1 {
-		remainder := resourcePath[idx+len("/Processors/"):]
-		if endIdx := strings.Index(remainder, "/"); endIdx != -1 {
-			gpuID = remainder[:endIdx]
-		}
-	}
-
-	// Extract Port ID from resource path: /Ports/PORT_ID/
-	if idx := strings.Index(resourcePath, "/Ports/"); idx != -1 {
-		remainder := resourcePath[idx+len("/Ports/"):]
-		if endIdx := strings.Index(remainder, "/"); endIdx != -1 {
-			portID = remainder[:endIdx]
-		}
-	}
-
-	return gpuID, portID, metricName
+	return segmentAfter(resourcePath, "/Processors/"), segmentAfter(resourcePath, "/Ports/"), metricName
 }
 
 // emitPortMetrics emits Prometheus metrics for a single port
@@ -1581,11 +1859,8 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 	var hasTotalGPUPower bool
 	var chassisID string
 
-	staleMarker := []byte(`"MetricValueStale": true`)
-	totalStaleReports := 0.0
 	for _, metricValue := range report.MetricValues {
-		if bytes.Contains(metricValue.OEM, staleMarker) || metricValue.MetricValue == "nan" {
-			totalStaleReports += 1.0
+		if metricValueIsStale(metricValue) {
 			continue
 		}
 
@@ -1620,7 +1895,12 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 			// Backward-compatible total GPU power metric (replaces chassis collector)
 			totalGPUPower = value
 			hasTotalGPUPower = true
-		} else if strings.HasPrefix(sensorID, sensorPrefixProcessorModule) && strings.Contains(sensorID, sensorInfixCPU) {
+			// NOTE: gated only on the ProcessorModule_ prefix. It previously also required
+			// the infix "_CPU_", which excluded this platform's
+			// ProcessorModule_N_Vreg_0_{Cpu,Soc}Power_0 sensors — they contain "_Cpu", never
+			// uppercase "_CPU_" — so parseCPUSensorMetric's existing voltage-regulator
+			// handling was unreachable and those readings fell off the end of the chain.
+		} else if strings.HasPrefix(sensorID, sensorPrefixProcessorModule) {
 			t.parseCPUSensorMetric(sensorID, value, cpuMetrics)
 		} else if strings.HasPrefix(sensorID, sensorPrefixHGXProcessorModule) {
 			t.parseAmbientSensorMetric(sensorID, value, ambientMetrics)
@@ -1667,11 +1947,6 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 		)
 	}
 
-	ch <- prometheus.MustNewConstMetric(
-		t.metrics["telemetry_collection_stale_reports_last"].desc,
-		prometheus.GaugeValue,
-		totalStaleReports,
-	)
 }
 
 // parseSensorPath extracts chassis ID and sensor ID from a Redfish sensor path.
