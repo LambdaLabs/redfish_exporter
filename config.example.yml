@@ -20,12 +20,13 @@ loglevel: info
 modules:
   chassis:
     prober: chassis_collector
-    chassis_collector:
-      # A GB300 tray publishes 144 per-core CPU utilisation sensors, more series than the
-      # rest of this collector produces for that tray combined, and node_exporter already
-      # reports the same thing in-band at higher resolution. Drop the pattern to collect
-      # them. This trims series only — the sensors arrive in the same single request.
-      sensor_exclude: "_CoreUtil_[0-9]+$"
+    # With no chassis_collector block, sensor_exclude defaults to "_CoreUtil_[0-9]+$": a
+    # GB300 tray publishes 144 per-core CPU utilisation sensors, more series than the rest
+    # of this collector produces for that tray combined, and node_exporter already reports
+    # the same thing in-band at higher resolution. To collect them anyway, set the pattern
+    # to the empty string — which is distinct from leaving the key out.
+    # chassis_collector:
+    #   sensor_exclude: ""
   # A leak-detection-only chassis scrape, cheap enough to poll on a short interval.
   # Coolant leaks on liquid-cooled hardware are a minutes-matter event, so this exists to
   # be scraped far more frequently than a full chassis scrape allows.

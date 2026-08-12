@@ -696,10 +696,20 @@ func TestChassisCollectorSensorScope(t *testing.T) {
 func TestChassisCollectorSensorExclude(t *testing.T) {
 	t.Run("excluded sensors emit nothing", func(t *testing.T) {
 		metrics := collectChassis(t, newLeakChassisServer(t, false), config.ChassisCollectorConfig{
-			SensorExclude: "_PWM$",
+			SensorExclude: ptr("_PWM$"),
 		})
 		require.NotContains(t, metrics, "redfish_chassis_sensor_percent")
 		require.Contains(t, metrics, "redfish_chassis_sensor_watts")
+	})
+
+	// An explicitly empty pattern is how a deployment opts back in to everything,
+	// including the per-core utilisation the shipped default declines.
+	t.Run("an empty pattern excludes nothing", func(t *testing.T) {
+		collector, err := NewChassisCollector(t.Name(), nil, NewTestLogger(t, slog.LevelWarn), config.ChassisCollectorConfig{
+			SensorExclude: ptr(""),
+		})
+		require.NoError(t, err)
+		require.False(t, collector.skipSensor("ProcessorModule_0_CPU_0_CoreUtil_0"))
 	})
 
 	// A pattern broad enough to catch a leak detector must not silence it. The Sensors
@@ -707,23 +717,37 @@ func TestChassisCollectorSensorExclude(t *testing.T) {
 	// signal to a series-trimming pattern is not a tradeoff worth offering.
 	t.Run("leak detectors are never excluded", func(t *testing.T) {
 		metrics := collectChassis(t, newLeakChassisServer(t, false), config.ChassisCollectorConfig{
-			SensorExclude: ".",
+			SensorExclude: ptr("."),
 		})
 		require.Len(t, metrics["redfish_chassis_leak_detector_volts"], 1)
 		require.NotContains(t, metrics, "redfish_chassis_temperature_celsius")
 	})
 
-	// The shipped default declines per-core CPU utilisation, which a GB300 tray publishes
-	// 144 of. The telemetry collector declines the identical sensors; the two collectors
-	// must not disagree about the same hardware.
-	t.Run("the shipped default declines per-core utilisation", func(t *testing.T) {
-		collector, err := NewChassisCollector(t.Name(), nil, NewTestLogger(t, slog.LevelWarn), config.DefaultChassisCollector)
-		require.NoError(t, err)
+	// The default declines per-core CPU utilisation, which a GB300 tray publishes 144 of.
+	// The telemetry collector declines the identical sensors; the two collectors must not
+	// disagree about the same hardware.
+	//
+	// Every construction path must agree on that, or a hand-written chassis_collector
+	// block would quietly collect more than the module shipped beside it. The zero value
+	// is the case that matters: it is what `chassis_collector: {}` unmarshals to.
+	t.Run("every unconfigured path declines per-core utilisation", func(t *testing.T) {
+		for tName, cfg := range map[string]config.ChassisCollectorConfig{
+			"shipped default":        config.DefaultChassisCollector,
+			"zero value":             {},
+			"configured but not set": {DisableNetworkAdapters: true},
+			"built-in module":        config.DefaultModuleConfig["chassis_collector"].ChassisCollector,
+			"leak_detection module":  config.DefaultModuleConfig["leak_detection"].ChassisCollector,
+		} {
+			t.Run(tName, func(t *testing.T) {
+				collector, err := NewChassisCollector(t.Name(), nil, NewTestLogger(t, slog.LevelWarn), cfg)
+				require.NoError(t, err)
 
-		require.True(t, collector.skipSensor("ProcessorModule_0_CPU_0_CoreUtil_0"))
-		require.True(t, collector.skipSensor("ProcessorModule_1_CPU_0_CoreUtil_71"))
-		require.False(t, collector.skipSensor("ProcessorModule_0_CPU_0_CpuFreq_0"))
-		require.False(t, collector.skipSensor("Chassis_0_FAN_1_PWM"))
+				require.True(t, collector.skipSensor("ProcessorModule_0_CPU_0_CoreUtil_0"))
+				require.True(t, collector.skipSensor("ProcessorModule_1_CPU_0_CoreUtil_71"))
+				require.False(t, collector.skipSensor("ProcessorModule_0_CPU_0_CpuFreq_0"))
+				require.False(t, collector.skipSensor("Chassis_0_FAN_1_PWM"))
+			})
+		}
 	})
 }
 
@@ -765,13 +789,13 @@ func TestChassisCollectorFiltering(t *testing.T) {
 		require.ErrorContains(t, err, "invalid chassis_exclude pattern")
 
 		_, err = NewChassisCollector(t.Name(), nil, NewTestLogger(t, slog.LevelWarn), config.ChassisCollectorConfig{
-			SensorExclude: "([unclosed",
+			SensorExclude: ptr("([unclosed"),
 		})
 		require.ErrorContains(t, err, "invalid sensor_exclude pattern")
 	})
 
-	// The zero-value config must be a no-op so that existing deployments, which pass
-	// chassis_collector: {}, keep collecting every subsystem and every sensor.
+	// The zero-value config must skip no chassis and no subsystem, so that existing
+	// deployments passing chassis_collector: {} keep collecting what they always have.
 	t.Run("zero value config disables nothing", func(t *testing.T) {
 		var cfg config.ChassisCollectorConfig
 		require.False(t, cfg.DisableThermal)
@@ -781,18 +805,14 @@ func TestChassisCollectorFiltering(t *testing.T) {
 		require.False(t, cfg.DisableSensors)
 		require.Empty(t, cfg.ChassisInclude)
 		require.Empty(t, cfg.ChassisExclude)
-		require.Empty(t, cfg.SensorExclude)
-	})
-
-	// The shipped default is not the zero value: it carries a sensor_exclude. Any
-	// behaviour it turns on has to be visible in configuration rather than hidden in the
-	// collector, so this pins which fields it actually sets.
-	t.Run("the shipped default only sets sensor_exclude", func(t *testing.T) {
-		cfg := config.DefaultChassisCollector
-		require.Equal(t, config.DefaultSensorExclude, cfg.SensorExclude)
-		require.Equal(t, config.ChassisCollectorConfig{SensorExclude: config.DefaultSensorExclude}, cfg)
+		require.Equal(t, config.DefaultChassisCollector, cfg,
+			"the shipped default must be the zero value, so no construction path is special")
 	})
 }
+
+// ptr returns a pointer to v, for the config fields where an absent key and an empty value
+// mean different things.
+func ptr[T any](v T) *T { return &v }
 
 func TestParseLeakDetection(t *testing.T) {
 	var leakDetection schemas.LeakDetection

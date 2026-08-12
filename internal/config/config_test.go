@@ -260,6 +260,52 @@ modules:
 	}
 }
 
+// TestSensorExcludeDefaulting pins the distinction the pointer exists for. An absent key
+// has to mean "whatever ships by default", so a hand-written chassis_collector block gets
+// the same treatment as a built-in module; an empty pattern has to mean "exclude nothing",
+// so a deployment can opt back in.
+func TestSensorExcludeDefaulting(t *testing.T) {
+	tT := map[string]struct {
+		inputYAML string
+		want      string
+	}{
+		"no chassis_collector block at all": {
+			inputYAML: "modules:\n  foo:\n    prober: chassis_collector\n",
+			want:      DefaultSensorExclude,
+		},
+		"an empty chassis_collector block": {
+			inputYAML: "modules:\n  foo:\n    prober: chassis_collector\n    chassis_collector:\n",
+			want:      DefaultSensorExclude,
+		},
+		"a chassis_collector block setting other keys": {
+			inputYAML: "modules:\n  foo:\n    prober: chassis_collector\n    chassis_collector:\n      disable_power: true\n",
+			want:      DefaultSensorExclude,
+		},
+		"an explicitly empty pattern opts back in": {
+			inputYAML: "modules:\n  foo:\n    prober: chassis_collector\n    chassis_collector:\n      sensor_exclude: \"\"\n",
+			want:      "",
+		},
+		"an explicit pattern wins": {
+			inputYAML: "modules:\n  foo:\n    prober: chassis_collector\n    chassis_collector:\n      sensor_exclude: \"^Foo_\"\n",
+			want:      "^Foo_",
+		},
+	}
+
+	for tName, test := range tT {
+		t.Run(tName, func(t *testing.T) {
+			gotConfig, err := readConfigFrom(bytes.NewReader([]byte(test.inputYAML)), "")
+			assert.NoError(t, err)
+			assert.Equal(t, test.want, gotConfig.Modules["foo"].ChassisCollector.SensorExcludePattern())
+		})
+	}
+
+	// The built-in modules must resolve to the same pattern, so that switching between a
+	// shipped module and a hand-written one does not silently change what is collected.
+	for _, name := range []string{"chassis_collector", "leak_detection"} {
+		assert.Equal(t, DefaultSensorExclude, DefaultModuleConfig[name].ChassisCollector.SensorExcludePattern())
+	}
+}
+
 func TestReloadConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, "config.yml")

@@ -121,7 +121,7 @@ func createChassisMetricMap() map[string]Metric {
 	// leak_detector_state is the actual leak signal. leak_detector_health above describes
 	// the health of the detector device itself, which can remain OK while a leak is
 	// reported, so it must not be used as a leak indicator on its own.
-	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_state", fmt.Sprintf("chassis leak detector state; this is the leak signal,%s", CommonDetectorStateHelp), ChassisLeakDetectorLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_state", fmt.Sprintf("chassis leak detector state; this is the signal to alert on, and a Critical state is a detector trip that the companion voltage classifies as wet or as contamination,%s", CommonDetectorStateHelp), ChassisLeakDetectorLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_enabled", "whether this chassis leak detector is enabled, 1(enabled),0(disabled); a disabled detector reports Unavailable state and does not trigger events", ChassisLeakDetectorLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_info", "chassis leak detector type and physical location, always 1", ChassisLeakDetectorInfoLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detection_health", fmt.Sprintf("health of the chassis leak detection subsystem as a whole,%s", CommonHealthHelp), ChassisLeakDetectionLabelNames)
@@ -183,7 +183,7 @@ func NewChassisCollector(collectorName string, redfishClient *gofish.APIClient, 
 	if err != nil {
 		return nil, err
 	}
-	sensorExclude, err := compileFilter("sensor_exclude", config.SensorExclude)
+	sensorExclude, err := compileFilter("sensor_exclude", config.SensorExcludePattern())
 	if err != nil {
 		return nil, err
 	}

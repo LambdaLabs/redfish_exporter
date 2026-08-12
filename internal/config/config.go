@@ -20,12 +20,10 @@ var (
 	//
 	// It is expressed as configuration rather than as a rule in the collector so that the
 	// judgement stays visible and overridable: the collector itself never infers meaning
-	// from a sensor's name.
+	// from a sensor's name. Set `sensor_exclude: ""` to collect them.
 	DefaultSensorExclude = `_CoreUtil_[0-9]+$`
 	// DefaultChassisCollector is a default unless the user provides particular values.
-	DefaultChassisCollector = ChassisCollectorConfig{
-		SensorExclude: DefaultSensorExclude,
-	}
+	DefaultChassisCollector = ChassisCollectorConfig{}
 	// DefaultGPUCollector is a default unless the user provides particular values.
 	DefaultGPUCollector = GPUCollectorConfig{}
 	//DefaultJSONCollector is a default unless the user provides particular values.
@@ -143,7 +141,10 @@ func unmarshalViperConfig(v *viper.Viper) (*Config, error) {
 //
 // Every field's zero value preserves the collector's historical behaviour: all chassis
 // are collected and no subsystem is skipped. This keeps `chassis_collector: {}` a no-op
-// and lets the toggles be expressed as opt-outs.
+// and lets the toggles be expressed as opt-outs. SensorExclude is the one field where the
+// zero value is not "collect everything" — see SensorExcludePattern — but the sensors it
+// declines were not collected at all before the Sensors pass existed, so an unconfigured
+// module still behaves as it always did.
 type ChassisCollectorConfig struct {
 	// ChassisInclude, when non-empty, is a regular expression matched against each
 	// chassis Id. Only matching chassis are collected. Applied before ChassisExclude.
@@ -151,15 +152,20 @@ type ChassisCollectorConfig struct {
 	// ChassisExclude, when non-empty, is a regular expression matched against each
 	// chassis Id. Matching chassis are skipped.
 	ChassisExclude string `mapstructure:"chassis_exclude"`
-	// SensorExclude, when non-empty, is a regular expression matched against each Sensor
-	// Id. Matching sensors emit no metrics. This trims series count, not request count:
-	// the collection arrives in one expanded request either way.
+	// SensorExclude is a regular expression matched against each Sensor Id. Matching
+	// sensors emit no metrics. This trims series count, not request count: the collection
+	// arrives in one expanded request either way.
+	//
+	// It is a pointer because an absent key and an empty pattern have to mean different
+	// things. Absent means "whatever ships by default", so a hand-written module gets the
+	// same treatment as a built-in one; empty means "exclude nothing", which is how a
+	// deployment opts back in. Read it through SensorExcludePattern rather than directly.
 	//
 	// Leak detector sensors are never excluded by this pattern. They are the reason the
 	// Sensors collection is consulted on a chassis that also implements Thermal/Power,
 	// and silently dropping a safety signal through a broad pattern is not a tradeoff
 	// worth offering.
-	SensorExclude string `mapstructure:"sensor_exclude"`
+	SensorExclude *string `mapstructure:"sensor_exclude"`
 
 	// DisableThermal skips the legacy Thermal schema (temperatures and fans).
 	DisableThermal bool `mapstructure:"disable_thermal"`
@@ -180,6 +186,21 @@ type ChassisCollectorConfig struct {
 	// the leak detectors: an operator who has opted out of bulk thermal and power data
 	// has not asked for it back under a different schema.
 	DisableSensors bool `mapstructure:"disable_sensors"`
+}
+
+// SensorExcludePattern returns the sensor exclusion pattern in effect, substituting
+// DefaultSensorExclude when the key was not configured at all.
+//
+// Defaulting here rather than at unmarshal time means every construction path agrees:
+// a module parsed from YAML, a built-in module, and a zero-value struct built in Go all
+// end up with the same behaviour. Applying it only where the config is read from disk
+// would leave a hand-written `chassis_collector:` block quietly collecting more than the
+// module shipped alongside it.
+func (c ChassisCollectorConfig) SensorExcludePattern() string {
+	if c.SensorExclude == nil {
+		return DefaultSensorExclude
+	}
+	return *c.SensorExclude
 }
 
 // GPUCollectorConfig is a prober configuration.
