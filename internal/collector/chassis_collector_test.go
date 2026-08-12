@@ -860,6 +860,21 @@ func TestChassisCollectorSensorScope(t *testing.T) {
 			"the leak detector voltage is only available from Sensors and must still arrive")
 		require.NotContains(t, metrics, "redfish_chassis_sensor_watts")
 	})
+
+	// A filtered scrape fetches each chassis itself rather than taking gofish's listing, so
+	// it has its own way to go wrong: a chassis whose client was not carried over would
+	// still report health and then silently traverse no subsystem at all. This is the
+	// configuration the leak_detection module actually ships with, end to end.
+	t.Run("a filtered scrape still traverses every subsystem", func(t *testing.T) {
+		cfg := config.DefaultModuleConfig["leak_detection"].ChassisCollector
+		cfg.ChassisInclude = "^Chassis_[0-9]+$"
+		metrics := collectChassis(t, newLeakChassisServer(t, false), cfg)
+
+		require.Len(t, metrics["redfish_chassis_leak_detector_state"], 4)
+		require.Len(t, metrics["redfish_chassis_leak_detector_volts"], 1)
+		require.Contains(t, metrics, "redfish_chassis_leak_detection_health")
+		require.Contains(t, metrics, "redfish_chassis_health")
+	})
 }
 
 func TestChassisCollectorSensorExclude(t *testing.T) {
