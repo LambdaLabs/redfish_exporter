@@ -199,6 +199,11 @@ func newRedfishClient(ctx context.Context, host string, username string, passwor
 	return redfishClient, nil
 }
 
+// odataLink is a Redfish reference object, which is absent, empty, or carries a URI.
+type odataLink struct {
+	ODataID string `json:"@odata.id"`
+}
+
 func parseCommonStatusHealth(status schemas.Health) (float64, bool) {
 	if bytes.Equal([]byte(status), []byte("OK")) {
 		return float64(1), true
