@@ -136,11 +136,9 @@ func createChassisMetricMap() map[string]Metric {
 	// able to see a leak rather than that it has seen one.
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_volts_upper_threshold_critical", "voltage at or above which this chassis leak detector is considered faulty, typically an open or shorted sense line rather than a leak", ChassisLeakDetectorLabelNames)
 
-	// Catch-all metrics for Sensors whose ReadingType has no exact equivalent among the
-	// curated families above, so that a reading is never silently dropped. Sensors whose
-	// meaning is unambiguous (Temperature, Rotational, Voltage) are folded into the
-	// existing chassis families instead, which keeps one metric name per concept
-	// fleet-wide regardless of whether a platform implements Thermal/Power or Sensors.
+	// Catch-all for Sensors whose ReadingType has no equivalent among the families above,
+	// so a reading is never silently dropped. Unambiguous ones fold into those families
+	// instead; see parseChassisSensor.
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "sensor_watts", "chassis sensor reading in watts", ChassisSensorLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "sensor_amperes", "chassis sensor reading in amperes", ChassisSensorLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "sensor_joules", "chassis sensor reading in joules", ChassisSensorLabelNames)
@@ -384,17 +382,11 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 			}
 		}
 
-		// Sensors carry the readings that Thermal/Power would have provided on older
-		// platforms, plus the analog side of the leak detectors.
-		//
-		// bulkSensors distinguishes the two reasons to consult the collection. Standing
-		// in for the legacy schemas means emitting everything; being consulted for the
-		// leak detectors alone means emitting only those, which keeps a chassis that
-		// implements Thermal *and* leak detection from publishing its temperatures
-		// twice under the same series name.
-		//
-		// An operator who disabled both deprecated schemas has opted out of bulk
-		// thermal and power data, not asked for it back under a different schema.
+		// bulkSensors distinguishes the two reasons to consult the collection: standing in
+		// for absent Thermal/Power, which emits everything, or reaching the leak detectors
+		// alone, which emits only those. Emitting everything in the second case would
+		// publish a chassis's temperatures twice under one series name, failing the scrape
+		// at registration.
 		optedOutOfBulk := c.config.DisableThermal && c.config.DisablePower
 		bulkSensors := !links.legacyThermalOrPower() && !optedOutOfBulk
 		if !c.config.DisableSensors && (bulkSensors || len(leakDetectorIDs) > 0) {
@@ -468,18 +460,15 @@ func (c *ChassisCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // listChassis returns the chassis this collector should walk.
 //
-// With no include/exclude pattern configured this is gofish's own listing, which fetches
-// every member of the ChassisCollection — the historical behaviour, and one request fewer
-// than the filtered path.
+// With no include/exclude pattern this is gofish's own listing, unchanged and one request
+// cheaper than the filtered path.
 //
-// With a pattern, the collection's member links are read first and only matching members are
-// fetched. skipChassis alone would filter after every body had already been paid for, which
-// on a module such as leak_detection is the entire per-scrape cost: forty-two chassis
-// fetched on a GB300 tray to look at one. Reading the links costs one extra request for the
-// service root, and saves one per chassis that was going to be discarded.
+// With a pattern, the member links are read first and only matching members are fetched.
+// skipChassis alone filters after every body has been paid for, which on a module such as
+// leak_detection is the entire per-scrape cost: forty-two chassis fetched to look at one.
 //
-// Members are matched on the trailing URI segment, which is a convention rather than a
-// guarantee, so callers still apply skipChassis to the fetched Id.
+// Members are matched on the trailing URI segment, a convention rather than a guarantee, so
+// callers still apply skipChassis to the fetched Id.
 func (c *ChassisCollector) listChassis(ctx context.Context, logger *slog.Logger) ([]*schemas.Chassis, error) {
 	service := c.redfishClient.Service
 	if c.chassisInclude == nil && c.chassisExclude == nil {
@@ -624,15 +613,12 @@ type odataLink struct {
 // legacyThermalOrPower reports whether the chassis links either of the deprecated Thermal
 // or Power resources.
 //
-// A chassis whose payload could not be inspected is treated as advertising them, which is
-// the conservative answer: it suppresses the Sensors fallback rather than risking an
-// unnecessary request per chassis.
+// An uninspectable payload counts as advertising them, suppressing the Sensors fallback
+// rather than risking a wasted request per chassis.
 //
-// Either link is enough to suppress the fallback, not both. A chassis implementing exactly
-// one of the two and expressing the other half only through Sensors would lose that half.
-// No such chassis appears in any captured payload — every GPU platform implements both or
-// neither — and the alternative risks the duplicate series that a partial overlap would
-// produce, which fails the whole scrape rather than thinning it.
+// Either link suppresses it, not both: a chassis implementing exactly one and expressing the
+// other half only through Sensors would lose that half. None does in any captured payload,
+// and the alternative risks duplicate series, which fails the scrape rather than thinning it.
 func (l chassisLinks) legacyThermalOrPower() bool {
 	return l.opaque || l.thermal != "" || l.power != ""
 }
@@ -641,10 +627,9 @@ func (l chassisLinks) legacyThermalOrPower() bool {
 // no Sensors resource to request.
 //
 // Synthesising "<chassis>/Sensors" instead would 404 once per scrape on every chassis that
-// has none, and roughly a third of the chassis on an NVL72 tray or an HGX baseboard are
-// ERoT/IRoT roots in exactly that position. An opaque payload falls back to the
-// conventional path so that a leak detector's companion sensor is still reachable in the
-// degraded case.
+// has none, which is roughly a third of an NVL72 tray or HGX baseboard (the ERoT/IRoT
+// roots). An opaque payload falls back to the conventional path so a leak detector's
+// companion sensor stays reachable in the degraded case.
 func (l chassisLinks) sensorsPath(chassis *schemas.Chassis) string {
 	if l.opaque {
 		return chassis.ODataID + "/Sensors"
@@ -652,18 +637,13 @@ func (l chassisLinks) sensorsPath(chassis *schemas.Chassis) string {
 	return l.sensors
 }
 
-// getChassisSensors returns sensors for a chassis in a single request.
-//
-// The whole collection is requested with $expand so the BMC inlines every member body. This
-// matters for request load: a single NVL72 tray carries a few hundred sensors across its
-// chassis, and gofish's typed accessor issues one request per member, which with
-// max_concurrent_requests defaulting to 1 serialises into a very long scrape.
+// getChassisSensors returns sensors for a chassis in a single request, using $expand so the
+// BMC inlines every member body rather than gofish's one request per member.
 //
 // If the BMC does not honour $expand there is deliberately no fan-out to one request per
-// sensor. Doing so would multiply this collector's request count against the very BMCs least
-// able to absorb it. Instead only the named sensors are fetched individually — the leak
-// detectors, whose readings are safety relevant and few in number — and the bulk sensor
-// telemetry is skipped with a warning.
+// sensor: that would multiply request count against the BMCs least able to absorb it. Only
+// the named sensors are fetched individually — the leak detectors, safety relevant and few
+// — and the bulk sensor telemetry is skipped with a warning.
 func (c *ChassisCollector) getChassisSensors(ctx context.Context, sensorsPath string, required map[string]string, logger *slog.Logger) ([]*schemas.Sensor, error) {
 	if sensorsPath == "" {
 		return nil, nil
@@ -716,12 +696,10 @@ func sensorMemberURIs(members []*schemas.Sensor) []string {
 // getNamedSensors fetches individually named sensors, one request each. Callers must keep
 // the set small.
 //
-// available is the collection's member URIs when they are known, in which case only the
-// required sensors that actually appear there are fetched. That distinction is not
-// theoretical: the MGX NVLink switch tray carries seven leak detectors and exactly one
-// sensor, so synthesising "<Sensors>/<detector Id>" for each detector would be seven
-// guaranteed 404s per chassis per scrape. A nil available means the collection could not be
-// read at all, and the conventional path is the only thing left to try.
+// available is the collection's member URIs when known, so only required sensors that
+// actually exist are fetched: the MGX NVLink switch tray has seven leak detectors and one
+// sensor, so synthesising a URI per detector is seven guaranteed 404s per scrape. A nil
+// available means the collection was unreadable, leaving the conventional path.
 func (c *ChassisCollector) getNamedSensors(ctx context.Context, sensorsPath string, required map[string]string, available []string, logger *slog.Logger) []*schemas.Sensor {
 	if len(required) == 0 {
 		return nil
@@ -867,14 +845,12 @@ func thresholdReadingOrZero(t schemas.Threshold) float64 {
 
 // parseChassisSensor emits metrics for a single Sensor resource.
 //
-// Sensors are the modern replacement for the deprecated Thermal and Power schemas. Where a
-// ReadingType maps unambiguously onto an existing chassis metric family it is folded into
-// that family, so a platform that only implements Sensors produces the same series names as
-// one that implements Thermal/Power. Anything else lands in a sensor_* catch-all rather
-// than being guessed at or dropped.
+// An unambiguous ReadingType folds into the existing chassis metric family so that a
+// Sensors-only platform produces the same series names as a Thermal/Power one; anything
+// else lands in a sensor_* catch-all rather than being guessed at or dropped.
 //
-// Readings are deliberately not inferred from sensor naming. On an NVL72 tray, fan PWM
-// duty cycle and CPU core utilisation are both ReadingType "Percent" and neither carries a
+// Readings are deliberately not inferred from sensor naming. On an NVL72 tray, fan PWM duty
+// cycle and CPU core utilisation are both ReadingType "Percent" and neither carries a
 // distinguishing PhysicalContext, so treating "Percent" as a fan speed would mislabel over
 // a hundred sensors per tray.
 func parseChassisSensor(ch chan<- prometheus.Metric, chassisID string, sensor *schemas.Sensor, leakDetectorIDs map[string]string) {

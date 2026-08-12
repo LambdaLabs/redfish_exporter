@@ -12,15 +12,12 @@ import (
 var (
 	// DefaultSensorExclude drops per-core CPU utilisation from the chassis Sensors pass.
 	//
-	// A GB300 tray publishes 144 of these (ProcessorModule_N_CPU_0_CoreUtil_M), which is
-	// more series than the rest of the chassis collector produces for that tray combined,
-	// and the same data is available in-band from node_exporter at higher resolution. The
-	// telemetry collector already declines the identical sensors for the identical reason;
-	// this keeps the two collectors from disagreeing about the same hardware.
+	// A GB300 tray publishes 144 of these (ProcessorModule_N_CPU_0_CoreUtil_M), more series
+	// than the rest of the chassis collector produces for that tray combined, and
+	// node_exporter already reports the same thing in-band at higher resolution.
 	//
-	// It is expressed as configuration rather than as a rule in the collector so that the
-	// judgement stays visible and overridable: the collector itself never infers meaning
-	// from a sensor's name. Set `sensor_exclude: ""` to collect them.
+	// Expressed as configuration rather than a rule in the collector, which never infers
+	// meaning from a sensor's name. Set `sensor_exclude: ""` to collect them.
 	DefaultSensorExclude = `_CoreUtil_[0-9]+$`
 	// DefaultChassisCollector is a default unless the user provides particular values.
 	DefaultChassisCollector = ChassisCollectorConfig{}
@@ -64,26 +61,19 @@ var (
 			Prober:             "telemetry_collector",
 			TelemetryCollector: DefaultTelemetryCollector,
 		},
-		// leak_detection is a narrowly scoped chassis_collector for coolant leak
-		// monitoring on liquid-cooled hardware. It exists so leak state can be scraped
-		// on a much shorter interval than a full chassis scrape allows: only
-		// ThermalSubsystem (leak detectors) and Sensors (their analog voltages and
-		// thresholds) are consulted.
+		// leak_detection is a chassis_collector narrowed to coolant leak monitoring, so
+		// that leak state can be scraped on a much shorter interval than a full chassis
+		// scrape allows. See docs/CONFIGURATION.md.
 		//
-		// Disabling Thermal and Power together is what makes this cheap, and not only
-		// because those two fetches are skipped. On the liquid-cooled platforms this
-		// module targets no chassis implements either schema, so the Sensors pass would
-		// otherwise stand in for them on every chassis and the disables would save
-		// almost nothing; setting both instead narrows that pass to the leak detectors.
+		// Disabling Thermal and Power together is load-bearing rather than incidental:
+		// on the liquid-cooled platforms this targets no chassis implements either, so
+		// the Sensors pass would otherwise stand in for what was just disabled. Setting
+		// both narrows that pass to the leak detectors.
 		//
-		// Deliberately not part of the rf_exporter_default bundle, and deliberately not
-		// filtered by chassis Id — chassis naming is vendor specific. Deployments that
-		// want the minimum possible request count should also set chassis_include to
-		// match only the chassis carrying leak detectors (on a Supermicro NVL72 tray
-		// that is "^Chassis_[0-9]+$", on an MGX NVSwitch tray "^MGX_BMC_[0-9]+$").
-		// That filter is applied before the chassis bodies are fetched, so it is worth
-		// far more than the subsystem fetches it skips: 78 requests per scrape against
-		// 11 on a GB300 tray.
+		// Deliberately not in the rf_exporter_default bundle, and deliberately unfiltered
+		// — chassis naming is vendor specific. Set chassis_include to match only the
+		// chassis carrying detectors ("^Chassis_[0-9]+$" on a Supermicro NVL72 tray,
+		// "^MGX_BMC_[0-9]+$" on an MGX NVSwitch tray) for a large further saving.
 		"leak_detection": {
 			Prober: "chassis_collector",
 			ChassisCollector: ChassisCollectorConfig{
@@ -140,14 +130,10 @@ func unmarshalViperConfig(v *viper.Viper) (*Config, error) {
 	return config, config.Validate()
 }
 
-// ChassisCollectorConfig is a prober configuration.
+// ChassisCollectorConfig is a prober configuration. See docs/CONFIGURATION.md.
 //
-// Every field's zero value preserves the collector's historical behaviour: all chassis
-// are collected and no subsystem is skipped. This keeps `chassis_collector: {}` a no-op
-// and lets the toggles be expressed as opt-outs. SensorExclude is the one field where the
-// zero value is not "collect everything" — see SensorExcludePattern — but the sensors it
-// declines were not collected at all before the Sensors pass existed, so an unconfigured
-// module still behaves as it always did.
+// Every field's zero value preserves the collector's historical behaviour, which keeps
+// `chassis_collector: {}` a no-op. SensorExclude is the exception; see below.
 type ChassisCollectorConfig struct {
 	// ChassisInclude, when non-empty, is a regular expression matched against each
 	// chassis Id. Only matching chassis are collected. Applied before ChassisExclude.
@@ -156,18 +142,14 @@ type ChassisCollectorConfig struct {
 	// chassis Id. Matching chassis are skipped.
 	ChassisExclude string `mapstructure:"chassis_exclude"`
 	// SensorExclude is a regular expression matched against each Sensor Id. Matching
-	// sensors emit no metrics. This trims series count, not request count: the collection
-	// arrives in one expanded request either way.
+	// sensors emit no metrics.
 	//
 	// It is a pointer because an absent key and an empty pattern have to mean different
-	// things. Absent means "whatever ships by default", so a hand-written module gets the
-	// same treatment as a built-in one; empty means "exclude nothing", which is how a
-	// deployment opts back in. Read it through SensorExcludePattern rather than directly.
+	// things: absent is "whatever ships by default", empty is "exclude nothing". Read it
+	// through SensorExcludePattern rather than directly.
 	//
-	// Leak detector sensors are never excluded by this pattern. They are the reason the
-	// Sensors collection is consulted on a chassis that also implements Thermal/Power,
-	// and silently dropping a safety signal through a broad pattern is not a tradeoff
-	// worth offering.
+	// Leak detector sensors are never excluded by it. Silently dropping a safety signal
+	// through a broad pattern is not a tradeoff worth offering.
 	SensorExclude *string `mapstructure:"sensor_exclude"`
 
 	// DisableThermal skips the legacy Thermal schema (temperatures and fans).
@@ -180,13 +162,10 @@ type ChassisCollectorConfig struct {
 	// often the most expensive subsystem, at one request per adapter plus one per port.
 	DisableNetworkAdapters bool `mapstructure:"disable_network_adapters"`
 	// DisableSensors skips the Sensors collection entirely, including the leak detector
-	// voltages. Sensors are only consulted for a chassis that advertises a Sensors
-	// collection and implements neither Thermal nor Power (for example an NVL72 tray),
-	// so leaving this enabled costs nothing on hardware that implements the legacy
-	// schemas and does not duplicate their metrics.
+	// voltages.
 	//
-	// Setting DisableThermal and DisablePower together also narrows the Sensors pass to
-	// the leak detectors: an operator who has opted out of bulk thermal and power data
+	// Setting DisableThermal and DisablePower together instead narrows the Sensors pass
+	// to the leak detectors: an operator who has opted out of bulk thermal and power data
 	// has not asked for it back under a different schema.
 	DisableSensors bool `mapstructure:"disable_sensors"`
 }
@@ -194,11 +173,8 @@ type ChassisCollectorConfig struct {
 // SensorExcludePattern returns the sensor exclusion pattern in effect, substituting
 // DefaultSensorExclude when the key was not configured at all.
 //
-// Defaulting here rather than at unmarshal time means every construction path agrees:
-// a module parsed from YAML, a built-in module, and a zero-value struct built in Go all
-// end up with the same behaviour. Applying it only where the config is read from disk
-// would leave a hand-written `chassis_collector:` block quietly collecting more than the
-// module shipped alongside it.
+// Defaulting here rather than at unmarshal time means every construction path agrees: a
+// module parsed from YAML, a built-in module and a zero-value struct all behave the same.
 func (c ChassisCollectorConfig) SensorExcludePattern() string {
 	if c.SensorExclude == nil {
 		return DefaultSensorExclude
