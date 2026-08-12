@@ -558,6 +558,46 @@ func TestListChassisFiltersBeforeFetching(t *testing.T) {
 	})
 }
 
+// TestCollectSurvivesOneUnreachableChassis pins that a single failing chassis costs its own
+// metrics and nothing else. gofish reports a collection error when any member fails while
+// still returning the members that succeeded, and discarding those turned one flaky chassis
+// out of forty into a host that appears to have no chassis at all.
+func TestCollectSurvivesOneUnreachableChassis(t *testing.T) {
+	server := newTestRedfishServer(t)
+	server.addRoute("/redfish/v1/Chassis", map[string]any{
+		"@odata.id":   "/redfish/v1/Chassis",
+		"@odata.type": "#ChassisCollection.ChassisCollection",
+		"Members": []map[string]string{
+			{"@odata.id": "/redfish/v1/Chassis/Chassis_0"},
+			{"@odata.id": "/redfish/v1/Chassis/Chassis_1"},
+		},
+	})
+	server.addRoute("/redfish/v1/Chassis/Chassis_0", map[string]any{
+		"@odata.id":   "/redfish/v1/Chassis/Chassis_0",
+		"@odata.type": "#Chassis.v1_22_0.Chassis",
+		"Id":          "Chassis_0",
+		"Status":      map[string]any{"Health": "OK", "State": "Enabled"},
+	})
+	server.addErrorRoute("/redfish/v1/Chassis/Chassis_1", http.StatusInternalServerError)
+
+	client := connectToTestServer(t, server.Server)
+	t.Cleanup(func() {
+		client.Logout()
+		server.Close()
+	})
+
+	collector, err := NewChassisCollector(t.Name(), client, NewTestLogger(t, slog.LevelDebug), config.DefaultChassisCollector)
+	require.NoError(t, err)
+
+	ch := make(chan prometheus.Metric, 128)
+	collector.CollectWithContext(context.Background(), ch)
+	metrics := drainMetrics(t, ch)
+
+	health := metrics["redfish_chassis_health"]
+	require.Len(t, health, 1, "the healthy chassis must still be collected")
+	require.Equal(t, "Chassis_0", health[0].labels["chassis_id"])
+}
+
 // TestChassisAdvertisedLinks pins the feature detection to the advertised links. Deriving
 // it from whether a fetch returned data made every chassis look modern as soon as Thermal
 // or Power was disabled by configuration, pulling in whole Sensors collections.
