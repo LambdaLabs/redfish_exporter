@@ -13,7 +13,7 @@ require (
 	github.com/prometheus/exporter-toolkit v0.15.0
 	github.com/sosodev/duration v1.3.1
 	github.com/spf13/viper v1.21.0
-	github.com/stmcginnis/gofish v0.20.1-0.20260203173523-22b2013b7c28
+	github.com/stmcginnis/gofish v0.24.0
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.65.0
 	go.opentelemetry.io/otel v1.40.0

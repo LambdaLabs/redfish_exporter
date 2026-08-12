@@ -1,0 +1,30 @@
+{
+  "@odata.type": "#ServiceRoot.v1_18_0.ServiceRoot",
+  "@odata.id": "/redfish/v1",
+  "Id": "RootService",
+  "Name": "Root Service",
+  "RedfishVersion": "1.20.1",
+  "Vendor": "Dell",
+  "Product": "Integrated Dell Remote Access Controller",
+  "Systems": {
+    "@odata.id": "/redfish/v1/Systems"
+  },
+  "Links": {
+    "Sessions": {
+      "@odata.id": "/redfish/v1/SessionService/Sessions"
+    }
+  },
+  "ProtocolFeaturesSupported": {
+    "FilterQuery": true,
+    "SelectQuery": true,
+    "ExcerptQuery": false,
+    "OnlyMemberQuery": false,
+    "ExpandQuery": {
+      "Links": true,
+      "NoLinks": true,
+      "ExpandAll": true,
+      "Levels": true,
+      "MaxLevels": 1
+    }
+  }
+}
