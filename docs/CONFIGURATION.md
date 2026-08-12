@@ -302,12 +302,21 @@ Measured requests per scrape, against captured dumps:
 
 | | full chassis scrape | `leak_detection` | + `chassis_include` |
 | --- | --- | --- | --- |
-| ARS-121GL-NB3 (GB300 tray) | 124 | 78 | 51 |
-| N5500_LD (MGX NVSwitch tray) | 48 | 42 | 24 |
-| SYS-A21GE-NBRT (B200) | 114 | 63 | — |
+| ARS-121GL-NB3 (GB300 tray) | 124 | 78 | 11 |
+| N5500_LD (MGX NVSwitch tray) | 48 | 42 | 14 |
+| SYS-A21GE-NBRT (B200) | 115 | 64 | — |
 
-The floor is one request per chassis plus one for the collection — 43 on a GB300 tray — since
-the chassis bodies are fetched before `chassis_include` can filter them.
+`chassis_include` and `chassis_exclude` are applied to the collection's member links before
+any chassis body is fetched, so a filtered scrape costs one request per *matching* chassis
+rather than one per chassis. That is what makes the module cheap enough to poll on a short
+interval: an unfiltered `leak_detection` scrape of a GB300 tray spends 43 of its 78 requests
+just enumerating the forty-two chassis it is about to discard.
+
+Filtering costs one extra request per scrape — the service root, read to find the
+`ChassisCollection` link rather than assuming it — and matches on the trailing segment of
+each member URI, which by Redfish convention is the chassis `Id`. The pattern is applied
+again to the fetched `Id`, so a BMC that breaks that convention filters correctly, just
+without the saving.
 
 ### `<gpu_collector>`
 [source](../collector/gpu_collector.go)

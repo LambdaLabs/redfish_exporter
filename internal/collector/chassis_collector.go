@@ -222,14 +222,13 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 		return
 	}
 	logger := c.logger.With(slog.String("collector", "ChassisCollector"))
-	service := c.redfishClient.Service
 
 	if ctx.Err() != nil {
 		c.logger.With("error", ctx.Err(), "collector", "chassis").Debug("skipping collection")
 		return
 	}
 	// get a list of chassis from service
-	if chassises, err := service.Chassis(); err != nil {
+	if chassises, err := c.listChassis(ctx, logger); err != nil {
 		logger.Error("error getting chassis from service", slog.String("operation", "service.Chassis()"), slog.Any("error", err))
 	} else {
 		// process the chassises
@@ -462,6 +461,79 @@ func (c *ChassisCollector) Describe(ch chan<- *prometheus.Desc) {
 
 }
 
+// listChassis returns the chassis this collector should walk.
+//
+// With no include/exclude pattern configured this is gofish's own listing, which fetches
+// every member of the ChassisCollection — the historical behaviour, and one request fewer
+// than the filtered path.
+//
+// With a pattern, the collection's member links are read first and only matching members are
+// fetched. skipChassis alone would filter after every body had already been paid for, which
+// on a module such as leak_detection is the entire per-scrape cost: forty-two chassis
+// fetched on a GB300 tray to look at one. Reading the links costs one extra request for the
+// service root, and saves one per chassis that was going to be discarded.
+//
+// Members are matched on the trailing URI segment, which is a convention rather than a
+// guarantee, so callers still apply skipChassis to the fetched Id.
+func (c *ChassisCollector) listChassis(ctx context.Context, logger *slog.Logger) ([]*schemas.Chassis, error) {
+	service := c.redfishClient.Service
+	if c.chassisInclude == nil && c.chassisExclude == nil {
+		return service.Chassis()
+	}
+
+	client := c.redfishClient.WithContext(ctx)
+	collectionURI, err := c.chassisCollectionURI(client)
+	if err != nil {
+		logger.Debug("could not read the chassis collection link, falling back to the full listing", slog.Any("error", err))
+		return service.Chassis()
+	}
+
+	memberURIs, err := collectionMemberURIs(client, collectionURI)
+	if err != nil {
+		logger.Debug("could not read chassis collection members, falling back to the full listing", slog.Any("error", err))
+		return service.Chassis()
+	}
+
+	chassises := make([]*schemas.Chassis, 0, len(memberURIs))
+	for _, uri := range memberURIs {
+		if c.skipChassis(resourceIDFromURI(uri)) {
+			continue
+		}
+		chassis, err := schemas.GetChassis(client.GetService().GetClient(), uri)
+		if err != nil {
+			logger.Error("error getting chassis", slog.String("chassis", uri), slog.Any("error", err))
+			continue
+		}
+		chassises = append(chassises, chassis)
+	}
+	return chassises, nil
+}
+
+// chassisCollectionURI returns the ChassisCollection URI advertised by the service root.
+//
+// gofish parses the same link but keeps it unexported, so it is re-read from the service
+// root here. Synthesising "/redfish/v1/Chassis" would work on every BMC we have captured,
+// but a wrong guess here silently collects nothing at all, which is not a failure mode worth
+// trading one request for.
+func (c *ChassisCollector) chassisCollectionURI(client *gofish.APIClient) (string, error) {
+	response, err := client.Get(c.redfishClient.Service.ODataID)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close() //nolint:errcheck
+
+	var root struct {
+		Chassis odataLink `json:"Chassis"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&root); err != nil {
+		return "", err
+	}
+	if root.Chassis.ODataID == "" {
+		return "", fmt.Errorf("service root advertises no Chassis collection")
+	}
+	return root.Chassis.ODataID, nil
+}
+
 // chassisThermal returns the deprecated Thermal resource, or (nil, nil) when the
 // subsystem is disabled by configuration or not implemented by the chassis.
 func (c *ChassisCollector) chassisThermal(chassis *schemas.Chassis) (*schemas.Thermal, error) {
@@ -590,7 +662,7 @@ func (c *ChassisCollector) getChassisSensors(ctx context.Context, sensorsPath st
 	response, err := rfClient.Get(sensorsPath + `?$expand=.($levels=1)`)
 	if err != nil {
 		logger.Debug("expanded Sensors request failed", slog.Any("error", err))
-		return c.getNamedSensors(ctx, sensorsPath, required, logger), nil
+		return c.getNamedSensors(ctx, sensorsPath, required, nil, logger), nil
 	}
 	defer response.Body.Close() //nolint:errcheck
 
@@ -614,21 +686,55 @@ func (c *ChassisCollector) getChassisSensors(ctx context.Context, sensorsPath st
 			slog.Int("skipped", len(agg.Members)),
 		)
 	}
-	return c.getNamedSensors(ctx, sensorsPath, required, logger), nil
+	// The link-only members are the collection's own account of what exists, so hand them to
+	// the fallback rather than letting it synthesise URIs.
+	return c.getNamedSensors(ctx, sensorsPath, required, sensorMemberURIs(agg.Members), logger), nil
+}
+
+// sensorMemberURIs returns the URIs of an unexpanded Sensors collection's members.
+func sensorMemberURIs(members []*schemas.Sensor) []string {
+	uris := make([]string, 0, len(members))
+	for _, member := range members {
+		if member != nil && member.ODataID != "" {
+			uris = append(uris, member.ODataID)
+		}
+	}
+	return uris
 }
 
 // getNamedSensors fetches individually named sensors, one request each. Callers must keep
 // the set small.
-func (c *ChassisCollector) getNamedSensors(ctx context.Context, sensorsPath string, required map[string]string, logger *slog.Logger) []*schemas.Sensor {
+//
+// available is the collection's member URIs when they are known, in which case only the
+// required sensors that actually appear there are fetched. That distinction is not
+// theoretical: the MGX NVLink switch tray carries seven leak detectors and exactly one
+// sensor, so synthesising "<Sensors>/<detector Id>" for each detector would be seven
+// guaranteed 404s per chassis per scrape. A nil available means the collection could not be
+// read at all, and the conventional path is the only thing left to try.
+func (c *ChassisCollector) getNamedSensors(ctx context.Context, sensorsPath string, required map[string]string, available []string, logger *slog.Logger) []*schemas.Sensor {
 	if len(required) == 0 {
 		return nil
 	}
+
+	targets := make([]string, 0, len(required))
+	if available == nil {
+		for sensorID := range required {
+			targets = append(targets, sensorsPath+"/"+sensorID)
+		}
+	} else {
+		for _, uri := range available {
+			if _, ok := required[resourceIDFromURI(uri)]; ok {
+				targets = append(targets, uri)
+			}
+		}
+	}
+
 	client := c.redfishClient.WithContext(ctx).GetService().GetClient()
-	sensors := make([]*schemas.Sensor, 0, len(required))
-	for sensorID := range required {
-		sensor, err := schemas.GetSensor(client, sensorsPath+"/"+sensorID)
+	sensors := make([]*schemas.Sensor, 0, len(targets))
+	for _, uri := range targets {
+		sensor, err := schemas.GetSensor(client, uri)
 		if err != nil {
-			logger.Debug("could not get named sensor", slog.String("sensor_id", sensorID), slog.Any("error", err))
+			logger.Debug("could not get named sensor", slog.String("sensor", uri), slog.Any("error", err))
 			continue
 		}
 		sensors = append(sensors, sensor)

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"maps"
 	"net/http"
+	"path"
 	"slices"
 	"sort"
 	"strings"
@@ -421,6 +422,140 @@ func TestGetChassisSensorsBoundedWhenExpandIgnored(t *testing.T) {
 	require.Equal(t, "Chassis_0_LeakDetector_0_ColdPlate", sensors[0].ID)
 	require.Equal(t, []string{"Chassis_0_LeakDetector_0_ColdPlate"}, perSensorRequests,
 		"the fan and temperature sensors must not be fetched individually")
+}
+
+// TestGetNamedSensorsSkipsDetectorsWithoutSensors covers the MGX NVLink switch tray, which
+// carries seven leak detectors and exactly one sensor. Synthesising "<Sensors>/<detector Id>"
+// for each detector there is seven guaranteed 404s per chassis per scrape, so the fallback
+// fetches only the detectors the collection actually lists.
+func TestGetNamedSensorsSkipsDetectorsWithoutSensors(t *testing.T) {
+	server := newTestRedfishServer(t)
+	server.addRouteFromFixture("/redfish/v1/Chassis", "chassis_collection.json")
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0", "chassis_main.json")
+
+	// A BMC that ignores $expand, listing one sensor against several detectors.
+	server.addRoute("/redfish/v1/Chassis/Chassis_0/Sensors", map[string]any{
+		"@odata.id":   "/redfish/v1/Chassis/Chassis_0/Sensors",
+		"@odata.type": "#SensorCollection.SensorCollection",
+		"Members": []map[string]string{
+			{"@odata.id": "/redfish/v1/Chassis/Chassis_0/Sensors/leakage1"},
+		},
+	})
+
+	var perSensorRequests []string
+	server.mux.HandleFunc("/redfish/v1/Chassis/Chassis_0/Sensors/", func(w http.ResponseWriter, r *http.Request) {
+		id := path.Base(r.URL.Path)
+		perSensorRequests = append(perSensorRequests, id)
+		if id != "leakage1" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"@odata.id":"/redfish/v1/Chassis/Chassis_0/Sensors/leakage1","Id":"leakage1","Name":"leakage1","ReadingType":"Voltage","Reading":1.7}`))
+	})
+
+	client := connectToTestServer(t, server.Server)
+	t.Cleanup(func() {
+		client.Logout()
+		server.Close()
+	})
+
+	collector, err := NewChassisCollector(t.Name(), client, NewTestLogger(t, slog.LevelDebug), config.DefaultChassisCollector)
+	require.NoError(t, err)
+
+	required := map[string]string{
+		"leakage1": "LeakDetection", "leakage2": "LeakDetection", "leakage3": "LeakDetection",
+		"leakage4": "LeakDetection", "leakage5": "LeakDetection", "leakage_aggr": "LeakDetection",
+	}
+	sensors, err := collector.getChassisSensors(context.Background(), "/redfish/v1/Chassis/Chassis_0/Sensors", required, NewTestLogger(t, slog.LevelDebug))
+	require.NoError(t, err)
+
+	require.Len(t, sensors, 1)
+	require.Equal(t, "leakage1", sensors[0].ID)
+	require.Equal(t, []string{"leakage1"}, perSensorRequests,
+		"detectors with no companion sensor must not be requested")
+}
+
+// TestListChassisFiltersBeforeFetching pins the saving that makes the leak_detection module
+// cheap enough to poll on a short interval. skipChassis alone filters after every chassis
+// body has already been paid for, which on a GB300 tray is forty-two fetches to look at one.
+func TestListChassisFiltersBeforeFetching(t *testing.T) {
+	members := []map[string]string{
+		{"@odata.id": "/redfish/v1/Chassis/Chassis_0"},
+		{"@odata.id": "/redfish/v1/Chassis/HGX_GPU_0"},
+		{"@odata.id": "/redfish/v1/Chassis/HGX_ERoT_BMC_0"},
+	}
+
+	newServer := func(t *testing.T) (*testRedfishServer, *[]string) {
+		t.Helper()
+		server := newTestRedfishServer(t)
+		server.addRoute("/redfish/v1/Chassis", map[string]any{
+			"@odata.id":   "/redfish/v1/Chassis",
+			"@odata.type": "#ChassisCollection.ChassisCollection",
+			"Members":     members,
+		})
+		fetched := &[]string{}
+		for _, member := range members {
+			uri := member["@odata.id"]
+			id := path.Base(uri)
+			server.mux.HandleFunc(uri, func(w http.ResponseWriter, r *http.Request) {
+				*fetched = append(*fetched, id)
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"@odata.id":"` + uri + `","@odata.type":"#Chassis.v1_22_0.Chassis","Id":"` + id + `","Status":{"Health":"OK","State":"Enabled"}}`))
+			})
+		}
+		return server, fetched
+	}
+
+	t.Run("an include pattern fetches only matching chassis", func(t *testing.T) {
+		server, fetched := newServer(t)
+		client := connectToTestServer(t, server.Server)
+		t.Cleanup(func() { client.Logout(); server.Close() })
+
+		collector, err := NewChassisCollector(t.Name(), client, NewTestLogger(t, slog.LevelDebug), config.ChassisCollectorConfig{
+			ChassisInclude: "^Chassis_[0-9]+$",
+		})
+		require.NoError(t, err)
+
+		chassises, err := collector.listChassis(context.Background(), NewTestLogger(t, slog.LevelDebug))
+		require.NoError(t, err)
+		require.Len(t, chassises, 1)
+		require.Equal(t, "Chassis_0", chassises[0].ID)
+		require.Equal(t, []string{"Chassis_0"}, *fetched,
+			"the filtered-out chassis bodies must never be requested")
+	})
+
+	t.Run("an exclude pattern skips matching chassis", func(t *testing.T) {
+		server, fetched := newServer(t)
+		client := connectToTestServer(t, server.Server)
+		t.Cleanup(func() { client.Logout(); server.Close() })
+
+		collector, err := NewChassisCollector(t.Name(), client, NewTestLogger(t, slog.LevelDebug), config.ChassisCollectorConfig{
+			ChassisExclude: "^HGX_",
+		})
+		require.NoError(t, err)
+
+		chassises, err := collector.listChassis(context.Background(), NewTestLogger(t, slog.LevelDebug))
+		require.NoError(t, err)
+		require.Len(t, chassises, 1)
+		require.Equal(t, []string{"Chassis_0"}, *fetched)
+	})
+
+	// No filter must keep the historical listing, which costs one request fewer: there is
+	// nothing to decide, so there is no reason to read the service root for the link.
+	t.Run("no filter fetches every chassis", func(t *testing.T) {
+		server, fetched := newServer(t)
+		client := connectToTestServer(t, server.Server)
+		t.Cleanup(func() { client.Logout(); server.Close() })
+
+		collector, err := NewChassisCollector(t.Name(), client, NewTestLogger(t, slog.LevelDebug), config.DefaultChassisCollector)
+		require.NoError(t, err)
+
+		chassises, err := collector.listChassis(context.Background(), NewTestLogger(t, slog.LevelDebug))
+		require.NoError(t, err)
+		require.Len(t, chassises, 3)
+		require.Len(t, *fetched, 3)
+	})
 }
 
 // TestChassisAdvertisedLinks pins the feature detection to the advertised links. Deriving

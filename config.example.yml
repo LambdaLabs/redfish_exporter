@@ -40,7 +40,8 @@ modules:
       disable_power: true
       disable_network_adapters: true
       # Optional and vendor specific, but worth setting: it is the difference between
-      # walking every chassis and walking only the one that carries detectors.
+      # fetching every chassis and fetching only the one that carries detectors, which on a
+      # GB300 tray is 78 requests per scrape against 11.
       # Supermicro NVL72 compute tray:
       # chassis_include: "^Chassis_[0-9]+$"
       # MGX NVSwitch tray:

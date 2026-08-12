@@ -81,6 +81,9 @@ var (
 		// want the minimum possible request count should also set chassis_include to
 		// match only the chassis carrying leak detectors (on a Supermicro NVL72 tray
 		// that is "^Chassis_[0-9]+$", on an MGX NVSwitch tray "^MGX_BMC_[0-9]+$").
+		// That filter is applied before the chassis bodies are fetched, so it is worth
+		// far more than the subsystem fetches it skips: 78 requests per scrape against
+		// 11 on a GB300 tray.
 		"leak_detection": {
 			Prober: "chassis_collector",
 			ChassisCollector: ChassisCollectorConfig{
