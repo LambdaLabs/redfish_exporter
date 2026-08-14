@@ -83,37 +83,9 @@ The Chassis Collector primarily exposes health data from the Chassis API. Agains
 # TYPE redfish_chassis_state gauge
 ```
 
-Newer platforms — notably the GB200/GB300 NVL72 trays and the MGX NVSwitch tray — do not
-implement the deprecated `Thermal` and `Power` schemas at all, and express the same
-readings through `Sensors` instead. For those chassis the collector falls back to the
-`Sensors` collection, folding readings into the metric families above wherever the meaning
-is unambiguous, so a Sensors-only platform produces the same series names as one that
-implements `Thermal`/`Power`:
-
-| Redfish `ReadingType` | Metric |
-| --- | --- |
-| `Temperature` | `redfish_chassis_temperature_celsius` (+ `_sensor_health`, `_sensor_state`) |
-| `Rotational` | `redfish_chassis_fan_rpm` (+ min/max/percentage/threshold series) |
-| `Voltage` | `redfish_chassis_power_voltage_volts` (+ `_state`) |
-| anything else | `redfish_chassis_sensor_{watts,amperes,joules,hertz,percent,reading}` |
-
-The collection is consulted only on a chassis that advertises neither `Thermal` nor `Power`.
-Collecting it alongside them would publish that chassis's temperatures twice under the same
-series name, which fails the whole scrape at registration rather than merely thinning it.
-
-A chassis advertising no `Sensors` collection is never asked for one. This matters more
-than it sounds: the `ERoT`/`IRoT` roots are roughly a third of the chassis on an NVL72 tray
-or an HGX baseboard, and synthesising `<chassis>/Sensors` for them would cost a 404 apiece
-on every scrape.
-
-Readings are not inferred from sensor naming: fan PWM duty cycle and CPU core utilisation
-are both `ReadingType: Percent` and neither carries a distinguishing `PhysicalContext`, so
-`Percent` reaches the catch-all rather than being assumed to be a fan speed.
-
-The collection is fetched with `$expand` so the BMC inlines every member body, costing one
-request per chassis rather than one per sensor. A BMC that does not honour `$expand` is
-**not** fanned out to one request per sensor — that would multiply load against the BMCs
-least able to absorb it — so the bulk sensor telemetry is skipped with a warning instead.
+On a platform implementing neither `Thermal` nor `Power` the same readings are collected
+from the `Sensors` collection instead; see
+[Platform differences](./PLATFORMS.md#chassis-sensors-instead-of-thermalpower).
 
 Exposes no user configuration.
 

@@ -304,19 +304,17 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 		// name, failing the scrape at registration.
 		if !links.legacyThermalOrPower() {
 			sensorsPath := links.sensorsPath(chassis)
-			sensors, err := c.getChassisSensors(ctx, sensorsPath, chassisLogger)
-			if err != nil {
-				chassisLogger.Error("error getting sensors from chassis", slog.String("operation", "chassis.Sensors()"), slog.Any("error", err))
-			} else if len(sensors) == 0 {
-				chassisLogger.Debug("no sensors found", slog.String("operation", "chassis.Sensors()"))
+			// getChassisSensors warns about anything it could not collect, so an empty
+			// answer here only means this chassis published none.
+			sensors := c.getChassisSensors(ctx, sensorsPath, chassisLogger)
+			if len(sensors) == 0 {
+				chassisLogger.Info("no sensors found", slog.String("operation", "GET "+sensorsPath))
 			} else {
 				// Parsing a sensor is a handful of channel sends, so this stays a plain
 				// loop; a goroutine per sensor would be several hundred per tray to save
-				// nothing.
+				// nothing. A panic in one is still contained, by the recover group the
+				// whole chassis collection runs under.
 				for _, sensor := range sensors {
-					if sensor == nil {
-						continue
-					}
 					// A leak detector's companion sensor is a leak signal, not a chassis
 					// voltage, and publishing it as one would misreport it. It is left to
 					// the leak detection path, which is the only thing able to interpret
@@ -378,14 +376,17 @@ func (c *ChassisCollector) Describe(ch chan<- *prometheus.Desc) {
 // full Sensor bodies rather than links, so one request replaces one-per-sensor.
 type sensorCollection struct {
 	Members []*schemas.Sensor `json:"Members"`
+	// NextLink is set when the BMC paginated the collection, which this collector reports
+	// rather than follows.
+	NextLink string `json:"Members@odata.nextLink"`
 }
 
 // chassisLinks are the subordinate resource URIs advertised by a chassis payload.
 //
-// gofish parses the same links but keeps them unexported, so they are re-read from the raw
-// payload here. Reading the advertised links rather than inferring from a fetch means the
-// answers do not change when a subsystem is disabled by configuration, and that a resource
-// the chassis never advertises is never requested.
+// gofish parses the same links but keeps them unexported, and its Chassis.Sensors() fans out
+// one request per member, so the URIs are re-read from the raw payload here. Reading what the
+// chassis advertises rather than inferring it from a fetch means a resource the chassis never
+// advertises is never requested.
 type chassisLinks struct {
 	thermal string
 	power   string
@@ -396,22 +397,28 @@ type chassisLinks struct {
 }
 
 // chassisAdvertisedLinks extracts the links this collector decides on from a chassis.
+//
+// The references are read through schemas.Link, the same type gofish parses them with, so
+// the two cannot disagree about whether a chassis advertises Thermal. A reference object
+// may spell its URI "href" rather than "@odata.id", and reading only the latter would leave
+// gofish collecting a chassis's Thermal while this concluded it had none — publishing that
+// chassis's temperatures from both paths at once, which fails the scrape at registration.
 func chassisAdvertisedLinks(chassis *schemas.Chassis) chassisLinks {
 	if len(chassis.RawData) == 0 {
 		return chassisLinks{opaque: true}
 	}
 	var raw struct {
-		Thermal odataLink `json:"Thermal"`
-		Power   odataLink `json:"Power"`
-		Sensors odataLink `json:"Sensors"`
+		Thermal schemas.Link `json:"Thermal"`
+		Power   schemas.Link `json:"Power"`
+		Sensors schemas.Link `json:"Sensors"`
 	}
 	if err := json.Unmarshal(chassis.RawData, &raw); err != nil {
 		return chassisLinks{opaque: true}
 	}
 	return chassisLinks{
-		thermal: raw.Thermal.ODataID,
-		power:   raw.Power.ODataID,
-		sensors: raw.Sensors.ODataID,
+		thermal: raw.Thermal.String(),
+		power:   raw.Power.String(),
+		sensors: raw.Sensors.String(),
 	}
 }
 
@@ -446,41 +453,74 @@ func (l chassisLinks) sensorsPath(chassis *schemas.Chassis) string {
 //
 // If the BMC does not honour $expand there is deliberately no fan-out to one request per
 // sensor: that would multiply request count against the BMCs least able to absorb it. The
-// bulk sensor telemetry is skipped with a warning instead.
-func (c *ChassisCollector) getChassisSensors(ctx context.Context, sensorsPath string, logger *slog.Logger) ([]*schemas.Sensor, error) {
+// bulk sensor telemetry is skipped instead.
+//
+// Nothing here fails the chassis: every way this can go wrong is the BMC answering for its
+// own Sensors collection badly, and the answer is always the same — collect what arrived and
+// warn about what did not, naming the collection. The caller has no decision left to make,
+// which is why no error is returned.
+func (c *ChassisCollector) getChassisSensors(ctx context.Context, sensorsPath string, logger *slog.Logger) []*schemas.Sensor {
 	if sensorsPath == "" {
-		return nil, nil
+		return nil
 	}
 	rfClient := c.redfishClient.WithContext(ctx)
 
+	// The path came from the chassis's own advertisement, so a failure here is the BMC
+	// contradicting itself.
 	response, err := rfClient.Get(sensorsPath + `?$expand=.($levels=1)`)
 	if err != nil {
-		logger.Debug("expanded Sensors request failed", slog.Any("error", err))
-		return nil, nil
+		logger.Warn("expanded Sensors request failed; skipping sensor collection",
+			slog.String("sensors", sensorsPath),
+			slog.Any("error", err),
+		)
+		return nil
 	}
 	defer response.Body.Close() //nolint:errcheck
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, err
+		logger.Warn("could not read the Sensors collection; skipping sensor collection",
+			slog.String("sensors", sensorsPath),
+			slog.Any("error", err),
+		)
+		return nil
 	}
 
 	var agg sensorCollection
 	if err := json.Unmarshal(body, &agg); err != nil {
-		return nil, err
-	}
-	// A BMC that ignores $expand answers with link-only members, which unmarshal into
-	// Sensors carrying no Id.
-	if len(agg.Members) > 0 && agg.Members[0] != nil && agg.Members[0].ID != "" {
-		return agg.Members, nil
-	}
-	if len(agg.Members) > 0 {
-		logger.Warn("BMC did not honour $expand on Sensors; skipping bulk sensor collection",
+		logger.Warn("could not parse the Sensors collection; skipping sensor collection",
 			slog.String("sensors", sensorsPath),
-			slog.Int("skipped", len(agg.Members)),
+			slog.Any("error", err),
+		)
+		return nil
+	}
+	if agg.NextLink != "" {
+		// Following the pages would be a request apiece, which is the fan-out this collector
+		// exists to avoid, so the tail is dropped — but never silently.
+		logger.Warn("Sensors collection is paginated; collecting the first page only",
+			slog.String("sensors", sensorsPath),
+			slog.String("next", agg.NextLink),
+			slog.Int("collected", len(agg.Members)),
 		)
 	}
-	return nil, nil
+
+	// A BMC that ignores $expand answers with link-only members, which unmarshal into Sensors
+	// carrying no Id. A partially expanded answer is possible too, so every member is checked
+	// rather than only the first.
+	expanded := make([]*schemas.Sensor, 0, len(agg.Members))
+	for _, member := range agg.Members {
+		if member != nil && member.ID != "" {
+			expanded = append(expanded, member)
+		}
+	}
+	if skipped := len(agg.Members) - len(expanded); skipped > 0 {
+		logger.Warn("BMC did not honour $expand on Sensors; skipping the unexpanded members",
+			slog.String("sensors", sensorsPath),
+			slog.Int("skipped", skipped),
+			slog.Int("collected", len(expanded)),
+		)
+	}
+	return expanded
 }
 
 // getLeakDetectors works around an unfortunate fact that the LeakDetection schema is not yet standard, and some OEMs return
@@ -546,6 +586,47 @@ func parseChassisTemperature(ch chan<- prometheus.Metric, chassisID string, chas
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_temperature_celsius"].desc, prometheus.GaugeValue, gofish.Deref(chassisTemperature.ReadingCelsius), chassisTemperatureLabelvalues...)
 }
 
+// fanUnitLabel normalises a fan's reading unit into the fan_unit label, shared by the Thermal
+// and the Sensors path.
+//
+// The two schemas spell the same unit differently — Thermal's enum gives "RPM" and "Percent",
+// a Sensor gives "%" for the same duty cycle — and fan_unit is part of the fan series
+// identity, so leaving each path to lowercase its own spelling would split one fan's series
+// in two across the platforms that report it either way.
+func fanUnitLabel(units string) string {
+	switch strings.ToLower(units) {
+	case "%", "percent", "percentage":
+		return "percent"
+	case "rpm", "{rev}/min":
+		// Redfish prefers "{rev}/min" for Rotational and deprecates "RPM"; no captured
+		// platform uses it yet, but it must not arrive as a second fan_unit spelling.
+		return "rpm"
+	}
+	return strings.ToLower(units)
+}
+
+// fanPercentage derives a fan's duty cycle from a tachometer reading, shared by the Thermal
+// and the Sensors path so the two cannot drift apart: a platform moving between them must
+// not shift the series under the existing alerts.
+//
+// alreadyPercent covers a fan reporting a duty cycle directly, which needs no derivation.
+//
+// Otherwise the quirks are deliberate. Some vendors (e.g. PowerEdge C6420) report null
+// Min/Max and Lower/UpperFatal but do provide Lower/UpperCritical, so the largest non-null
+// upper bound stands in for a max the firmware did not report. A null min is indistinguishable
+// from a real zero once gofish has flattened it, so it is taken at face value — which is why
+// the formula is (reading + min) / max rather than the usual (reading - min) / (max - min).
+func fanPercentage(reading, rangeMin, rangeMax, upperFatal, upperCritical float64, alreadyPercent bool) float64 {
+	if alreadyPercent {
+		return reading
+	}
+	ceiling := math.Max(math.Max(rangeMax, upperFatal), upperCritical)
+	if ceiling == 0 {
+		return 0
+	}
+	return ((reading + rangeMin) / ceiling) * 100
+}
+
 func parseChassisFan(ch chan<- prometheus.Metric, chassisID string, chassisFan schemas.ThermalFan) {
 	chassisFanID := chassisFan.MemberID
 	chassisFanName := chassisFan.Name
@@ -561,22 +642,17 @@ func parseChassisFan(ch chan<- prometheus.Metric, chassisID string, chassisFan s
 	chassisFanRPMMin := intPtrToFloat64(chassisFan.MinReadingRange)
 	chassisFanRPMMax := intPtrToFloat64(chassisFan.MaxReadingRange)
 
-	chassisFanPercentage := chassisFanRPM
-	if chassisFanUnit != schemas.PercentReadingUnits {
-		// Some vendors (e.g. PowerEdge C6420) report null RPMs for Min/Max, as well as Lower/UpperFatal,
-		// but provide Lower/UpperCritical, so use largest non-null for max. However, we can't know if
-		// min is null (reported as zero by gofish) or just zero, so we'll have to assume a min of zero
-		// if Min is not reported...
-		min := chassisFanRPMMin
-		max := math.Max(math.Max(chassisFanRPMMax, chassisFanRPMUpperFatalThreshold), chassisFanRPMUpperCriticalThreshold)
-		chassisFanPercentage = 0
-		if max != 0 {
-			chassisFanPercentage = float64((chassisFanRPM+min)/max) * 100
-		}
-	}
+	chassisFanPercentage := fanPercentage(
+		chassisFanRPM,
+		chassisFanRPMMin,
+		chassisFanRPMMax,
+		chassisFanRPMUpperFatalThreshold,
+		chassisFanRPMUpperCriticalThreshold,
+		chassisFanUnit == schemas.PercentReadingUnits,
+	)
 
 	//			chassisFanStatusLabelNames :=[]string{BaseLabelNames,"fan_name","fan_member_id")
-	chassisFanLabelvalues := []string{"fan", chassisID, chassisFanName, chassisFanID, strings.ToLower(string(chassisFanUnit))} // e.g. RPM -> rpm, Percentage -> percentage
+	chassisFanLabelvalues := []string{"fan", chassisID, chassisFanName, chassisFanID, fanUnitLabel(string(chassisFanUnit))} // e.g. RPM -> rpm, Percent -> percent
 
 	if chassisFanStausHealthValue, ok := parseCommonStatusHealth(chassisFanStausHealth); ok {
 		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_health"].desc, prometheus.GaugeValue, chassisFanStausHealthValue, chassisFanLabelvalues...)
@@ -604,21 +680,15 @@ func parseLeakDetector(ch chan<- prometheus.Metric, chassisID string, ld *schema
 	}
 }
 
-// thresholdReading flattens an optional Redfish threshold, reporting whether the firmware
-// supplied one at all.
-func thresholdReading(t schemas.Threshold) (float64, bool) {
-	if t.Reading == nil {
-		return 0, false
-	}
-	return *t.Reading, true
-}
-
-// thresholdReadingOrZero is thresholdReading for the fan families, where the Thermal path
-// has always emitted an unreported threshold as zero and the existing alerts compare the
-// two series directly. A Sensors-only platform must produce the same shape.
+// thresholdReadingOrZero flattens an optional Redfish threshold, reporting a threshold the
+// firmware did not supply as zero rather than omitting the series: the Thermal path has
+// always emitted it that way and the existing alerts compare the two series directly, so a
+// Sensors-only platform has to produce the same shape.
 func thresholdReadingOrZero(t schemas.Threshold) float64 {
-	value, _ := thresholdReading(t)
-	return value
+	if t.Reading == nil {
+		return 0
+	}
+	return *t.Reading
 }
 
 // parseChassisSensor emits metrics for a single Sensor resource.
@@ -649,26 +719,22 @@ func parseChassisSensor(ch chan<- prometheus.Metric, chassisID string, sensor *s
 		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_temperature_celsius"].desc, prometheus.GaugeValue, reading, labelValues...)
 
 	case schemas.RotationalReadingType:
-		// A rotational reading is a fan tachometer. Percentage is derived the same way
-		// parseChassisFan derives it — including its quirks: the reading is already a
-		// percentage when that is the unit, the upper thresholds stand in for a max the
-		// firmware did not report, and the formula is (reading + min) / max rather than
-		// the usual (reading - min) / (max - min). Reproducing it exactly is the point,
-		// so a platform that moved from Thermal to Sensors does not shift the series.
-		labelValues := []string{"fan", chassisID, sensor.Name, sensor.ID, strings.ToLower(sensor.ReadingUnits)}
+		// A rotational reading is a fan tachometer, so it goes through the same derivation
+		// the Thermal path uses, quirks and all — see fanPercentage.
+		labelValues := []string{"fan", chassisID, sensor.Name, sensor.ID, fanUnitLabel(sensor.ReadingUnits)}
 		rpmMin := gofish.Deref(sensor.ReadingRangeMin)
 		rpmMax := gofish.Deref(sensor.ReadingRangeMax)
-		// Thermal spells this unit "Percent" and Sensors spells it "%"; accept either, so
-		// that a firmware using the Thermal spelling in a Sensor is not scaled twice.
-		percentage := reading
-		if !strings.EqualFold(sensor.ReadingUnits, "%") && !strings.EqualFold(sensor.ReadingUnits, string(schemas.PercentReadingUnits)) {
-			upper := math.Max(thresholdReadingOrZero(sensor.Thresholds.UpperFatal), thresholdReadingOrZero(sensor.Thresholds.UpperCritical))
-			max := math.Max(rpmMax, upper)
-			percentage = 0
-			if max != 0 {
-				percentage = ((reading + rpmMin) / max) * 100
-			}
-		}
+		// Thermal spells this unit "Percent" and Sensors spells it "%"; fanUnitLabel accepts
+		// either, so a firmware using the Thermal spelling in a Sensor is not scaled twice.
+		alreadyPercent := fanUnitLabel(sensor.ReadingUnits) == "percent"
+		percentage := fanPercentage(
+			reading,
+			rpmMin,
+			rpmMax,
+			thresholdReadingOrZero(sensor.Thresholds.UpperFatal),
+			thresholdReadingOrZero(sensor.Thresholds.UpperCritical),
+			alreadyPercent,
+		)
 		if health, ok := parseCommonStatusHealth(sensor.Status.Health); ok {
 			ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_health"].desc, prometheus.GaugeValue, health, labelValues...)
 		}

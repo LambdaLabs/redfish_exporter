@@ -103,15 +103,30 @@ func TestCollectSurvivesOneUnreachableChassis(t *testing.T) {
 	require.Equal(t, "Chassis_0", health[0].labels["chassis_id"])
 }
 
+// TestGetChassisSensorsUsesExpand pins that the request actually carries $expand. The BMC
+// only inlines the member bodies when asked, so a dropped $expand costs every sensor on
+// every platform — the server here answers with link-only members when it is missing, which
+// is what a real BMC does.
 func TestGetChassisSensorsUsesExpand(t *testing.T) {
 	server := newTestRedfishServer(t)
 	server.addRouteFromFixture("/redfish/v1/Chassis", "chassis_collection.json")
 	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0", "chassis_main.json")
-	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/Sensors", "chassis_sensors_expanded.json")
 
-	var expandedRequests int
+	expanded := loadTestData(t, "chassis_sensors_expanded.json")
+	var expandQueries []string
+	server.mux.HandleFunc("/redfish/v1/Chassis/Chassis_0/Sensors", func(w http.ResponseWriter, r *http.Request) {
+		expandQueries = append(expandQueries, r.URL.Query().Get("$expand"))
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Query().Get("$expand") == "" {
+			_, _ = w.Write([]byte(`{"@odata.id":"/redfish/v1/Chassis/Chassis_0/Sensors","Members":[{"@odata.id":"/redfish/v1/Chassis/Chassis_0/Sensors/Chassis_0_FAN_1_FRONT"}]}`))
+			return
+		}
+		_ = json.NewEncoder(w).Encode(expanded)
+	})
+
+	var perSensorRequests int
 	server.mux.HandleFunc("/redfish/v1/Chassis/Chassis_0/Sensors/", func(w http.ResponseWriter, r *http.Request) {
-		expandedRequests++
+		perSensorRequests++
 		w.WriteHeader(http.StatusInternalServerError)
 	})
 
@@ -128,10 +143,10 @@ func TestGetChassisSensorsUsesExpand(t *testing.T) {
 	require.NoError(t, err)
 
 	links := chassisAdvertisedLinks(chassis[0])
-	sensors, err := collector.getChassisSensors(context.Background(), links.sensorsPath(chassis[0]), NewTestLogger(t, slog.LevelDebug))
-	require.NoError(t, err)
+	sensors := collector.getChassisSensors(context.Background(), links.sensorsPath(chassis[0]), NewTestLogger(t, slog.LevelDebug))
 	require.Len(t, sensors, 6, "all sensors should arrive from the single expanded request")
-	require.Zero(t, expandedRequests, "no per-sensor requests should be issued when $expand is honoured")
+	require.Equal(t, []string{".($levels=1)"}, expandQueries, "the collection must be requested with $expand, exactly once")
+	require.Zero(t, perSensorRequests, "no per-sensor requests should be issued when $expand is honoured")
 }
 
 // TestGetChassisSensorsSkipsChassisWithoutSensors covers the ERoT/IRoT chassis that make up
@@ -222,11 +237,69 @@ func TestGetChassisSensorsBoundedWhenExpandIgnored(t *testing.T) {
 	require.NoError(t, err)
 
 	links := chassisAdvertisedLinks(chassis[0])
-	sensors, err := collector.getChassisSensors(context.Background(), links.sensorsPath(chassis[0]), NewTestLogger(t, slog.LevelDebug))
-	require.NoError(t, err)
+	sensors := collector.getChassisSensors(context.Background(), links.sensorsPath(chassis[0]), NewTestLogger(t, slog.LevelDebug))
 
 	require.Empty(t, sensors, "an unexpanded collection yields no bulk sensors")
 	require.Empty(t, perSensorRequests, "no sensor may be fetched individually")
+}
+
+// TestSensorsAreNotCollectedAlongsideThermal pins the invariant the whole fallback rests on:
+// a chassis that implements Thermal must not also be read through Sensors. Both express the
+// same temperature, so collecting both publishes redfish_chassis_temperature_celsius twice
+// under one label set, which fails the entire scrape at registration rather than merely
+// thinning it — on the legacy platforms, not the new ones this PR is for.
+func TestSensorsAreNotCollectedAlongsideThermal(t *testing.T) {
+	server := newTestRedfishServer(t)
+	server.addRoute("/redfish/v1/Chassis", map[string]any{
+		"@odata.id":   "/redfish/v1/Chassis",
+		"@odata.type": "#ChassisCollection.ChassisCollection",
+		"Members":     []map[string]string{{"@odata.id": "/redfish/v1/Chassis/Chassis_0"}},
+	})
+	// A legacy chassis: Thermal as well as a Sensors collection. Both carry the same
+	// reading, which is exactly the collision to avoid.
+	server.addRoute("/redfish/v1/Chassis/Chassis_0", map[string]any{
+		"@odata.id":   "/redfish/v1/Chassis/Chassis_0",
+		"@odata.type": "#Chassis.v1_22_0.Chassis",
+		"Id":          "Chassis_0",
+		"Status":      map[string]any{"Health": "OK", "State": "Enabled"},
+		"Thermal":     map[string]string{"@odata.id": "/redfish/v1/Chassis/Chassis_0/Thermal"},
+		"Sensors":     map[string]string{"@odata.id": "/redfish/v1/Chassis/Chassis_0/Sensors"},
+	})
+	server.addRoute("/redfish/v1/Chassis/Chassis_0/Thermal", map[string]any{
+		"@odata.id": "/redfish/v1/Chassis/Chassis_0/Thermal",
+		"Id":        "Thermal",
+		"Temperatures": []map[string]any{{
+			"MemberId":       "Chassis_0_Front_IO_Temp_0",
+			"Name":           "Chassis 0 Front IO Temp 0",
+			"ReadingCelsius": 27.5,
+			"Status":         map[string]any{"Health": "OK", "State": "Enabled"},
+		}},
+	})
+
+	var sensorRequests int
+	server.mux.HandleFunc("/redfish/v1/Chassis/Chassis_0/Sensors", func(w http.ResponseWriter, r *http.Request) {
+		sensorRequests++
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(loadTestData(t, "chassis_sensors_expanded.json"))
+	})
+
+	client := connectToTestServer(t, server.Server)
+	t.Cleanup(func() {
+		client.Logout()
+		server.Close()
+	})
+
+	collector, err := NewChassisCollector(t.Name(), client, NewTestLogger(t, slog.LevelDebug), config.DefaultChassisCollector)
+	require.NoError(t, err)
+
+	ch := make(chan prometheus.Metric, 256)
+	collector.CollectWithContext(context.Background(), ch)
+	metrics := drainMetrics(t, ch)
+
+	require.Zero(t, sensorRequests, "a chassis advertising Thermal must not be asked for Sensors")
+	celsius := requireMetric(t, metrics, "redfish_chassis_temperature_celsius")
+	require.InDelta(t, 27.5, celsius.value, 1e-9, "the reading must come from Thermal, once")
+	require.NotContains(t, metrics, "redfish_chassis_sensor_reading", "no Sensors series may appear")
 }
 
 func TestChassisAdvertisedLinks(t *testing.T) {
@@ -258,6 +331,19 @@ func TestChassisAdvertisedLinks(t *testing.T) {
 		"empty link objects do not count": {
 			raw:        `{"Id":"1","Thermal":{},"Power":{},"Sensors":{}}`,
 			wantLegacy: false,
+		},
+		// A reference object may spell its URI "href", which gofish accepts. Reading only
+		// "@odata.id" would have this conclude the chassis has no Thermal while gofish
+		// collects one, and the chassis would publish its temperatures from both paths at
+		// once — a duplicate series, which fails the whole scrape at registration.
+		"href spelling counts as a link": {
+			raw:        `{"Id":"1","Thermal":{"href":"/redfish/v1/Chassis/1/Thermal"}}`,
+			wantLegacy: true,
+		},
+		"href spelling is followed for Sensors too": {
+			raw:         `{"Id":"Chassis_0","Sensors":{"href":"/redfish/v1/Chassis/Chassis_0/Sensors"}}`,
+			wantLegacy:  false,
+			wantSensors: "/redfish/v1/Chassis/Chassis_0/Sensors",
 		},
 	}
 
@@ -319,11 +405,7 @@ func TestLeakDetectorSensorIsNeverAChassisVoltage(t *testing.T) {
 	require.Contains(t, metrics, "redfish_chassis_temperature_celsius")
 	require.Contains(t, metrics, "redfish_chassis_sensor_watts")
 
-	// The detector's voltage does not, under any series name.
-	for _, sample := range metrics["redfish_chassis_power_voltage_volts"] {
-		require.NotContains(t, sample.labels["power_voltage_id"], "LeakDetector",
-			"a leak detector must not be published as a chassis power voltage")
-	}
+	// The detector's voltage does not, under any series name — power_voltage included.
 	for name, samples := range metrics {
 		for _, sample := range samples {
 			for _, label := range []string{"sensor_id", "power_voltage_id"} {
@@ -435,6 +517,93 @@ func TestParseChassisSensor(t *testing.T) {
 		require.InDelta(t, 132.0, reading.value, 1e-9)
 		require.Equal(t, "m", reading.labels["sensor_units"])
 	})
+}
+
+// TestFanPercentageSharedByBothPaths drives the same firmware numbers through the Thermal
+// and the Sensors path and requires one answer from both, series identity included. An alert
+// on redfish_chassis_fan_rpm_percentage has to mean the same thing on a platform reporting
+// fans through Sensors as on one reporting them through Thermal, which holds only for as long
+// as the two go on sharing fanPercentage and fanUnitLabel.
+//
+// The two schemas spell the units differently — Thermal's enum has "RPM" and "Percent" where
+// a Sensor has "RPM" and "%" — so each case states both spellings of one unit.
+func TestFanPercentageSharedByBothPaths(t *testing.T) {
+	tT := map[string]struct {
+		reading       float64
+		min           float64
+		max           float64
+		upperCritical float64
+		upperFatal    float64
+		thermalUnits  schemas.ReadingUnits
+		sensorUnits   string
+		want          float64
+		wantUnitLabel string
+	}{
+		"a plain reading range": {reading: 8623, min: 2000, max: 30000, want: 35.41},
+		// Some vendors (e.g. PowerEdge C6420) report no range at all but do supply the
+		// upper thresholds, which then stand in for the max.
+		"no range, upper critical only":   {reading: 50, upperCritical: 20000, want: 0.25},
+		"no range, both upper thresholds": {reading: 50, upperCritical: 20000, upperFatal: 24000, want: 0.2083333},
+		// Nothing to divide by: the percentage is zero rather than an infinity.
+		"no range and no thresholds": {reading: 8623, want: 0},
+		// A fan already reporting a duty cycle needs no derivation, and the two spellings
+		// of that unit must not split the series in two. The reading is whole because the
+		// Thermal schema carries it as an int.
+		"a reading already in percent": {
+			reading: 30, max: 30000, thermalUnits: schemas.PercentReadingUnits, sensorUnits: "%",
+			want: 30, wantUnitLabel: "percent",
+		},
+	}
+
+	for name, test := range tT {
+		t.Run(name, func(t *testing.T) {
+			intPtr := func(v float64) *int { i := int(v); return &i }
+			floatPtr := func(v float64) *float64 { return &v }
+
+			thermalUnits, sensorUnits := test.thermalUnits, test.sensorUnits
+			if thermalUnits == "" {
+				thermalUnits, sensorUnits = schemas.RPMReadingUnits, "RPM"
+			}
+			wantUnitLabel := test.wantUnitLabel
+			if wantUnitLabel == "" {
+				wantUnitLabel = "rpm"
+			}
+
+			thermalCh := make(chan prometheus.Metric, 32)
+			parseChassisFan(thermalCh, "Chassis_0", schemas.ThermalFan{
+				Entity:                 schemas.Entity{ID: "FAN_0", Name: "FAN_0"},
+				MemberID:               "FAN_0",
+				ReadingUnits:           thermalUnits,
+				Reading:                intPtr(test.reading),
+				MinReadingRange:        intPtr(test.min),
+				MaxReadingRange:        intPtr(test.max),
+				UpperThresholdCritical: intPtr(test.upperCritical),
+				UpperThresholdFatal:    intPtr(test.upperFatal),
+			})
+			thermal := requireMetric(t, drainMetrics(t, thermalCh), "redfish_chassis_fan_rpm_percentage")
+
+			sensorCh := make(chan prometheus.Metric, 32)
+			parseChassisSensor(sensorCh, "Chassis_0", &schemas.Sensor{
+				Entity:          schemas.Entity{ID: "FAN_0", Name: "FAN_0"},
+				ReadingType:     schemas.RotationalReadingType,
+				ReadingUnits:    sensorUnits,
+				Reading:         floatPtr(test.reading),
+				ReadingRangeMin: floatPtr(test.min),
+				ReadingRangeMax: floatPtr(test.max),
+				Thresholds: schemas.Thresholds{
+					UpperCritical: schemas.Threshold{Reading: floatPtr(test.upperCritical)},
+					UpperFatal:    schemas.Threshold{Reading: floatPtr(test.upperFatal)},
+				},
+			})
+			sensor := requireMetric(t, drainMetrics(t, sensorCh), "redfish_chassis_fan_rpm_percentage")
+
+			require.Equal(t, wantUnitLabel, thermal.labels["fan_unit"])
+			require.Equal(t, thermal.labels["fan_unit"], sensor.labels["fan_unit"],
+				"one fan must not land under two fan_unit spellings")
+			require.InDelta(t, test.want, thermal.value, 1e-6)
+			require.InDelta(t, thermal.value, sensor.value, 1e-9)
+		})
+	}
 }
 
 func TestGetLeakDetectors(t *testing.T) {
