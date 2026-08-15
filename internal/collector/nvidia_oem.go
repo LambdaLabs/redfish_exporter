@@ -113,46 +113,52 @@ func (c *NvidiaOEMClient) GetMemoryOEMMetrics(odataID string) (*MemoryOEMMetrics
 }
 
 type GPUNVLinkCollection struct {
-	ODataID   string `json:"@odata.id"`
-	ODataType string `json:"@odata.type"`
-	Members   []struct {
-		ID      string `json:"Id"`
-		Metrics struct {
-			Oem struct {
-				NVidiaOEM struct {
-					OdataType string `json:"@odata.type,omitempty"`
-					// PCIe-specific fields
-					RXErrorsPerLane []int `json:"RXErrorsPerLane,omitempty"`
-					// NVLink-specific fields
-					BitErrorRate               float64      `json:"BitErrorRate,omitempty"`
-					EffectiveBER               float64      `json:"EffectiveBER,omitempty"`
-					EffectiveError             int          `json:"EffectiveError,omitempty"`
-					IntentionalLinkDownCount   int          `json:"IntentionalLinkDownCount,omitempty"`
-					LinkDownReasonCode         string       `json:"LinkDownReasonCode,omitempty"`
-					LinkDownedCount            int          `json:"LinkDownedCount,omitempty"`
-					LinkErrorRecoveryCount     int          `json:"LinkErrorRecoveryCount,omitempty"`
-					MalformedPackets           int          `json:"MalformedPackets,omitempty"`
-					NVLinkDataRxBandwidthGbps  float64      `json:"NVLinkDataRxBandwidthGbps,omitempty"`
-					NVLinkDataTxBandwidthGbps  float64      `json:"NVLinkDataTxBandwidthGbps,omitempty"`
-					NVLinkErrors               NVLinkErrors `json:"NVLinkErrors,omitempty"`
-					NVLinkRawRxBandwidthGbps   float64      `json:"NVLinkRawRxBandwidthGbps,omitempty"`
-					NVLinkRawTxBandwidthGbps   float64      `json:"NVLinkRawTxBandwidthGbps,omitempty"`
-					RXNoProtocolBytes          int64        `json:"RXNoProtocolBytes,omitempty"`
-					SymbolErrors               int          `json:"SymbolErrors,omitempty"`
-					TXNoProtocolBytes          int64        `json:"TXNoProtocolBytes,omitempty"`
-					TXWait                     int          `json:"TXWait,omitempty"`
-					TotalRawBER                float64      `json:"TotalRawBER,omitempty"`
-					TotalRawError              int          `json:"TotalRawError,omitempty"`
-					UnintentionalLinkDownCount int          `json:"UnintentionalLinkDownCount,omitempty"`
-					VL15Dropped                int          `json:"VL15Dropped,omitempty"`
-					VL15TXBytes                int          `json:"VL15TXBytes,omitempty"`
-					VL15TXPackets              int          `json:"VL15TXPackets,omitempty"`
-				} `json:"Nvidia,omitempty"`
-			} `json:"Oem"`
-		} `json:"Metrics"`
-		PortType     string                 `json:"PortType"`
-		PortProtocol schemas.Protocol       `json:"PortProtocol"`
-		LinkStatus   schemas.PortLinkStatus `json:"LinkStatus"`
-		Status       schemas.Status         `json:"Status"`
-	} `json:"Members"`
+	ODataID   string          `json:"@odata.id"`
+	ODataType string          `json:"@odata.type"`
+	Members   []GPUNVLinkPort `json:"Members"`
+}
+
+type GPUNVLinkPort struct {
+	ODataID      string                 `json:"@odata.id"`
+	ID           string                 `json:"Id"`
+	Metrics      GPUNVLinkPortMetrics   `json:"Metrics"`
+	PortType     string                 `json:"PortType"`
+	PortProtocol schemas.Protocol       `json:"PortProtocol"`
+	LinkStatus   schemas.PortLinkStatus `json:"LinkStatus"`
+	Status       schemas.Status         `json:"Status"`
+}
+
+type GPUNVLinkPortMetrics struct {
+	ODataID string `json:"@odata.id"`
+	Oem     struct {
+		NVidiaOEM struct {
+			OdataType string `json:"@odata.type,omitempty"`
+			// PCIe-specific fields
+			RXErrorsPerLane []int `json:"RXErrorsPerLane,omitempty"`
+			// NVLink-specific fields
+			BitErrorRate               float64      `json:"BitErrorRate,omitempty"`
+			EffectiveBER               float64      `json:"EffectiveBER,omitempty"`
+			EffectiveError             int          `json:"EffectiveError,omitempty"`
+			IntentionalLinkDownCount   int          `json:"IntentionalLinkDownCount,omitempty"`
+			LinkDownReasonCode         string       `json:"LinkDownReasonCode,omitempty"`
+			LinkDownedCount            int          `json:"LinkDownedCount,omitempty"`
+			LinkErrorRecoveryCount     int          `json:"LinkErrorRecoveryCount,omitempty"`
+			MalformedPackets           int          `json:"MalformedPackets,omitempty"`
+			NVLinkDataRxBandwidthGbps  float64      `json:"NVLinkDataRxBandwidthGbps,omitempty"`
+			NVLinkDataTxBandwidthGbps  float64      `json:"NVLinkDataTxBandwidthGbps,omitempty"`
+			NVLinkErrors               NVLinkErrors `json:"NVLinkErrors,omitempty"`
+			NVLinkRawRxBandwidthGbps   float64      `json:"NVLinkRawRxBandwidthGbps,omitempty"`
+			NVLinkRawTxBandwidthGbps   float64      `json:"NVLinkRawTxBandwidthGbps,omitempty"`
+			RXNoProtocolBytes          int64        `json:"RXNoProtocolBytes,omitempty"`
+			SymbolErrors               int          `json:"SymbolErrors,omitempty"`
+			TXNoProtocolBytes          int64        `json:"TXNoProtocolBytes,omitempty"`
+			TXWait                     int          `json:"TXWait,omitempty"`
+			TotalRawBER                float64      `json:"TotalRawBER,omitempty"`
+			TotalRawError              int          `json:"TotalRawError,omitempty"`
+			UnintentionalLinkDownCount int          `json:"UnintentionalLinkDownCount,omitempty"`
+			VL15Dropped                int          `json:"VL15Dropped,omitempty"`
+			VL15TXBytes                int          `json:"VL15TXBytes,omitempty"`
+			VL15TXPackets              int          `json:"VL15TXPackets,omitempty"`
+		} `json:"Nvidia,omitempty"`
+	} `json:"Oem"`
 }
