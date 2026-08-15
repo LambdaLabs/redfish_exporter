@@ -3,9 +3,12 @@ package collector
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
+	"path"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -433,21 +436,9 @@ func (g *GPUCollector) emitGPUOem(ch chan<- prometheus.Metric, gpu SystemGPU, pr
 }
 
 func (g *GPUCollector) emitNVLinkTelemetry(ctx context.Context, ch chan<- prometheus.Metric, gpu SystemGPU) {
-	rfClient := g.redfishClient.WithContext(ctx)
-	rfPath := fmt.Sprintf(`%s/Ports?$expand=.($levels=2)`, gpu.ODataID)
-	response, err := rfClient.Get(rfPath)
+	agg, err := g.gatherNVLinkPorts(ctx, gpu)
 	if err != nil {
 		g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("unable to gather NVLink data, skipping")
-		return
-	}
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("unable to read in NVLink data, skipping")
-		return
-	}
-	var agg GPUNVLinkCollection
-	if err := json.Unmarshal(body, &agg); err != nil {
-		g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("unable to unmarshal NVLink data, skipping")
 		return
 	}
 	for _, port := range agg.Members {
@@ -518,4 +509,114 @@ func (g *GPUCollector) emitNVLinkTelemetry(ctx context.Context, ch chan<- promet
 			portLabels...,
 		)
 	}
+}
+
+func (g *GPUCollector) gatherNVLinkPorts(ctx context.Context, gpu SystemGPU) (*GPUNVLinkCollection, error) {
+	rfClient := g.redfishClient.WithContext(ctx)
+	// gatherNVLinkPorts fetches a GPU's ports with each port's Metrics resource
+	// attached. $expand=.($levels=2) inlines the whole Ports subtree in one
+	// response; a BMC that rejects it with HTTP 400 gets the per-port walk.
+	agg, err := g.getNVLinkCollection(rfClient, fmt.Sprintf(`%s/Ports?$expand=.($levels=2)`, gpu.ODataID))
+	if isExpandRejected(err) {
+		g.logger.With("error", err).Info("BMC rejected $expand $levels=2, walking NVLink ports individually")
+		return g.walkNVLinkPorts(ctx, gpu)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return agg, nil
+}
+
+func (g *GPUCollector) walkNVLinkPorts(ctx context.Context, gpu SystemGPU) (*GPUNVLinkCollection, error) {
+	rfClient := g.redfishClient.WithContext(ctx)
+	agg, err := g.getNVLinkCollection(rfClient, fmt.Sprintf(`%s/Ports`, gpu.ODataID))
+	if err != nil {
+		return nil, err
+	}
+	members := make([]*GPUNVLinkPort, len(agg.Members))
+	eg := newRecoverGroup(ctx)
+	for i := range agg.Members {
+		portURL := agg.Members[i].ODataID
+		portLogger := g.logger.With("gpu_id", gpu.ID, "port_url", portURL, "system_name", gpu.SystemName)
+		eg.Go(func() error {
+			if !isNVLinkPortURL(portURL) {
+				return nil
+			}
+			portLogger.Debug("fetching NVLink port")
+			port, err := schemas.GetPort(rfClient, portURL)
+			if err != nil {
+				portLogger.With("error", err).Error("failed obtaining NVLink port, skipping")
+				return nil
+			}
+			if !isNVLinkPort(port.ID, port.PortProtocol) {
+				return nil
+			}
+			metrics, err := port.Metrics()
+			if err != nil {
+				portLogger.With("error", err).Error("failed obtaining NVLink port metrics, skipping")
+				return nil
+			}
+			if metrics == nil {
+				portLogger.Error("NVLink port has no Metrics reference, skipping")
+				return nil
+			}
+			member := &GPUNVLinkPort{
+				ODataID:      port.ODataID,
+				ID:           port.ID,
+				PortType:     string(port.PortType),
+				PortProtocol: port.PortProtocol,
+				LinkStatus:   port.LinkStatus,
+				Status:       port.Status,
+			}
+			member.Metrics.ODataID = metrics.ODataID
+			if len(metrics.OEM) > 0 {
+				if err := json.Unmarshal(metrics.OEM, &member.Metrics.Oem); err != nil {
+					portLogger.With("error", err).Error("failed unmarshaling NVLink port OEM metrics, skipping")
+					return nil
+				}
+			}
+			members[i] = member
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+	out := &GPUNVLinkCollection{ODataID: agg.ODataID, ODataType: agg.ODataType}
+	for _, member := range members {
+		if member != nil {
+			out.Members = append(out.Members, *member)
+		}
+	}
+	return out, nil
+}
+
+func (g *GPUCollector) getNVLinkCollection(rfClient *gofish.APIClient, rfPath string) (*GPUNVLinkCollection, error) {
+	response, err := rfClient.Get(rfPath)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close() //nolint:errcheck // Close() errors on read are not actionable
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read in NVLink data: %w", err)
+	}
+	var agg GPUNVLinkCollection
+	if err := json.Unmarshal(body, &agg); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal NVLink data: %w", err)
+	}
+	return &agg, nil
+}
+
+func isExpandRejected(err error) bool {
+	var rfErr *schemas.Error
+	return errors.As(err, &rfErr) && rfErr.HTTPReturnedStatusCode == http.StatusBadRequest
+}
+
+func isNVLinkPort(id string, protocol schemas.Protocol) bool {
+	return protocol == schemas.NVLinkProtocol || strings.HasPrefix(id, "NVLink_")
+}
+
+func isNVLinkPortURL(portURL string) bool {
+	return strings.HasPrefix(path.Base(portURL), "NVLink_")
 }
