@@ -145,6 +145,13 @@ func (g *GPUCollector) Describe(ch chan<- *prometheus.Desc) {
 	for _, metric := range g.metrics {
 		ch <- metric.desc
 	}
+	if g.config.EnableGPUModuleTelemetry {
+		// enable_gpu_module_telemetry additionally emits the shared telemetry families, so
+		// their descriptors must be announced or the registry rejects the series.
+		for _, metric := range telemetryMetrics {
+			ch <- metric.desc
+		}
+	}
 	g.collectorScrapeStatus.Describe(ch)
 }
 
@@ -258,6 +265,10 @@ func (g *GPUCollector) emitGPUMemoryMetrics(ch chan<- prometheus.Metric, gpu Sys
 		memLabels := make([]string, len(commonLabels))
 		copy(memLabels, commonLabels)
 		memLabels = append(memLabels, mem.ID)
+
+		if g.config.EnableGPUModuleTelemetry {
+			emitMemoryMetrics(ch, telemetryMetrics, memLabels, memoryTelemetryValues(memMetric))
+		}
 
 		ch <- prometheus.MustNewConstMetric(
 			g.metrics["gpu_memory_ecc_correctable"].desc,
@@ -405,6 +416,9 @@ func (g *GPUCollector) emitGPUOem(ch chan<- prometheus.Metric, gpu SystemGPU, pr
 	if err != nil {
 		g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("failed obtaining gpu processor metrics, skipping")
 		return
+	}
+	if g.config.EnableGPUModuleTelemetry {
+		g.emitTelemetryFromProcessorMetrics(ch, gpu, gpuOEMMetrics)
 	}
 	var gpuOEM ProcessorMetricsOEMResponse
 	if err := json.Unmarshal(gpuOEMMetrics.OEM, &gpuOEM); err != nil {

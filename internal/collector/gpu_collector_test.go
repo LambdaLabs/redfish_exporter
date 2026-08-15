@@ -489,3 +489,33 @@ func BenchmarkGPUCollector_ExtremeDelay(b *testing.B) {
 		registry.Gather() //nolint:errcheck
 	}
 }
+
+func telemetryFamiliesFromGolden(golden []byte) []string {
+	var names []string
+	for _, line := range strings.Split(string(golden), "\n") {
+		if strings.HasPrefix(line, "# TYPE ") {
+			names = append(names, strings.Fields(line)[2])
+		}
+	}
+	return names
+}
+
+// TestGPUCollector_telemetry verifies the enable_gpu_module_telemetry module flag:
+// off emits no redfish_telemetry_* series, on emits them from the ProcessorMetrics/MemoryMetrics documents
+// the collector already fetches, identical to what the Telemetry collector emits.
+func TestGPUCollector_telemetry(t *testing.T) {
+	wanted := golden.Get(t, "golden/gpu_collector_telemetry.golden")
+	families := telemetryFamiliesFromGolden(wanted)
+	require.NotEmpty(t, families)
+
+	_, client := setupTestServerClient(t, "testdata/gb300_happypath")
+	logger := NewTestLogger(t, slog.LevelInfo)
+
+	off, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
+	require.NoError(t, err)
+	assert.Equal(t, 0, testutil.CollectAndCount(off, families...))
+
+	on, err := NewGPUCollector(t.Name(), client, logger, config.GPUCollectorConfig{EnableGPUModuleTelemetry: true})
+	require.NoError(t, err)
+	assert.NoError(t, testutil.CollectAndCompare(on, bytes.NewReader(wanted), families...))
+}

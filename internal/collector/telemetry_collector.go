@@ -420,7 +420,7 @@ func (t *TelemetryCollector) collectProcessorMetrics(ch chan<- prometheus.Metric
 	// Emit metrics for each GPU
 	for gpuID, metrics := range metricsByGPU {
 		labels := []string{systemID, gpuID}
-		t.emitGPUMetrics(ch, labels, metrics)
+		emitGPUMetrics(ch, t.metrics, labels, metrics)
 	}
 }
 
@@ -493,12 +493,14 @@ func extractSystemIDFromReport(report *schemas.MetricReport) string {
 	return ""
 }
 
-// emitGPUMetrics emits Prometheus metrics for a single GPU
-func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels []string, metrics map[string]float64) {
+// emitGPUMetrics emits Prometheus metrics for a single GPU from values keyed by
+// ProcessorMetrics property paths (e.g. "PCIeErrors/FatalErrorCount").
+// Shared by the telemetry (HGX MetricReports) and gpu_direct (per-resource) collection paths.
+func emitGPUMetrics(ch chan<- prometheus.Metric, metricDescs map[string]Metric, labels []string, metrics map[string]float64) {
 	// Cache ECC errors
 	if val, ok := metrics["CacheMetricsTotal/LifeTime/CorrectableECCErrorCount"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_cache_ecc_correctable_total"].desc,
+			metricDescs["telemetry_cache_ecc_correctable_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -506,7 +508,7 @@ func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["CacheMetricsTotal/LifeTime/UncorrectableECCErrorCount"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_cache_ecc_uncorrectable_total"].desc,
+			metricDescs["telemetry_cache_ecc_uncorrectable_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -516,7 +518,7 @@ func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels 
 	// PCIe errors
 	if val, ok := metrics["PCIeErrors/CorrectableErrorCount"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_pcie_correctable_errors_total"].desc,
+			metricDescs["telemetry_pcie_correctable_errors_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -524,7 +526,7 @@ func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["PCIeErrors/NonFatalErrorCount"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_pcie_nonfatal_errors_total"].desc,
+			metricDescs["telemetry_pcie_nonfatal_errors_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -532,7 +534,7 @@ func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["PCIeErrors/FatalErrorCount"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_pcie_fatal_errors_total"].desc,
+			metricDescs["telemetry_pcie_fatal_errors_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -540,7 +542,7 @@ func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["PCIeErrors/L0ToRecoveryCount"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_pcie_l0_to_recovery_total"].desc,
+			metricDescs["telemetry_pcie_l0_to_recovery_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -548,7 +550,7 @@ func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["PCIeErrors/ReplayCount"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_pcie_replay_total"].desc,
+			metricDescs["telemetry_pcie_replay_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -556,7 +558,7 @@ func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["PCIeErrors/ReplayRolloverCount"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_pcie_replay_rollover_total"].desc,
+			metricDescs["telemetry_pcie_replay_rollover_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -564,7 +566,7 @@ func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["PCIeErrors/NAKSentCount"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_pcie_nak_sent_total"].desc,
+			metricDescs["telemetry_pcie_nak_sent_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -572,7 +574,7 @@ func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["PCIeErrors/NAKReceivedCount"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_pcie_nak_received_total"].desc,
+			metricDescs["telemetry_pcie_nak_received_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -580,7 +582,7 @@ func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["PCIeErrors/UnsupportedRequestCount"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_pcie_unsupported_request_total"].desc,
+			metricDescs["telemetry_pcie_unsupported_request_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -590,7 +592,7 @@ func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels 
 	// Throttling durations - parseMetricValue handles ISO 8601 duration conversion
 	if val, ok := metrics["PowerLimitThrottleDuration"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_power_throttle_duration_seconds_total"].desc,
+			metricDescs["telemetry_power_throttle_duration_seconds_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -598,7 +600,7 @@ func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["ThermalLimitThrottleDuration"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_thermal_throttle_duration_seconds_total"].desc,
+			metricDescs["telemetry_thermal_throttle_duration_seconds_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -606,7 +608,7 @@ func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["Oem/Nvidia/HardwareViolationThrottleDuration"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_hardware_violation_throttle_duration_seconds_total"].desc,
+			metricDescs["telemetry_hardware_violation_throttle_duration_seconds_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -614,7 +616,7 @@ func (t *TelemetryCollector) emitGPUMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["Oem/Nvidia/GlobalSoftwareViolationThrottleDuration"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_software_violation_throttle_duration_seconds_total"].desc,
+			metricDescs["telemetry_software_violation_throttle_duration_seconds_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -668,7 +670,7 @@ func (t *TelemetryCollector) collectMemoryMetrics(ch chan<- prometheus.Metric, r
 			// Extract GPU ID from memory ID (e.g., "GPU_SXM_1_DRAM_0" -> "GPU_SXM_1")
 			gpuID := extractGPUIDFromMemoryID(memoryID)
 			labels := []string{systemID, gpuID, memoryID}
-			t.emitMemoryMetrics(ch, labels, metrics)
+			emitMemoryMetrics(ch, t.metrics, labels, metrics)
 		}
 	}
 }
@@ -721,12 +723,14 @@ func extractGPUIDFromMemoryID(memoryID string) string {
 	return memoryID
 }
 
-// emitMemoryMetrics emits Prometheus metrics for a single memory module
-func (t *TelemetryCollector) emitMemoryMetrics(ch chan<- prometheus.Metric, labels []string, metrics map[string]float64) {
+// emitMemoryMetrics emits Prometheus metrics for a single memory module from values
+// keyed by MemoryMetrics property paths (e.g. "LifeTime/CorrectableECCErrorCount").
+// Shared by the telemetry (HGX MetricReports) and gpu_direct (per-resource) collection paths.
+func emitMemoryMetrics(ch chan<- prometheus.Metric, metricDescs map[string]Metric, labels []string, metrics map[string]float64) {
 	// Lifetime ECC errors
 	if val, ok := metrics["LifeTime/CorrectableECCErrorCount"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_memory_ecc_correctable_lifetime_total"].desc,
+			metricDescs["telemetry_memory_ecc_correctable_lifetime_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -734,7 +738,7 @@ func (t *TelemetryCollector) emitMemoryMetrics(ch chan<- prometheus.Metric, labe
 	}
 	if val, ok := metrics["LifeTime/UncorrectableECCErrorCount"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_memory_ecc_uncorrectable_lifetime_total"].desc,
+			metricDescs["telemetry_memory_ecc_uncorrectable_lifetime_total"].desc,
 			prometheus.CounterValue,
 			val,
 			labels...,
@@ -744,7 +748,7 @@ func (t *TelemetryCollector) emitMemoryMetrics(ch chan<- prometheus.Metric, labe
 	// Bandwidth and utilization
 	if val, ok := metrics["BandwidthPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_memory_bandwidth_percent"].desc,
+			metricDescs["telemetry_memory_bandwidth_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -752,7 +756,7 @@ func (t *TelemetryCollector) emitMemoryMetrics(ch chan<- prometheus.Metric, labe
 	}
 	if val, ok := metrics["CapacityUtilizationPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_memory_capacity_utilization_percent"].desc,
+			metricDescs["telemetry_memory_capacity_utilization_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -760,7 +764,7 @@ func (t *TelemetryCollector) emitMemoryMetrics(ch chan<- prometheus.Metric, labe
 	}
 	if val, ok := metrics["OperatingSpeedMHz"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_memory_operating_speed_mhz"].desc,
+			metricDescs["telemetry_memory_operating_speed_mhz"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1327,14 +1331,14 @@ func (t *TelemetryCollector) collectGPMMetrics(ch chan<- prometheus.Metric, repo
 	// Emit regular metrics for each GPU
 	for gpuID, metrics := range metricsByGPU {
 		labels := []string{systemID, gpuID}
-		t.emitGPMMetrics(ch, labels, metrics)
+		emitGPMMetrics(ch, t.metrics, labels, metrics)
 	}
 
 	// Emit instance metrics
 	for gpuID, instances := range instanceMetricsByGPU {
 		for instanceID, metrics := range instances {
 			labels := []string{systemID, gpuID, instanceID}
-			t.emitGPMInstanceMetrics(ch, labels, metrics)
+			emitGPMInstanceMetrics(ch, t.metrics, labels, metrics)
 		}
 	}
 }
@@ -1369,12 +1373,14 @@ func parseGPMMetricProperty(property string) (gpuID string, metricName string) {
 	return gpuID, metricName
 }
 
-// emitGPMMetrics emits Prometheus metrics for GPU Performance Monitoring (non-instance metrics)
-func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels []string, metrics map[string]float64) {
+// emitGPMMetrics emits Prometheus metrics for GPU Performance Monitoring (non-instance
+// metrics) from values keyed by field names with the Oem/Nvidia prefix stripped.
+// Shared by the telemetry (HGX MetricReports) and gpu_direct (per-resource) collection paths.
+func emitGPMMetrics(ch chan<- prometheus.Metric, metricDescs map[string]Metric, labels []string, metrics map[string]float64) {
 	// Compute unit utilization
 	if val, ok := metrics["TensorCoreActivityPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_tensor_core_activity_percent"].desc,
+			metricDescs["telemetry_nvidia_tensor_core_activity_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1382,7 +1388,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["SMActivityPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_sm_activity_percent"].desc,
+			metricDescs["telemetry_nvidia_sm_activity_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1390,7 +1396,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["SMOccupancyPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_sm_occupancy_percent"].desc,
+			metricDescs["telemetry_nvidia_sm_occupancy_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1398,7 +1404,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["FP16ActivityPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_fp16_activity_percent"].desc,
+			metricDescs["telemetry_nvidia_fp16_activity_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1406,7 +1412,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["FP32ActivityPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_fp32_activity_percent"].desc,
+			metricDescs["telemetry_nvidia_fp32_activity_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1414,7 +1420,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["FP64ActivityPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_fp64_activity_percent"].desc,
+			metricDescs["telemetry_nvidia_fp64_activity_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1422,7 +1428,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["IntegerActivityUtilizationPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_integer_activity_percent"].desc,
+			metricDescs["telemetry_nvidia_integer_activity_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1430,7 +1436,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["DMMAUtilizationPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_dmma_utilization_percent"].desc,
+			metricDescs["telemetry_nvidia_dmma_utilization_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1438,7 +1444,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["HMMAUtilizationPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_hmma_utilization_percent"].desc,
+			metricDescs["telemetry_nvidia_hmma_utilization_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1446,7 +1452,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["IMMAUtilizationPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_imma_utilization_percent"].desc,
+			metricDescs["telemetry_nvidia_imma_utilization_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1454,7 +1460,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["GraphicsEngineActivityPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_graphics_engine_activity_percent"].desc,
+			metricDescs["telemetry_nvidia_graphics_engine_activity_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1464,7 +1470,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	// Media engine utilization - aggregate
 	if val, ok := metrics["NVDecUtilizationPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_nvdec_utilization_percent"].desc,
+			metricDescs["telemetry_nvidia_nvdec_utilization_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1472,7 +1478,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["NVJpgUtilizationPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_nvjpg_utilization_percent"].desc,
+			metricDescs["telemetry_nvidia_nvjpg_utilization_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1482,7 +1488,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	// Network bandwidth
 	if val, ok := metrics["NVLinkDataRxBandwidthGbps"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_nvlink_data_rx_bandwidth_gbps"].desc,
+			metricDescs["telemetry_nvidia_nvlink_data_rx_bandwidth_gbps"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1490,7 +1496,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["NVLinkDataTxBandwidthGbps"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_nvlink_data_tx_bandwidth_gbps"].desc,
+			metricDescs["telemetry_nvidia_nvlink_data_tx_bandwidth_gbps"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1498,7 +1504,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["NVLinkRawRxBandwidthGbps"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_nvlink_raw_rx_bandwidth_gbps"].desc,
+			metricDescs["telemetry_nvidia_nvlink_raw_rx_bandwidth_gbps"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1506,7 +1512,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["NVLinkRawTxBandwidthGbps"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_nvlink_raw_tx_bandwidth_gbps"].desc,
+			metricDescs["telemetry_nvidia_nvlink_raw_tx_bandwidth_gbps"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1514,7 +1520,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["NVOfaUtilizationPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_nvofa_utilization_percent"].desc,
+			metricDescs["telemetry_nvidia_nvofa_utilization_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1524,7 +1530,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	// PCIe bandwidth
 	if val, ok := metrics["PCIeRawRxBandwidthGbps"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_pcie_raw_rx_bandwidth_gbps"].desc,
+			metricDescs["telemetry_nvidia_pcie_raw_rx_bandwidth_gbps"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1532,7 +1538,7 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	}
 	if val, ok := metrics["PCIeRawTxBandwidthGbps"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_pcie_raw_tx_bandwidth_gbps"].desc,
+			metricDescs["telemetry_nvidia_pcie_raw_tx_bandwidth_gbps"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1540,12 +1546,14 @@ func (t *TelemetryCollector) emitGPMMetrics(ch chan<- prometheus.Metric, labels 
 	}
 }
 
-// emitGPMInstanceMetrics emits Prometheus metrics for GPU Performance Monitoring instance metrics (NVDec, NVJpg)
-func (t *TelemetryCollector) emitGPMInstanceMetrics(ch chan<- prometheus.Metric, labels []string, metrics map[string]float64) {
+// emitGPMInstanceMetrics emits Prometheus metrics for GPU Performance Monitoring
+// instance metrics (NVDec, NVJpg).
+// Shared by the telemetry (HGX MetricReports) and gpu_direct (per-resource) collection paths.
+func emitGPMInstanceMetrics(ch chan<- prometheus.Metric, metricDescs map[string]Metric, labels []string, metrics map[string]float64) {
 	// Media engine utilization - per instance
 	if val, ok := metrics["NVDecInstanceUtilizationPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_nvdec_instance_utilization_percent"].desc,
+			metricDescs["telemetry_nvidia_nvdec_instance_utilization_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,
@@ -1553,7 +1561,7 @@ func (t *TelemetryCollector) emitGPMInstanceMetrics(ch chan<- prometheus.Metric,
 	}
 	if val, ok := metrics["NVJpgInstanceUtilizationPercent"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_nvidia_nvjpg_instance_utilization_percent"].desc,
+			metricDescs["telemetry_nvidia_nvjpg_instance_utilization_percent"].desc,
 			prometheus.GaugeValue,
 			val,
 			labels...,

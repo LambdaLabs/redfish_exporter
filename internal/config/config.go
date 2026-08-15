@@ -104,7 +104,15 @@ func unmarshalViperConfig(v *viper.Viper) (*Config, error) {
 type ChassisCollectorConfig struct{}
 
 // GPUCollectorConfig is a prober configuration.
-type GPUCollectorConfig struct{}
+type GPUCollectorConfig struct {
+	// EnableGPUModuleTelemetry additionally emits the redfish_telemetry_* metric families
+	// from the per-GPU ProcessorMetrics and MemoryMetrics resources this collector
+	// already fetches, at no additional request cost. Enable it on platforms whose
+	// BMCs do not publish the NVIDIA HGX_* MetricReports the telemetry module
+	// consumes (e.g. Dell XE9780/iDRAC); do not enable it in a scrape that also
+	// runs the telemetry module, or the same series will be emitted twice.
+	EnableGPUModuleTelemetry bool `mapstructure:"enable_gpu_module_telemetry"`
+}
 
 type JSONCollectorConfig struct {
 	Timeout     time.Duration `mapstructure:"context_timeout"`
