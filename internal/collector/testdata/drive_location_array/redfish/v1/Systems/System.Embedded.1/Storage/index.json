@@ -1,0 +1,12 @@
+{
+  "@odata.type": "#StorageCollection.StorageCollection",
+  "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage",
+  "Name": "Storage Collection",
+  "Description": "Collection of Storage entities",
+  "Members@odata.count": 1,
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/BOSS.Slot.14-1"
+    }
+  ]
+}

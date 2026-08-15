@@ -1,0 +1,28 @@
+{
+  "@odata.type": "#Storage.v1_15_1.Storage",
+  "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/BOSS.Slot.14-1",
+  "Id": "BOSS.Slot.14-1",
+  "Name": "BOSS-N1 Monolithic",
+  "Description": "BOSS-N1 Monolithic Controller",
+  "Status": {
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Enabled"
+  },
+  "Drives@odata.count": 2,
+  "Drives": [
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/BOSS.Slot.14-1/Drives/Disk.Direct.0-0:BOSS.Slot.14-1"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/BOSS.Slot.14-1/Drives/Disk.Direct.1-1:BOSS.Slot.14-1"
+    }
+  ],
+  "Links": {
+    "Enclosures": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1"
+      }
+    ]
+  }
+}
