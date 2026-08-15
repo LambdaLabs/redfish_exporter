@@ -311,6 +311,21 @@ func jsonContentTypeMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// Simulate HTTP return with given status and body if match
+// is a substring of the request URL.
+func rejectURLsMiddleware(match string, status int, body string) testMiddleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.URL.String(), match) {
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(body))
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 type testWriter struct {
 	t testing.TB
 }

@@ -1,0 +1,202 @@
+{
+ "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/Ports",
+ "@odata.type": "#PortCollection.PortCollection",
+ "Members": [
+  {
+   "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/Ports/PCIe_0",
+   "Id": "PCIe_0",
+   "PortProtocol": "PCIe",
+   "PortType": "BidirectionalPort"
+  },
+  {
+   "@Redfish.Settings": {
+    "@odata.type": "#Settings.v1_3_3.Settings",
+    "SettingsObject": {
+     "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/Ports/NVLink_0/Settings",
+     "@odata.type": "#Port.v1_4_0.Port",
+     "Id": "Settings",
+     "LinkState": "Enabled",
+     "Name": "GPU_0 NVLink_0 Pending Settings"
+    }
+   },
+   "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/Ports/NVLink_0",
+   "@odata.type": "#Port.v1_4_0.Port",
+   "CurrentSpeedGbps": 400.0,
+   "Id": "NVLink_0",
+   "LinkState": "Enabled",
+   "LinkStatus": "LinkUp",
+   "Links": {
+    "ConnectedPorts": []
+   },
+   "MaxSpeedGbps": 425.0,
+   "Metrics": {
+    "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/Ports/NVLink_0/Metrics",
+    "@odata.type": "#PortMetrics.v1_3_0.PortMetrics",
+    "Id": "Metrics",
+    "Name": "NVLink_0 Port Metrics",
+    "Networking": {
+     "RXFrames": 19834748105,
+     "TXDiscards": 0,
+     "TXFrames": 19834747593
+    },
+    "Oem": {
+     "Nvidia": {
+      "@odata.type": "#NvidiaPortMetrics.v1_6_0.NvidiaNVLinkPortMetrics",
+      "BitErrorRate": 1.5e-254,
+      "EffectiveBER": 1.5e-254,
+      "EffectiveError": 0,
+      "IntentionalLinkDownCount": 0,
+      "LinkDownReasonCode": "NoLinkDown",
+      "LinkDownedCount": 0,
+      "LinkErrorRecoveryCount": 0,
+      "MalformedPackets": 0,
+      "NVLinkDataRxBandwidthGbps": 0.0,
+      "NVLinkDataTxBandwidthGbps": 0.0,
+      "NVLinkErrors": {
+       "RuntimeError": false,
+       "TrainingError": false
+      },
+      "NVLinkRawRxBandwidthGbps": 0.0,
+      "NVLinkRawTxBandwidthGbps": 0.0,
+      "RXNoProtocolBytes": 400000000,
+      "SymbolErrors": 0,
+      "TXNoProtocolBytes": 400000000,
+      "TXWait": 0,
+      "TotalRawBER": 1.2000000000000002e-07,
+      "TotalRawError": 0,
+      "UnintentionalLinkDownCount": 0,
+      "VL15Dropped": 0,
+      "VL15TXBytes": 0,
+      "VL15TXPackets": 0
+     }
+    },
+    "RXBytes": 1764631904332,
+    "RXErrors": 0,
+    "TXBytes": 1695923028084
+   },
+   "Name": "NVLink_0 Resource",
+   "Oem": {
+    "Nvidia": {
+     "@odata.type": "#NvidiaPort.v1_2_0.NvidiaNVLinkPort",
+     "Histograms": {
+      "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/Ports/NVLink_0/Oem/Nvidia/Histograms",
+      "@odata.type": "#NvidiaHistogramCollection.NvidiaHistogramCollection",
+      "Members": [
+       {
+        "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/Ports/NVLink_0/Oem/Nvidia/Histograms/FEC_0"
+       }
+      ],
+      "Members@odata.count": 1,
+      "Name": "GPU_0_NVLink_0_Histogram_Collection"
+     },
+     "RXWidth": 2,
+     "TXWidth": 2
+    }
+   },
+   "PortProtocol": "NVLink",
+   "PortType": "BidirectionalPort",
+   "Status": {
+    "Conditions": [],
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Enabled"
+   }
+  },
+  {
+   "@Redfish.Settings": {
+    "@odata.type": "#Settings.v1_3_3.Settings",
+    "SettingsObject": {
+     "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/Ports/NVLink_1/Settings",
+     "@odata.type": "#Port.v1_4_0.Port",
+     "Id": "Settings",
+     "LinkState": "Enabled",
+     "Name": "GPU_0 NVLink_1 Pending Settings"
+    }
+   },
+   "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/Ports/NVLink_1",
+   "@odata.type": "#Port.v1_4_0.Port",
+   "CurrentSpeedGbps": 400.0,
+   "Id": "NVLink_1",
+   "LinkState": "Enabled",
+   "LinkStatus": "LinkUp",
+   "Links": {
+    "ConnectedPorts": []
+   },
+   "MaxSpeedGbps": 425.0,
+   "Metrics": {
+    "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/Ports/NVLink_1/Metrics",
+    "@odata.type": "#PortMetrics.v1_3_0.PortMetrics",
+    "Id": "Metrics",
+    "Name": "NVLink_1 Port Metrics",
+    "Networking": {
+     "RXFrames": 19908032205,
+     "TXDiscards": 0,
+     "TXFrames": 19908032008
+    },
+    "Oem": {
+     "Nvidia": {
+      "@odata.type": "#NvidiaPortMetrics.v1_6_0.NvidiaNVLinkPortMetrics",
+      "BitErrorRate": 1.5e-254,
+      "EffectiveBER": 1.5e-254,
+      "EffectiveError": 0,
+      "IntentionalLinkDownCount": 0,
+      "LinkDownReasonCode": "NoLinkDown",
+      "LinkDownedCount": 0,
+      "LinkErrorRecoveryCount": 0,
+      "MalformedPackets": 0,
+      "NVLinkDataRxBandwidthGbps": 0.0,
+      "NVLinkDataTxBandwidthGbps": 0.0,
+      "NVLinkErrors": {
+       "RuntimeError": false,
+       "TrainingError": false
+      },
+      "NVLinkRawRxBandwidthGbps": 0.0,
+      "NVLinkRawTxBandwidthGbps": 0.0,
+      "RXNoProtocolBytes": 400000000,
+      "SymbolErrors": 0,
+      "TXNoProtocolBytes": 400000000,
+      "TXWait": 0,
+      "TotalRawBER": 0.12,
+      "TotalRawError": 0,
+      "UnintentionalLinkDownCount": 0,
+      "VL15Dropped": 0,
+      "VL15TXBytes": 0,
+      "VL15TXPackets": 0
+     }
+    },
+    "RXBytes": 1766834049998,
+    "RXErrors": 0,
+    "TXBytes": 1699871835712
+   },
+   "Name": "NVLink_1 Resource",
+   "Oem": {
+    "Nvidia": {
+     "@odata.type": "#NvidiaPort.v1_2_0.NvidiaNVLinkPort",
+     "Histograms": {
+      "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/Ports/NVLink_1/Oem/Nvidia/Histograms",
+      "@odata.type": "#NvidiaHistogramCollection.NvidiaHistogramCollection",
+      "Members": [
+       {
+        "@odata.id": "/redfish/v1/Systems/HGX_Baseboard_0/Processors/GPU_0/Ports/NVLink_1/Oem/Nvidia/Histograms/FEC_0"
+       }
+      ],
+      "Members@odata.count": 1,
+      "Name": "GPU_0_NVLink_1_Histogram_Collection"
+     },
+     "RXWidth": 2,
+     "TXWidth": 2
+    }
+   },
+   "PortProtocol": "NVLink",
+   "PortType": "BidirectionalPort",
+   "Status": {
+    "Conditions": [],
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Enabled"
+   }
+  }
+ ],
+ "Members@odata.count": 3,
+ "Name": "NVLink Port Collection"
+}
