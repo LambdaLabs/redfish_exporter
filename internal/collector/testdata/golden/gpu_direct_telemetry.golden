@@ -1,0 +1,308 @@
+# HELP redfish_telemetry_cache_ecc_correctable_total Total correctable ECC errors in GPU cache (L2/SRAM)
+# TYPE redfish_telemetry_cache_ecc_correctable_total counter
+redfish_telemetry_cache_ecc_correctable_total{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_cache_ecc_correctable_total{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_cache_ecc_correctable_total{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_cache_ecc_correctable_total{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_cache_ecc_uncorrectable_total Total uncorrectable ECC errors in GPU cache (L2/SRAM)
+# TYPE redfish_telemetry_cache_ecc_uncorrectable_total counter
+redfish_telemetry_cache_ecc_uncorrectable_total{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_cache_ecc_uncorrectable_total{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_cache_ecc_uncorrectable_total{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_cache_ecc_uncorrectable_total{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_hardware_violation_throttle_duration_seconds_total Total time GPU was throttled due to hardware violations
+# TYPE redfish_telemetry_hardware_violation_throttle_duration_seconds_total counter
+redfish_telemetry_hardware_violation_throttle_duration_seconds_total{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_hardware_violation_throttle_duration_seconds_total{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_hardware_violation_throttle_duration_seconds_total{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_hardware_violation_throttle_duration_seconds_total{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_memory_bandwidth_percent Memory bandwidth utilization percentage
+# TYPE redfish_telemetry_memory_bandwidth_percent gauge
+redfish_telemetry_memory_bandwidth_percent{gpu_id="GPU_0",memory_id="GPU_0_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_memory_bandwidth_percent{gpu_id="GPU_1",memory_id="GPU_1_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_memory_bandwidth_percent{gpu_id="GPU_2",memory_id="GPU_2_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_memory_bandwidth_percent{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_memory_capacity_utilization_percent Memory capacity utilization percentage
+# TYPE redfish_telemetry_memory_capacity_utilization_percent gauge
+redfish_telemetry_memory_capacity_utilization_percent{gpu_id="GPU_0",memory_id="GPU_0_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_memory_capacity_utilization_percent{gpu_id="GPU_1",memory_id="GPU_1_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_memory_capacity_utilization_percent{gpu_id="GPU_2",memory_id="GPU_2_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_memory_capacity_utilization_percent{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_memory_ecc_correctable_lifetime_total Lifetime correctable DRAM ECC errors
+# TYPE redfish_telemetry_memory_ecc_correctable_lifetime_total counter
+redfish_telemetry_memory_ecc_correctable_lifetime_total{gpu_id="GPU_0",memory_id="GPU_0_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_memory_ecc_correctable_lifetime_total{gpu_id="GPU_1",memory_id="GPU_1_DRAM_0",system_id="HGX_Baseboard_0"} 100
+redfish_telemetry_memory_ecc_correctable_lifetime_total{gpu_id="GPU_2",memory_id="GPU_2_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_memory_ecc_correctable_lifetime_total{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_memory_ecc_uncorrectable_lifetime_total Lifetime uncorrectable DRAM ECC errors
+# TYPE redfish_telemetry_memory_ecc_uncorrectable_lifetime_total counter
+redfish_telemetry_memory_ecc_uncorrectable_lifetime_total{gpu_id="GPU_0",memory_id="GPU_0_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_memory_ecc_uncorrectable_lifetime_total{gpu_id="GPU_1",memory_id="GPU_1_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_memory_ecc_uncorrectable_lifetime_total{gpu_id="GPU_2",memory_id="GPU_2_DRAM_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_memory_ecc_uncorrectable_lifetime_total{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_memory_operating_speed_mhz Memory operating speed in MHz
+# TYPE redfish_telemetry_memory_operating_speed_mhz gauge
+redfish_telemetry_memory_operating_speed_mhz{gpu_id="GPU_0",memory_id="GPU_0_DRAM_0",system_id="HGX_Baseboard_0"} 3996
+redfish_telemetry_memory_operating_speed_mhz{gpu_id="GPU_1",memory_id="GPU_1_DRAM_0",system_id="HGX_Baseboard_0"} 3996
+redfish_telemetry_memory_operating_speed_mhz{gpu_id="GPU_2",memory_id="GPU_2_DRAM_0",system_id="HGX_Baseboard_0"} 3996
+redfish_telemetry_memory_operating_speed_mhz{gpu_id="GPU_3",memory_id="GPU_3_DRAM_0",system_id="HGX_Baseboard_0"} 3996
+# HELP redfish_telemetry_nvidia_dmma_utilization_percent Double precision Matrix Multiply-Accumulate utilization (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_dmma_utilization_percent gauge
+redfish_telemetry_nvidia_dmma_utilization_percent{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_dmma_utilization_percent{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_dmma_utilization_percent{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_dmma_utilization_percent{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_fp16_activity_percent FP16 floating point activity percentage (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_fp16_activity_percent gauge
+redfish_telemetry_nvidia_fp16_activity_percent{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_fp16_activity_percent{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_fp16_activity_percent{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_fp16_activity_percent{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_fp32_activity_percent FP32 floating point activity percentage (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_fp32_activity_percent gauge
+redfish_telemetry_nvidia_fp32_activity_percent{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_fp32_activity_percent{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_fp32_activity_percent{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_fp32_activity_percent{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_fp64_activity_percent FP64 floating point activity percentage (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_fp64_activity_percent gauge
+redfish_telemetry_nvidia_fp64_activity_percent{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_fp64_activity_percent{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_fp64_activity_percent{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_fp64_activity_percent{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_graphics_engine_activity_percent Graphics engine activity percentage (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_graphics_engine_activity_percent gauge
+redfish_telemetry_nvidia_graphics_engine_activity_percent{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_graphics_engine_activity_percent{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_graphics_engine_activity_percent{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_graphics_engine_activity_percent{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_hmma_utilization_percent Half precision Matrix Multiply-Accumulate utilization (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_hmma_utilization_percent gauge
+redfish_telemetry_nvidia_hmma_utilization_percent{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_hmma_utilization_percent{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_hmma_utilization_percent{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_hmma_utilization_percent{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_imma_utilization_percent Integer Matrix Multiply-Accumulate utilization (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_imma_utilization_percent gauge
+redfish_telemetry_nvidia_imma_utilization_percent{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_imma_utilization_percent{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_imma_utilization_percent{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_imma_utilization_percent{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_integer_activity_percent Integer operation activity percentage (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_integer_activity_percent gauge
+redfish_telemetry_nvidia_integer_activity_percent{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_integer_activity_percent{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_integer_activity_percent{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_integer_activity_percent{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_nvdec_instance_utilization_percent Video decoder instance utilization (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_nvdec_instance_utilization_percent gauge
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_0",instance_id="0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_0",instance_id="1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_0",instance_id="2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_0",instance_id="3",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_0",instance_id="4",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_0",instance_id="5",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_0",instance_id="6",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_0",instance_id="7",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_1",instance_id="0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_1",instance_id="1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_1",instance_id="2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_1",instance_id="3",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_1",instance_id="4",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_1",instance_id="5",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_1",instance_id="6",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_1",instance_id="7",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_2",instance_id="0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_2",instance_id="1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_2",instance_id="2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_2",instance_id="3",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_2",instance_id="4",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_2",instance_id="5",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_2",instance_id="6",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_2",instance_id="7",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_3",instance_id="0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_3",instance_id="1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_3",instance_id="2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_3",instance_id="3",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_3",instance_id="4",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_3",instance_id="5",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_3",instance_id="6",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_instance_utilization_percent{gpu_id="GPU_3",instance_id="7",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_nvdec_utilization_percent Video decoder overall utilization (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_nvdec_utilization_percent gauge
+redfish_telemetry_nvidia_nvdec_utilization_percent{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_utilization_percent{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_utilization_percent{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvdec_utilization_percent{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_nvjpg_instance_utilization_percent JPEG decoder instance utilization (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_nvjpg_instance_utilization_percent gauge
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_0",instance_id="0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_0",instance_id="1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_0",instance_id="2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_0",instance_id="3",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_0",instance_id="4",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_0",instance_id="5",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_0",instance_id="6",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_0",instance_id="7",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_1",instance_id="0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_1",instance_id="1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_1",instance_id="2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_1",instance_id="3",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_1",instance_id="4",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_1",instance_id="5",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_1",instance_id="6",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_1",instance_id="7",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_2",instance_id="0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_2",instance_id="1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_2",instance_id="2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_2",instance_id="3",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_2",instance_id="4",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_2",instance_id="5",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_2",instance_id="6",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_2",instance_id="7",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_3",instance_id="0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_3",instance_id="1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_3",instance_id="2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_3",instance_id="3",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_3",instance_id="4",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_3",instance_id="5",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_3",instance_id="6",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_instance_utilization_percent{gpu_id="GPU_3",instance_id="7",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_nvjpg_utilization_percent JPEG decoder overall utilization (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_nvjpg_utilization_percent gauge
+redfish_telemetry_nvidia_nvjpg_utilization_percent{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_utilization_percent{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_utilization_percent{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvjpg_utilization_percent{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_nvlink_data_rx_bandwidth_gbps NVLink data receive bandwidth in Gbps (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_nvlink_data_rx_bandwidth_gbps gauge
+redfish_telemetry_nvidia_nvlink_data_rx_bandwidth_gbps{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvlink_data_rx_bandwidth_gbps{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvlink_data_rx_bandwidth_gbps{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvlink_data_rx_bandwidth_gbps{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_nvlink_data_tx_bandwidth_gbps NVLink data transmit bandwidth in Gbps (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_nvlink_data_tx_bandwidth_gbps gauge
+redfish_telemetry_nvidia_nvlink_data_tx_bandwidth_gbps{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvlink_data_tx_bandwidth_gbps{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvlink_data_tx_bandwidth_gbps{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvlink_data_tx_bandwidth_gbps{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_nvlink_raw_rx_bandwidth_gbps NVLink raw receive bandwidth in Gbps including overhead (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_nvlink_raw_rx_bandwidth_gbps gauge
+redfish_telemetry_nvidia_nvlink_raw_rx_bandwidth_gbps{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvlink_raw_rx_bandwidth_gbps{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvlink_raw_rx_bandwidth_gbps{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvlink_raw_rx_bandwidth_gbps{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_nvlink_raw_tx_bandwidth_gbps NVLink raw transmit bandwidth in Gbps including overhead (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_nvlink_raw_tx_bandwidth_gbps gauge
+redfish_telemetry_nvidia_nvlink_raw_tx_bandwidth_gbps{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvlink_raw_tx_bandwidth_gbps{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvlink_raw_tx_bandwidth_gbps{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvlink_raw_tx_bandwidth_gbps{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_nvofa_utilization_percent NVIDIA Optimized Fabrics Adapter utilization (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_nvofa_utilization_percent gauge
+redfish_telemetry_nvidia_nvofa_utilization_percent{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvofa_utilization_percent{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvofa_utilization_percent{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_nvofa_utilization_percent{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_pcie_raw_rx_bandwidth_gbps PCIe raw receive bandwidth in Gbps (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_pcie_raw_rx_bandwidth_gbps gauge
+redfish_telemetry_nvidia_pcie_raw_rx_bandwidth_gbps{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 3.814697265625e-06
+redfish_telemetry_nvidia_pcie_raw_rx_bandwidth_gbps{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_pcie_raw_rx_bandwidth_gbps{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_pcie_raw_rx_bandwidth_gbps{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 3.814697265625e-06
+# HELP redfish_telemetry_nvidia_pcie_raw_tx_bandwidth_gbps PCIe raw transmit bandwidth in Gbps (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_pcie_raw_tx_bandwidth_gbps gauge
+redfish_telemetry_nvidia_pcie_raw_tx_bandwidth_gbps{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_pcie_raw_tx_bandwidth_gbps{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 3.814697265625e-06
+redfish_telemetry_nvidia_pcie_raw_tx_bandwidth_gbps{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_pcie_raw_tx_bandwidth_gbps{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_sm_activity_percent Streaming Multiprocessor activity percentage (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_sm_activity_percent gauge
+redfish_telemetry_nvidia_sm_activity_percent{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_sm_activity_percent{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_sm_activity_percent{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_sm_activity_percent{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_sm_occupancy_percent Streaming Multiprocessor occupancy percentage (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_sm_occupancy_percent gauge
+redfish_telemetry_nvidia_sm_occupancy_percent{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_sm_occupancy_percent{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_sm_occupancy_percent{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_sm_occupancy_percent{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_nvidia_tensor_core_activity_percent Tensor core activity percentage (NVIDIA GPM)
+# TYPE redfish_telemetry_nvidia_tensor_core_activity_percent gauge
+redfish_telemetry_nvidia_tensor_core_activity_percent{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_tensor_core_activity_percent{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_tensor_core_activity_percent{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_nvidia_tensor_core_activity_percent{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_pcie_correctable_errors_total Total PCIe correctable errors
+# TYPE redfish_telemetry_pcie_correctable_errors_total counter
+redfish_telemetry_pcie_correctable_errors_total{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_correctable_errors_total{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_correctable_errors_total{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_correctable_errors_total{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_pcie_fatal_errors_total Total PCIe fatal errors
+# TYPE redfish_telemetry_pcie_fatal_errors_total counter
+redfish_telemetry_pcie_fatal_errors_total{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_fatal_errors_total{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_fatal_errors_total{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_fatal_errors_total{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_pcie_l0_to_recovery_total Total PCIe L0 to recovery transitions
+# TYPE redfish_telemetry_pcie_l0_to_recovery_total counter
+redfish_telemetry_pcie_l0_to_recovery_total{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 4
+redfish_telemetry_pcie_l0_to_recovery_total{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 4
+redfish_telemetry_pcie_l0_to_recovery_total{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 4
+redfish_telemetry_pcie_l0_to_recovery_total{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 4
+# HELP redfish_telemetry_pcie_nak_received_total Total PCIe NAK received
+# TYPE redfish_telemetry_pcie_nak_received_total counter
+redfish_telemetry_pcie_nak_received_total{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_nak_received_total{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_nak_received_total{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_nak_received_total{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_pcie_nak_sent_total Total PCIe NAK sent
+# TYPE redfish_telemetry_pcie_nak_sent_total counter
+redfish_telemetry_pcie_nak_sent_total{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_nak_sent_total{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_nak_sent_total{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_nak_sent_total{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_pcie_nonfatal_errors_total Total PCIe non-fatal errors
+# TYPE redfish_telemetry_pcie_nonfatal_errors_total counter
+redfish_telemetry_pcie_nonfatal_errors_total{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_nonfatal_errors_total{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_nonfatal_errors_total{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_nonfatal_errors_total{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_pcie_replay_rollover_total Total PCIe replay rollover events
+# TYPE redfish_telemetry_pcie_replay_rollover_total counter
+redfish_telemetry_pcie_replay_rollover_total{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_replay_rollover_total{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_replay_rollover_total{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_replay_rollover_total{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_pcie_replay_total Total PCIe replay events
+# TYPE redfish_telemetry_pcie_replay_total counter
+redfish_telemetry_pcie_replay_total{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_replay_total{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_replay_total{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_replay_total{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_pcie_unsupported_request_total Total PCIe unsupported requests
+# TYPE redfish_telemetry_pcie_unsupported_request_total counter
+redfish_telemetry_pcie_unsupported_request_total{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_unsupported_request_total{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_unsupported_request_total{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_pcie_unsupported_request_total{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_power_throttle_duration_seconds_total Total time GPU was throttled due to power limits
+# TYPE redfish_telemetry_power_throttle_duration_seconds_total counter
+redfish_telemetry_power_throttle_duration_seconds_total{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_power_throttle_duration_seconds_total{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_power_throttle_duration_seconds_total{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_power_throttle_duration_seconds_total{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
+# HELP redfish_telemetry_software_violation_throttle_duration_seconds_total Total time GPU was throttled due to software violations
+# TYPE redfish_telemetry_software_violation_throttle_duration_seconds_total counter
+redfish_telemetry_software_violation_throttle_duration_seconds_total{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 86374.146524704
+redfish_telemetry_software_violation_throttle_duration_seconds_total{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 86446.024266208
+redfish_telemetry_software_violation_throttle_duration_seconds_total{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 86444.840902144
+redfish_telemetry_software_violation_throttle_duration_seconds_total{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 86455.76020384
+# HELP redfish_telemetry_thermal_throttle_duration_seconds_total Total time GPU was throttled due to thermal limits
+# TYPE redfish_telemetry_thermal_throttle_duration_seconds_total counter
+redfish_telemetry_thermal_throttle_duration_seconds_total{gpu_id="GPU_0",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_thermal_throttle_duration_seconds_total{gpu_id="GPU_1",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_thermal_throttle_duration_seconds_total{gpu_id="GPU_2",system_id="HGX_Baseboard_0"} 0
+redfish_telemetry_thermal_throttle_duration_seconds_total{gpu_id="GPU_3",system_id="HGX_Baseboard_0"} 0
