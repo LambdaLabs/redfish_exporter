@@ -9,7 +9,7 @@ import (
 	"github.com/stmcginnis/gofish/schemas"
 )
 
-// This file implements the GPU collector's direct_telemetry mode: emitting the
+// This file implements the GPU collector's enable_gpu_module_telemetry mode: emitting the
 // redfish_telemetry_* metric families from the per-GPU ProcessorMetrics and
 // MemoryMetrics resources the collector already fetches, instead of the
 // NVIDIA-format HGX_* MetricReports the telemetry module consumes. It exists
@@ -23,7 +23,7 @@ import (
 // which only accepts NVDec/NVJpg instance IDs 0-7.
 const maxGPMInstanceID = 7
 
-type gpuDirectProcessorOEMNvidia struct {
+type gpuTelemetryProcessorOEMNvidia struct {
 	SMActivityPercent                       *float64   `json:"SMActivityPercent"`
 	SMOccupancyPercent                      *float64   `json:"SMOccupancyPercent"`
 	TensorCoreActivityPercent               *float64   `json:"TensorCoreActivityPercent"`
@@ -50,18 +50,18 @@ type gpuDirectProcessorOEMNvidia struct {
 	GlobalSoftwareViolationThrottleDuration string     `json:"GlobalSoftwareViolationThrottleDuration"`
 }
 
-// gpuDirectProcessorOEM is the OEM envelope of a ProcessorMetrics resource.
-type gpuDirectProcessorOEM struct {
-	Nvidia gpuDirectProcessorOEMNvidia `json:"Nvidia"`
+// gpuTelemetryProcessorOEM is the OEM envelope of a ProcessorMetrics resource.
+type gpuTelemetryProcessorOEM struct {
+	Nvidia gpuTelemetryProcessorOEMNvidia `json:"Nvidia"`
 }
 
-// emitDirectProcessorTelemetry emits the redfish_telemetry_* processor families
+// emitTelemetryFromProcessorMetrics emits the redfish_telemetry_* processor families
 // (cache ECC, PCIe errors, etc.) from a GPU's already-fetched ProcessorMetrics resource.
-func (g *GPUCollector) emitDirectProcessorTelemetry(ch chan<- prometheus.Metric, gpu SystemGPU, pm *schemas.ProcessorMetrics) {
+func (g *GPUCollector) emitTelemetryFromProcessorMetrics(ch chan<- prometheus.Metric, gpu SystemGPU, pm *schemas.ProcessorMetrics) {
 	if pm == nil {
 		return
 	}
-	var oem gpuDirectProcessorOEM
+	var oem gpuTelemetryProcessorOEM
 	if len(pm.OEM) > 0 {
 		if err := json.Unmarshal(pm.OEM, &oem); err != nil {
 			g.logger.With("error", err, "gpu_id", gpu.ID, "system_id", gpu.SystemID).Debug("unable to unmarshal processor metrics OEM data")
@@ -75,7 +75,7 @@ func (g *GPUCollector) emitDirectProcessorTelemetry(ch chan<- prometheus.Metric,
 	g.emitGPMInstanceTelemetry(ch, gpu.SystemID, gpu.ID, "NVJpgInstanceUtilizationPercent", oem.Nvidia.NVJpgInstanceUtilizationPercent)
 }
 
-func (g *GPUCollector) processorTelemetryValues(pm *schemas.ProcessorMetrics, oem *gpuDirectProcessorOEMNvidia) map[string]float64 {
+func (g *GPUCollector) processorTelemetryValues(pm *schemas.ProcessorMetrics, oem *gpuTelemetryProcessorOEMNvidia) map[string]float64 {
 	values := make(map[string]float64)
 
 	addInt := func(key string, v *int) {
@@ -119,7 +119,7 @@ func (g *GPUCollector) processorTelemetryValues(pm *schemas.ProcessorMetrics, oe
 	return values
 }
 
-func gpmTelemetryValues(oem *gpuDirectProcessorOEMNvidia) map[string]float64 {
+func gpmTelemetryValues(oem *gpuTelemetryProcessorOEMNvidia) map[string]float64 {
 	values := make(map[string]float64)
 	for key, v := range map[string]*float64{
 		"SMActivityPercent":                 oem.SMActivityPercent,

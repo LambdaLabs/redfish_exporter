@@ -27,10 +27,10 @@ modules:
   # For platforms whose BMCs do not publish NVIDIA HGX_* MetricReports (e.g. Dell
   # XE9780/iDRAC); do not combine with the telemetry module or the same series
   # will be emitted twice.
-  gpu_dell:
+  gpu_with_telemetry:
     prober: gpu_collector
     gpu_collector:
-      direct_telemetry: true
+      enable_gpu_module_telemetry: true
   manager:
     prober: manager_collector
   system:

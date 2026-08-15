@@ -433,11 +433,11 @@ func telemetryFamiliesFromGolden(golden []byte) []string {
 	return names
 }
 
-// TestGPUCollector_directTelemetry verifies the direct_telemetry module flag:
+// TestGPUCollector_telemetry verifies the enable_gpu_module_telemetry module flag:
 // off emits no redfish_telemetry_* series, on emits them from the ProcessorMetrics/MemoryMetrics documents
 // the collector already fetches, identical to what the Telemetry collector emits.
-func TestGPUCollector_directTelemetry(t *testing.T) {
-	wanted := golden.Get(t, "golden/gpu_direct_telemetry.golden")
+func TestGPUCollector_telemetry(t *testing.T) {
+	wanted := golden.Get(t, "golden/gpu_collector_telemetry.golden")
 	families := telemetryFamiliesFromGolden(wanted)
 	require.NotEmpty(t, families)
 
@@ -448,7 +448,7 @@ func TestGPUCollector_directTelemetry(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, testutil.CollectAndCount(off, families...))
 
-	on, err := NewGPUCollector(t.Name(), client, logger, config.GPUCollectorConfig{DirectTelemetry: true})
+	on, err := NewGPUCollector(t.Name(), client, logger, config.GPUCollectorConfig{EnableGPUModuleTelemetry: true})
 	require.NoError(t, err)
 	assert.NoError(t, testutil.CollectAndCompare(on, bytes.NewReader(wanted), families...))
 }
