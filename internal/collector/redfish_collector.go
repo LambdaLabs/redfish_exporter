@@ -65,10 +65,15 @@ type redfishCollector struct {
 
 // NewRedfishCollector returns a *redfishCollector or an error.
 func NewRedfishCollector(ctx context.Context, logger *slog.Logger, host string, username string, password string, rfConfig config.RedfishClientConfig) (*redfishCollector, error) {
+	loginStart := time.Now()
 	redfishClient, err := newRedfishClient(ctx, host, username, password, rfConfig)
 	if err != nil {
 		return nil, err
 	}
+	logger.Info("redfish client connected",
+		slog.Duration("login_duration", time.Since(loginStart)),
+		slog.Bool("basic_auth", rfConfig.BasicAuth),
+	)
 
 	return &redfishCollector{
 		ctx:           ctx,
