@@ -82,6 +82,20 @@ type memoryResponse struct {
 	} `json:"Oem"`
 }
 
+// parseMemoryOEMMetrics parses the Nvidia OEM fields from a Memory resource's payload
+func parseMemoryOEMMetrics(raw json.RawMessage) (*MemoryOEMMetrics, error) {
+	if len(raw) == 0 {
+		return nil, fmt.Errorf("memory resource has no OEM payload")
+	}
+	var oem struct {
+		Nvidia MemoryOEMMetrics `json:"Nvidia"`
+	}
+	if err := json.Unmarshal(raw, &oem); err != nil {
+		return nil, fmt.Errorf("failed to decode memory OEM payload: %w", err)
+	}
+	return &oem.Nvidia, nil
+}
+
 // MemoryMetricsResponse represents the JSON structure from MemoryMetrics endpoint
 type MemoryMetricsResponse struct {
 	Nvidia struct {

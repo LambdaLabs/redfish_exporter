@@ -55,7 +55,6 @@ type GPUCollector struct {
 	metrics               map[string]Metric
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
-	oemClient             *NvidiaOEMClient
 }
 
 func createGPUMetricMap() map[string]Metric {
@@ -126,7 +125,6 @@ func NewGPUCollector(collectorName string, redfishClient *gofish.APIClient, logg
 			},
 			[]string{"collector"},
 		),
-		oemClient: NewNvidiaOEMClient(redfishClient.GetService().GetClient(), logger),
 	}, nil
 }
 
@@ -310,8 +308,7 @@ func (g *GPUCollector) emitGPUMemoryMetrics(ch chan<- prometheus.Metric, gpu Sys
 			)
 		}
 
-		// Get Memory OEM metrics
-		if memOEM, err := g.oemClient.GetMemoryOEMMetrics(mem.ODataID); err == nil {
+		if memOEM, err := parseMemoryOEMMetrics(mem.OEM); err == nil {
 			ch <- prometheus.MustNewConstMetric(
 				g.metrics["gpu_memory_row_remapping_failed"].desc,
 				prometheus.GaugeValue,
