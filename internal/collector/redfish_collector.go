@@ -120,7 +120,14 @@ func (r *redfishCollector) Collect(ch chan<- prometheus.Metric) {
 		r.redfishUp.Set(0)
 	} else {
 		r.redfishUp.Set(1)
-		defer r.redfishClient.Logout()
+		// Logout runs after the scrape context may already be cancelled
+		// (client disconnect, deadline); a cancelled logout prevents the session
+		// with the BMC from closing and clogs the number of BMC sessions.
+		defer func() {
+			if r.redfishClient != nil {
+				r.redfishClient.WithContext(context.WithoutCancel(r.ctx)).Logout()
+			}
+		}()
 		eg := newRecoverGroup(r.ctx)
 		for _, collector := range r.collectors {
 			eg.Go(func() error {
