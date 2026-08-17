@@ -113,6 +113,31 @@ func TestGPUCollector_gatherGPUs(t *testing.T) {
 	}
 }
 
+// TestGPUCollector_gatherGPUs_retriesProcessorsFetch verifies a transient
+// failure of the Processors fetch is absorbed by the single retry rather than
+// silently dropping every GPU for the scrape.
+func TestGPUCollector_gatherGPUs_retriesProcessorsFetch(t *testing.T) {
+	root, err := os.OpenRoot("testdata/gathergpus_happypath")
+	require.NoError(t, err)
+	server := newTestServer(t, root,
+		jsonContentTypeMiddleware,
+		rejectURLOnceMiddleware("/Processors", http.StatusInternalServerError, `{}`),
+	)
+	client := connectToTestServer(t, server.Server)
+	t.Cleanup(func() {
+		server.Close()
+		client.Logout()
+	})
+	logger := NewTestLogger(t, slog.LevelInfo)
+	collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
+	require.NoError(t, err)
+
+	got, gotErr := collector.gatherGPUs(t.Context())
+	require.NoError(t, gotErr)
+	require.Len(t, got, 1)
+	require.Equal(t, "GPU_0", got[0].ID)
+}
+
 func TestGPUCollector_emitGPUMemoryMetrics(t *testing.T) {
 	tT := map[string]struct {
 		testdataPath     string
