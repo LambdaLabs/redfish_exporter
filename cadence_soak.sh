@@ -14,7 +14,7 @@ for i in $(seq 1 "$N"); do
   TE=$(grep -c '^redfish_telemetry_' /tmp/soak-$i.txt || true)
   SY=$(grep -c '^redfish_system_' /tmp/soak-$i.txt || true)
   CH=$(grep -c '^redfish_chassis_' /tmp/soak-$i.txt || true)
-  echo "cycle=$i start=$(date -r $T0 +%T) dur=${DUR}s code=$CODE nvlink=$NV telemetry=$TE system=$SY chassis=$CH" >> "$RESULTS"
+  echo "cycle=$i start=$(date -r $T0 +%T) finish=$(date -r $T1 +%T) dur=${DUR}s code=$CODE nvlink=$NV telemetry=$TE system=$SY chassis=$CH" >> "$RESULTS"
   if [ "$CODE" != "200" ] || [ "$NV" != "1296" ] || [ "$TE" != "448" ] || [ "$SY" -lt 400 ] || [ "$CH" -lt 400 ]; then
     echo "FAIL at cycle $i" >> "$RESULTS"
     kill $(lsof -tnP -iTCP:9610 -sTCP:LISTEN) 2>/dev/null
