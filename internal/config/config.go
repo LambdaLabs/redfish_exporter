@@ -76,6 +76,7 @@ func newViperInstance(envPrefix string) *viper.Viper {
 	v.SetDefault("shutdown_timeout", 60*time.Second)
 	v.SetDefault("redfish_client.max_concurrent_requests", DefaultRedfishConfig.MaxConcurrentRequests)
 	v.SetDefault("redfish_client.dial_timeout", DefaultRedfishConfig.DialTimeout)
+	v.SetDefault("redfish_client.basic_auth", false)
 
 	return v
 }
@@ -164,6 +165,7 @@ type RedfishClientConfig struct {
 	// MaxConcurrentRequests sets the gofish client maximum permitted concurrent requests.
 	MaxConcurrentRequests int64         `mapstructure:"max_concurrent_requests"`
 	DialTimeout           time.Duration `mapstructure:"dial_timeout"`
+	BasicAuth             bool          `mapstructure:"basic_auth"`
 }
 
 // Config represents the redfish_exporter config file

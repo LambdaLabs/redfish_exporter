@@ -194,6 +194,7 @@ func newRedfishClient(ctx context.Context, host string, username string, passwor
 		Password:              password,
 		Insecure:              true,
 		ReuseConnections:      true, // Enable HTTP keepalive for connection reuse
+		BasicAuth:             rfConfig.BasicAuth,
 	}
 	redfishClient, err := gofish.ConnectContext(ctx, config)
 	if err != nil {
