@@ -2,9 +2,12 @@ package collector
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
+	"path"
+	"regexp"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -40,6 +43,8 @@ type ChassisCollector struct {
 	metrics               map[string]Metric
 	logger                *slog.Logger
 	collectorScrapeStatus *prometheus.GaugeVec
+	// exclude regex for last segement of redfish endpoint
+	excludeChassis *regexp.Regexp
 }
 
 func createChassisMetricMap() map[string]Metric {
@@ -98,13 +103,21 @@ func createChassisMetricMap() map[string]Metric {
 
 // NewChassisCollector returns a collector that collecting chassis statistics
 func NewChassisCollector(collectorName string, redfishClient *gofish.APIClient, logger *slog.Logger, config config.ChassisCollectorConfig) (*ChassisCollector, error) {
-	// get service from redfish client
+	var excludeChassis *regexp.Regexp
+	if config.ExcludeChassis != "" {
+		re, err := regexp.Compile(config.ExcludeChassis)
+		if err != nil {
+			return nil, fmt.Errorf("invalid chassis_collector exclude_chassis pattern %q: %w", config.ExcludeChassis, err)
+		}
+		excludeChassis = re
+	}
 
 	return &ChassisCollector{
-		redfishClient: redfishClient,
-		metrics:       chassisMetrics,
-		config:        config,
-		logger:        logger,
+		redfishClient:  redfishClient,
+		metrics:        chassisMetrics,
+		config:         config,
+		logger:         logger,
+		excludeChassis: excludeChassis,
 		collectorScrapeStatus: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Namespace: namespace,
@@ -131,28 +144,32 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 		return
 	}
 	logger := c.logger.With(slog.String("collector", "ChassisCollector"))
-	service := c.redfishClient.Service
 
 	if ctx.Err() != nil {
 		c.logger.With("error", ctx.Err(), "collector", "chassis").Debug("skipping collection")
 		return
 	}
-	// get a list of chassis from service
-	chassises, err := service.Chassis()
-	if err != nil {
-		// A collection error means some member failed, not that none of them arrived:
-		// gofish still returns the chassis it did fetch. Discarding those made one flaky
-		// chassis out of forty silently zero the whole chassis scrape, which reads as a
-		// host with no chassis rather than as a host with a problem.
-		logger.Error("error getting chassis from service", slog.String("operation", "service.Chassis()"), slog.Any("error", err))
-	}
-
-	// process the chassises
+	chassises := c.gatherChassis(ctx, logger)
+	egChassis := newRecoverGroup(ctx)
 	for _, chassis := range chassises {
 		if ctx.Err() != nil {
 			c.logger.With("error", ctx.Err()).Warn("skipping further collection")
-			continue
+			break
 		}
+		egChassis.Go(func() error {
+			return c.collectChassis(ctx, ch, logger, chassis)
+		})
+	}
+	if err := egChassis.Wait(); err != nil {
+		c.logger.Error("goroutine error", slog.Any("error", err))
+	}
+
+	c.collectorScrapeStatus.WithLabelValues("chassis").Set(float64(1))
+}
+
+// collectChassis gathers and emits all series for a single chassis.
+func (c *ChassisCollector) collectChassis(ctx context.Context, ch chan<- prometheus.Metric, logger *slog.Logger, chassis *schemas.Chassis) error {
+	{
 		chassisLogger := logger.With(slog.String("Chassis", chassis.ID))
 		chassisLogger.Info("collector scrape started")
 		chassisID := chassis.ID
@@ -297,8 +314,7 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 
 		chassisLogger.Info("collector scrape completed")
 	}
-
-	c.collectorScrapeStatus.WithLabelValues("chassis").Set(float64(1))
+	return nil
 }
 
 // Describe implemented prometheus.Collector
@@ -537,4 +553,82 @@ func parseNetworkPort(ch chan<- prometheus.Metric, chassisID string, networkPort
 	if networkPortHealthStateValue, ok := parseCommonStatusHealth(networkPortHealthState); ok {
 		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_network_port_health_state"].desc, prometheus.GaugeValue, networkPortHealthStateValue, chassisNetworkPortLabelValues...)
 	}
+}
+
+func (c *ChassisCollector) gatherChassis(ctx context.Context, logger *slog.Logger) []*schemas.Chassis {
+	service := c.redfishClient.Service
+	if c.excludeChassis == nil {
+		chassises, err := service.Chassis()
+		if err != nil {
+			// A collection error means some member failed, not that none of them arrived:
+			// gofish still returns the chassis it did fetch. Discarding those made one flaky
+			// chassis out of forty silently zero the whole chassis scrape, which reads as a
+			// host with no chassis rather than as a host with a problem.
+			logger.Error("error getting chassis from service", slog.String("operation", "service.Chassis()"), slog.Any("error", err))
+		}
+		return chassises
+	}
+
+	rfClient := c.redfishClient.WithContext(ctx)
+	resp, err := rfClient.Get(service.ODataID)
+	if err != nil {
+		logger.Error("error getting service root", slog.Any("error", err))
+		return nil
+	}
+	defer resp.Body.Close() //nolint:errcheck // Close() errors on read are not actionable
+	var root struct {
+		Chassis struct {
+			ODataID string `json:"@odata.id"`
+		} `json:"Chassis"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&root); err != nil {
+		logger.Error("error decoding service root", slog.Any("error", err))
+		return nil
+	}
+	if root.Chassis.ODataID == "" {
+		logger.Info("service root advertises no chassis collection")
+		return nil
+	}
+
+	collection, err := schemas.GetCollection(rfClient, root.Chassis.ODataID)
+	if err != nil {
+		logger.Error("error getting chassis collection", slog.Any("error", err))
+		return nil
+	}
+
+	kept := make([]string, 0, len(collection.ItemLinks))
+	for _, link := range collection.ItemLinks {
+		if c.excludeChassis.MatchString(path.Base(link)) {
+			continue
+		}
+		kept = append(kept, link)
+	}
+	logger.Info("chassis filter applied",
+		slog.Int("total", len(collection.ItemLinks)),
+		slog.Int("kept", len(kept)),
+	)
+
+	chassises := make([]*schemas.Chassis, len(kept))
+	eg := newRecoverGroup(ctx)
+	for i, link := range kept {
+		eg.Go(func() error {
+			chassis, err := schemas.GetChassis(rfClient, link)
+			if err != nil {
+				logger.With("error", err, "chassis_url", link).Error("failed obtaining chassis, skipping")
+				return nil
+			}
+			chassises[i] = chassis
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		logger.Error("goroutine error", slog.Any("error", err))
+	}
+	out := chassises[:0]
+	for _, chassis := range chassises {
+		if chassis != nil {
+			out = append(out, chassis)
+		}
+	}
+	return out
 }

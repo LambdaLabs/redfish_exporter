@@ -102,7 +102,13 @@ func unmarshalViperConfig(v *viper.Viper) (*Config, error) {
 }
 
 // ChassisCollectorConfig is a prober configuration.
-type ChassisCollectorConfig struct{}
+type ChassisCollectorConfig struct {
+	// ExcludeChassis is a regular expression matched against each "chassis ID"
+	// (the last segment of the collection member URL); matching chassis are
+	// skipped without fetching any of their resources. Empty disables
+	// filtering.
+	ExcludeChassis string `mapstructure:"exclude_chassis"`
+}
 
 // GPUCollectorConfig is a prober configuration.
 type GPUCollectorConfig struct {
