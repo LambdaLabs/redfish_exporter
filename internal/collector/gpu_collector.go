@@ -225,7 +225,11 @@ func (g *GPUCollector) gatherGPUs(ctx context.Context) ([]SystemGPU, error) {
 		if strings.Contains(sys.Name, "HGX_") {
 			procs, err := sys.Processors()
 			if err != nil {
-				g.logger.With("error", err, "system", sys.ODataID).Debug("unable to obtain system processors")
+				g.logger.With("error", err, "system", sys.ODataID).Warn("unable to obtain system processors, retrying")
+				procs, err = sys.Processors()
+			}
+			if err != nil {
+				g.logger.With("error", err, "system", sys.ODataID).Error("unable to obtain system processors")
 				continue
 			}
 			for _, gpu := range filterGPUs(procs) {
