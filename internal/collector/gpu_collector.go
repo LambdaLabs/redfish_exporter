@@ -185,18 +185,25 @@ func (g *GPUCollector) collect(ctx context.Context, ch chan<- prometheus.Metric)
 		return
 	}
 
+	eg := newRecoverGroup(ctx)
 	for _, gpu := range gpus {
 		if ctx.Err() != nil {
 			g.logger.With("error", ctx.Err().Error()).Debug("skipping further gpu collection")
-			return
+			break
 		}
 		procBaseLabels := []string{gpu.SystemName, gpu.ID}
-		g.whileContextAllows(ctx,
-			func() { g.emitGPUMemoryMetrics(ch, gpu, []string{gpu.SystemID, gpu.ID}) },
-			func() { g.emitHealthInfo(ch, gpu, procBaseLabels) },
-			func() { g.emitGPUOem(ch, gpu, procBaseLabels) },
-			func() { g.emitNVLinkTelemetry(ctx, ch, gpu) },
-		)
+		eg.Go(func() error {
+			g.whileContextAllows(ctx,
+				func() { g.emitGPUMemoryMetrics(ch, gpu, []string{gpu.SystemID, gpu.ID}) },
+				func() { g.emitHealthInfo(ch, gpu, procBaseLabels) },
+				func() { g.emitGPUOem(ch, gpu, procBaseLabels) },
+				func() { g.emitNVLinkTelemetry(ctx, ch, gpu) },
+			)
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		g.logger.Error("goroutine error", slog.Any("error", err))
 	}
 
 	g.collectorScrapeStatus.WithLabelValues("gpu").Set(float64(1))
