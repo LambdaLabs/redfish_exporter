@@ -112,6 +112,11 @@ type GPUCollectorConfig struct {
 	// consumes (e.g. Dell XE9780/iDRAC); do not enable it in a scrape that also
 	// runs the telemetry module, or the same series will be emitted twice.
 	EnableGPUModuleTelemetry bool `mapstructure:"enable_gpu_module_telemetry"`
+	// SkipNVLinkExpand goes straight to the per-port NVLink walk without
+	// attempting the deep $expand first. Use on BMCs that always reject the
+	// expand (e.g. iDRAC), where the attempt costs one rejected request per
+	// GPU per scrape and possibly cause the BMC to start timing out requests.
+	SkipNVLinkExpand bool `mapstructure:"skip_nvlink_expand"`
 }
 
 type JSONCollectorConfig struct {

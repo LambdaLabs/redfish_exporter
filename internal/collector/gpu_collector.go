@@ -531,6 +531,12 @@ func (g *GPUCollector) emitNVLinkTelemetry(ctx context.Context, ch chan<- promet
 
 func (g *GPUCollector) gatherNVLinkPorts(ctx context.Context, gpu SystemGPU) (*GPUNVLinkCollection, error) {
 	rfClient := g.redfishClient.WithContext(ctx)
+	// On Dell PowerEdge XE9780, the BMC was stalling a lot for many test runs. It is believed
+	// calling the expand endpoint for levels that it couldn't expand to was related to this.
+	// For that reason, we added an option here to turn off the auto fallback.
+	if g.config.SkipNVLinkExpand {
+		return g.walkNVLinkPorts(ctx, gpu)
+	}
 	// gatherNVLinkPorts fetches a GPU's ports with each port's Metrics resource
 	// attached. $expand=.($levels=2) inlines the whole Ports subtree in one
 	// response; a BMC that rejects it with HTTP 400 gets the per-port walk.
