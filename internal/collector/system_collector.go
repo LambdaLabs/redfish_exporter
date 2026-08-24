@@ -161,6 +161,13 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 	if systems, err := service.Systems(); err != nil {
 		logger.Error("error getting systems from service", slog.String("operation", "service.Systems()"), slog.Any("error", err))
 	} else {
+		// Some BMCs (e.g. Supermicro ASG-2115S) list the same drive or volume
+		// more than once. Duplicate label sets fail the entire gather, turning
+		// the scrape into an HTTP 500, so emit only the first occurrence of
+		// each label set. Drive/volume labels carry no system dimension, so
+		// track across systems.
+		seenVolumes := make(map[string]struct{})
+		seenDrives := make(map[string]struct{})
 		for _, system := range systems {
 			if ctx.Err() != nil {
 				s.logger.With("error", ctx.Err(), "collector", "system").Debug("skipping further collection")
@@ -259,6 +266,12 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 						systemLogger.Error("error getting storage data from system", slog.String("operation", "system.Volumes()"), slog.Any("wrror", err))
 					} else {
 						for _, volume := range volumes {
+							volumeKey := volume.Name + "\x00" + volume.ID
+							if _, dup := seenVolumes[volumeKey]; dup {
+								systemLogger.Debug("skipping duplicate volume listing", slog.String("storage", storageID), slog.String("volume", volume.ID))
+								continue
+							}
+							seenVolumes[volumeKey] = struct{}{}
 							eg.Go(func() error {
 								parseVolume(ch, volume)
 								return nil
@@ -273,6 +286,12 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 						systemLogger.Info("no drive data found", slog.String("operation", "system.Drives()"), slog.String("storage", storage.ID))
 					} else {
 						for _, drive := range drives {
+							driveKey := drive.Name + "\x00" + drive.ID + "\x00" + storageID
+							if _, dup := seenDrives[driveKey]; dup {
+								systemLogger.Debug("skipping duplicate drive listing", slog.String("storage", storageID), slog.String("drive", drive.ID))
+								continue
+							}
+							seenDrives[driveKey] = struct{}{}
 							eg.Go(func() error {
 								parseDrive(ch, drive, storageID)
 								return nil
