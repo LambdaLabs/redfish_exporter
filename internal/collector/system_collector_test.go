@@ -321,3 +321,73 @@ func TestSystemCollectorBiosInfo(t *testing.T) {
 	require.Equal(t, "2.4b", biosInfoLabels[0]["bios_version"])
 	require.Equal(t, "SYS-A21GE-NBRT-01-LL014", biosInfoLabels[0]["model"])
 }
+
+// TestDuplicateDriveListingGathers reproduces BMC firmwares that list the
+// same drive more than once under a single storage controller. Without
+// dedupe, the duplicate label sets fail the entire registry gather ("was
+// collected before with the same name and label values"), which turns every
+// scrape of such a host into an HTTP 500.
+func TestDuplicateDriveListingGathers(t *testing.T) {
+	srv := newTestRedfishServer(t)
+
+	systemPath := "/redfish/v1/Systems/System1"
+	storagePath := systemPath + "/Storage/Storage.1"
+	drivePath := storagePath + "/Drives/Drive.Bay.1"
+
+	system := srv.loadFixture("system1.json")
+	system["Storage"] = map[string]string{"@odata.id": systemPath + "/Storage"}
+	delete(system, "Processors") // keep the mock focused on storage
+	srv.addRoute(systemPath, system)
+
+	srv.addRoute(systemPath+"/Storage", map[string]any{
+		"@odata.type": "#StorageCollection.StorageCollection",
+		"Members": []map[string]string{
+			{"@odata.id": storagePath},
+		},
+	})
+
+	// The BMC references the same drive twice within one storage subsystem.
+	srv.addRoute(storagePath, map[string]any{
+		"@odata.type": "#Storage.v1_13_0.Storage",
+		"@odata.id":   storagePath,
+		"Id":          "Storage.1",
+		"Name":        "Storage.1",
+		"Drives": []map[string]string{
+			{"@odata.id": drivePath},
+			{"@odata.id": drivePath},
+		},
+	})
+
+	srv.addRoute(drivePath, map[string]any{
+		"@odata.type":   "#Drive.v1_16_0.Drive",
+		"@odata.id":     drivePath,
+		"Id":            "Drive.Bay.1",
+		"Name":          "Drive.Bay.1",
+		"CapacityBytes": 1920398934016,
+		"Status":        map[string]string{"State": "Enabled", "Health": "OK"},
+	})
+
+	client := connectToTestServer(t, srv.Server)
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	collector, err := NewSystemCollector(t.Name(), client, logger, config.DefaultSystemCollector)
+	require.NoError(t, err)
+
+	registry := prometheus.NewPedanticRegistry()
+	require.NoError(t, registry.Register(collector))
+
+	families, err := registry.Gather()
+	require.NoError(t, err, "gather must not fail on duplicate drive listings")
+
+	got := map[string]int{}
+	for _, mf := range families {
+		if strings.HasPrefix(mf.GetName(), "redfish_system_storage_drive_") {
+			got[mf.GetName()] = len(mf.GetMetric())
+		}
+	}
+	assert.Equal(t, map[string]int{
+		"redfish_system_storage_drive_state":        1,
+		"redfish_system_storage_drive_health_state": 1,
+		"redfish_system_storage_drive_capacity":     1,
+	}, got, "each drive metric family should carry exactly one deduped series")
+}
