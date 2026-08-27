@@ -83,6 +83,10 @@ The Chassis Collector primarily exposes health data from the Chassis API. Agains
 # TYPE redfish_chassis_state gauge
 ```
 
+On a platform implementing neither `Thermal` nor `Power` the same readings are collected
+from the `Sensors` collection instead; see
+[Platform differences](./PLATFORMS.md#chassis-sensors-instead-of-thermalpower).
+
 Exposes no user configuration.
 
 ### `<gpu_collector>`

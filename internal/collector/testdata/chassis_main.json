@@ -19,6 +19,9 @@
   "ThermalSubsystem": {
     "@odata.id": "/redfish/v1/Chassis/Chassis_0/ThermalSubsystem"
   },
+  "Sensors": {
+    "@odata.id": "/redfish/v1/Chassis/Chassis_0/Sensors"
+  },
   "PowerSubsystem": {
     "@odata.id": "/redfish/v1/Chassis/Chassis_0/PowerSubsystem"
   },

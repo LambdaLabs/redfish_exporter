@@ -7,7 +7,9 @@ Forked from https://github.com/FlxPeters/redfish_exporter, see [Why a fork](#why
 
 Configuration of the redfish_exporter is done via YAML file.
 
-See [CONFIGURATION.md](./docs/CONFIGURATION.md) for details.
+See [CONFIGURATION.md](./docs/CONFIGURATION.md) for details, and
+[PLATFORMS.md](./docs/PLATFORMS.md) for where a platform's Redfish implementation makes the
+exporter behave differently from that description.
 
 ## Building
 
