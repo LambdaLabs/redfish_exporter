@@ -31,6 +31,8 @@ func NewCollectorFromModule(moduleName string, m *config.Module, rfClient *gofis
 	switch m.Prober {
 	case "chassis_collector":
 		return NewChassisCollector(moduleName, rfClient, logger, m.ChassisCollector)
+	case "firmware_inventory_collector":
+		return NewFirmwareInventoryCollector(moduleName, rfClient, logger, m.FirmwareInventoryCollector)
 	case "gpu_collector":
 		return NewGPUCollector(moduleName, rfClient, logger, m.GPUCollector)
 	case "json_collector":

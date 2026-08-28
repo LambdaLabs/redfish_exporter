@@ -1,0 +1,24 @@
+{
+  "@odata.type": "#SoftwareInventory.v1_11_0.SoftwareInventory",
+  "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/GPU1",
+  "Id": "GPU1",
+  "Name": "GPU1 System Slot1",
+  "Updateable": false,
+  "Version": "96.00.A5.00.01",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "RelatedItem": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/GPU1"
+    }
+  ],
+  "Actions": {
+    "Oem": {}
+  },
+  "Oem": {},
+  "Manufacturer": "Supermicro",
+  "WriteProtected": false,
+  "@odata.etag": "\"bb923075e84393fd0599c6966aa8b114\""
+}

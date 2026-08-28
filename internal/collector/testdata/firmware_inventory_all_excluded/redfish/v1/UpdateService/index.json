@@ -1,0 +1,10 @@
+{
+  "@odata.type": "#UpdateService.v1_8_4.UpdateService",
+  "@odata.id": "/redfish/v1/UpdateService",
+  "Id": "UpdateService",
+  "Name": "Update Service",
+  "ServiceEnabled": true,
+  "FirmwareInventory": {
+    "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory"
+  }
+}
