@@ -65,10 +65,15 @@ type redfishCollector struct {
 
 // NewRedfishCollector returns a *redfishCollector or an error.
 func NewRedfishCollector(ctx context.Context, logger *slog.Logger, host string, username string, password string, rfConfig config.RedfishClientConfig) (*redfishCollector, error) {
+	loginStart := time.Now()
 	redfishClient, err := newRedfishClient(ctx, host, username, password, rfConfig)
 	if err != nil {
 		return nil, err
 	}
+	logger.Info("redfish client connected",
+		slog.Duration("login_duration", time.Since(loginStart)),
+		slog.Bool("basic_auth", rfConfig.BasicAuth),
+	)
 
 	return &redfishCollector{
 		ctx:           ctx,
@@ -120,7 +125,14 @@ func (r *redfishCollector) Collect(ch chan<- prometheus.Metric) {
 		r.redfishUp.Set(0)
 	} else {
 		r.redfishUp.Set(1)
-		defer r.redfishClient.Logout()
+		// Logout runs after the scrape context may already be cancelled
+		// (client disconnect, deadline); a cancelled logout prevents the session
+		// with the BMC from closing and clogs the number of BMC sessions.
+		defer func() {
+			if r.redfishClient != nil {
+				r.redfishClient.WithContext(context.WithoutCancel(r.ctx)).Logout()
+			}
+		}()
 		eg := newRecoverGroup(r.ctx)
 		for _, collector := range r.collectors {
 			eg.Go(func() error {
@@ -182,6 +194,7 @@ func newRedfishClient(ctx context.Context, host string, username string, passwor
 		Password:              password,
 		Insecure:              true,
 		ReuseConnections:      true, // Enable HTTP keepalive for connection reuse
+		BasicAuth:             rfConfig.BasicAuth,
 	}
 	redfishClient, err := gofish.ConnectContext(ctx, config)
 	if err != nil {

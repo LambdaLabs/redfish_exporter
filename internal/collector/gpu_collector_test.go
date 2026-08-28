@@ -3,6 +3,7 @@ package collector
 import (
 	"bytes"
 	"log/slog"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -110,6 +111,31 @@ func TestGPUCollector_gatherGPUs(t *testing.T) {
 			require.Equal(t, test.want[0].UUID, got[0].UUID)
 		})
 	}
+}
+
+// TestGPUCollector_gatherGPUs_retriesProcessorsFetch verifies a transient
+// failure of the Processors fetch is absorbed by the single retry rather than
+// silently dropping every GPU for the scrape.
+func TestGPUCollector_gatherGPUs_retriesProcessorsFetch(t *testing.T) {
+	root, err := os.OpenRoot("testdata/gathergpus_happypath")
+	require.NoError(t, err)
+	server := newTestServer(t, root,
+		jsonContentTypeMiddleware,
+		rejectURLOnceMiddleware("/Processors", http.StatusInternalServerError, `{}`),
+	)
+	client := connectToTestServer(t, server.Server)
+	t.Cleanup(func() {
+		server.Close()
+		client.Logout()
+	})
+	logger := NewTestLogger(t, slog.LevelInfo)
+	collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
+	require.NoError(t, err)
+
+	got, gotErr := collector.gatherGPUs(t.Context())
+	require.NoError(t, gotErr)
+	require.Len(t, got, 1)
+	require.Equal(t, "GPU_0", got[0].ID)
 }
 
 func TestGPUCollector_emitGPUMemoryMetrics(t *testing.T) {
@@ -338,6 +364,72 @@ func TestGPUCollector_emitGPUNVLinkTelemetry(t *testing.T) {
 	}
 }
 
+var nvlinkSeriesNames = []string{"redfish_gpu_nvlink_state",
+	"redfish_gpu_nvlink_health",
+	"redfish_gpu_nvlink_link_status",
+	"redfish_gpu_nvlink_runtime_error",
+	"redfish_gpu_nvlink_training_error",
+	"redfish_gpu_nvlink_link_error_recovery_count",
+	"redfish_gpu_nvlink_link_downed_count",
+	"redfish_gpu_nvlink_symbol_errors",
+	"redfish_gpu_nvlink_bit_error_rate",
+}
+
+func TestGPUCollector_emitGPUNVLinkTelemetry_expandFallback(t *testing.T) {
+	// iDRAC-shaped rejection body. Informational only: the walk is gated
+	// purely on the HTTP 400 status, never on the body or vendor.
+	idracRejectBody := `{"error":{"@Message.ExtendedInfo":[{"Message":"The value for the parameter $expand is invalid.","MessageId":"Base.1.18.QueryParameterValueError"}],"code":"Base.1.18.GeneralError","message":"A general error has occurred. See ExtendedInfo for more information."}}`
+
+	tT := map[string]testMiddleware{
+		"deep expand honored, no per-port requests":            rejectURLsMiddleware("/Ports/", http.StatusInternalServerError, `{}`),
+		"HTTP 400 on deep expand walks the ports individually": rejectURLsMiddleware("$levels=2", http.StatusBadRequest, idracRejectBody),
+	}
+	for tName, middleware := range tT {
+		t.Run(tName, func(t *testing.T) {
+			root, err := os.OpenRoot("testdata/nvlink_fallback")
+			require.NoError(t, err)
+			server := newTestServer(t, root, jsonContentTypeMiddleware, middleware)
+			client := connectToTestServer(t, server.Server)
+			t.Cleanup(func() {
+				server.Close()
+				client.Logout()
+			})
+			logger := NewTestLogger(t, slog.LevelInfo)
+			collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
+			require.NoError(t, err)
+
+			wanted := golden.Get(t, "golden/nvlink_fallback.golden")
+			assert.NoError(t, testutil.CollectAndCompare(collector, bytes.NewReader(wanted), nvlinkSeriesNames...))
+		})
+	}
+}
+
+// TestGPUCollector_emitGPUNVLinkTelemetry_walkSkipsUnfetchablePort verifies
+// that a port that cannot be fetched during the walk is skipped and the rest of the ports still emit.
+func TestGPUCollector_emitGPUNVLinkTelemetry_walkSkipsUnfetchablePort(t *testing.T) {
+	root, err := os.OpenRoot("testdata/nvlink_fallback")
+	require.NoError(t, err)
+	server := newTestServer(t, root,
+		jsonContentTypeMiddleware,
+		rejectURLsMiddleware("$levels=2", http.StatusBadRequest, `{}`),
+		rejectURLsMiddleware("GPU_0/Ports/NVLink_0", http.StatusInternalServerError, `{}`),
+	)
+	client := connectToTestServer(t, server.Server)
+	t.Cleanup(func() {
+		server.Close()
+		client.Logout()
+	})
+	logger := NewTestLogger(t, 9)
+	collector, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
+	require.NoError(t, err)
+	// No port miss:
+	// Total ports = 2 GPUs * 2 ports = 4 ports
+	// 4 ports * 9 families = 36
+	// 1 port miss:
+	// 3 ports * 9 families = 27
+	assert.Equal(t, 27, testutil.CollectAndCount(collector, nvlinkSeriesNames...))
+}
+
 // BenchmarkGPUCollector_NoDelay benchmarks the GPU collector in the most ideal condition (no artificial delay added)
 func BenchmarkGPUCollector_NoDelay(b *testing.B) {
 	root, err := os.OpenRoot("testdata/gb300_happypath")
@@ -421,4 +513,34 @@ func BenchmarkGPUCollector_ExtremeDelay(b *testing.B) {
 	for b.Loop() {
 		registry.Gather() //nolint:errcheck
 	}
+}
+
+func telemetryFamiliesFromGolden(golden []byte) []string {
+	var names []string
+	for _, line := range strings.Split(string(golden), "\n") {
+		if strings.HasPrefix(line, "# TYPE ") {
+			names = append(names, strings.Fields(line)[2])
+		}
+	}
+	return names
+}
+
+// TestGPUCollector_telemetry verifies the enable_gpu_module_telemetry module flag:
+// off emits no redfish_telemetry_* series, on emits them from the ProcessorMetrics/MemoryMetrics documents
+// the collector already fetches, identical to what the Telemetry collector emits.
+func TestGPUCollector_telemetry(t *testing.T) {
+	wanted := golden.Get(t, "golden/gpu_collector_telemetry.golden")
+	families := telemetryFamiliesFromGolden(wanted)
+	require.NotEmpty(t, families)
+
+	_, client := setupTestServerClient(t, "testdata/gb300_happypath")
+	logger := NewTestLogger(t, slog.LevelInfo)
+
+	off, err := NewGPUCollector(t.Name(), client, logger, config.DefaultGPUCollector)
+	require.NoError(t, err)
+	assert.Equal(t, 0, testutil.CollectAndCount(off, families...))
+
+	on, err := NewGPUCollector(t.Name(), client, logger, config.GPUCollectorConfig{EnableGPUModuleTelemetry: true})
+	require.NoError(t, err)
+	assert.NoError(t, testutil.CollectAndCompare(on, bytes.NewReader(wanted), families...))
 }

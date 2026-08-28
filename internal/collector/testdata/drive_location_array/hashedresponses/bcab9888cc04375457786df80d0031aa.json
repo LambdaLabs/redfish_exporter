@@ -1,0 +1,160 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#Drive.Drive",
+  "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/BOSS.Slot.14-1/Drives/Disk.Direct.0-0:BOSS.Slot.14-1",
+  "@odata.type": "#Drive.v1_21_0.Drive",
+  "@odata.etag": "W/\"gen-15\"",
+  "@Redfish.Settings": {
+    "@odata.type": "#Settings.v1_5_0.Settings",
+    "SettingsObject": {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/BOSS.Slot.14-1/Drives/Disk.Direct.0-0:BOSS.Slot.14-1/Settings"
+    },
+    "SupportedApplyTimes": [
+      "Immediate",
+      "OnReset",
+      "Deferred"
+    ]
+  },
+  "Id": "Disk.Direct.0-0:BOSS.Slot.14-1",
+  "Name": "NVMe 0",
+  "Description": "NVMe 0",
+  "MediaType": "SSD",
+  "Protocol": "PCIe",
+  "Manufacturer": "Phison Electronics Corporation ",
+  "Model": "PASCARI D1802K02960GP211T0200          ",
+  "SerialNumber": "SCRUBBED000000000",
+  "PartNumber": "Not Available",
+  "Revision": "EIED51.C",
+  "CapacityBytes": 960197124096,
+  "BlockSizeBytes": 512,
+  "NegotiatedSpeedGbs": 8,
+  "CapableSpeedGbs": 16,
+  "RotationSpeedRPM": null,
+  "PredictedMediaLifeLeftPercent": 100,
+  "FailurePredicted": false,
+  "HotspareType": "None",
+  "WriteCacheEnabled": false,
+  "ConfigurationLock": "Disabled",
+  "EncryptionAbility": "SelfEncryptingDrive",
+  "EncryptionStatus": "Unencrypted",
+  "LocationIndicatorActive": null,
+  "Identifiers": [
+    {
+      "DurableName": "0000000000000000",
+      "DurableNameFormat": "NAA"
+    }
+  ],
+  "Identifiers@odata.count": 1,
+  "Location": [
+    {
+      "Info": "0",
+      "InfoFormat": "Slot Number"
+    }
+  ],
+  "PhysicalLocation": {
+    "PartLocation": {
+      "LocationOrdinalValue": 0,
+      "LocationType": "Slot"
+    }
+  },
+  "Status": {
+    "Health": "Warning",
+    "HealthRollup": "Warning",
+    "State": "Enabled"
+  },
+  "Operations": [],
+  "Operations@odata.count": 0,
+  "Assembly": {
+    "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Assembly"
+  },
+  "Certificates": {
+    "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/BOSS.Slot.14-1/Drives/Disk.Direct.0-0:BOSS.Slot.14-1/Certificates"
+  },
+  "Links": {
+    "Storage": {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/BOSS.Slot.14-1"
+    },
+    "Volumes": [
+      {
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/BOSS.Slot.14-1/Volumes/Disk.Virtual.0:BOSS.Slot.14-1"
+      }
+    ],
+    "Volumes@odata.count": 1,
+    "PCIeFunctions": [],
+    "PCIeFunctions@odata.count": 0,
+    "Oem": {
+      "Dell": {
+        "@odata.context": "/redfish/v1/$metadata#DellDrive.DellDrive",
+        "@odata.type": "#DellDrive.v1_4_0.DellDriveLinks",
+        "CPUAffinity": [
+          {
+            "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Processors/CPU.Socket.0"
+          }
+        ],
+        "CPUAffinity@odata.count": 1
+      }
+    }
+  },
+  "Oem": {
+    "Dell": {
+      "@odata.context": "/redfish/v1/$metadata#DellDrive.DellDrive",
+      "@odata.type": "#DellDrive.v1_4_0.DellDrive",
+      "RaidStatus": "Online",
+      "SecurityStatus": "Unsecured",
+      "EncryptionCapable": true,
+      "ConfigJobExists": false,
+      "ProgressPercent": 0,
+      "OperationalStates": [],
+      "PendingChanges": [],
+      "PendingChanges@odata.count": 0,
+      "StorageCapabilities": [
+        "BlinkUnblinkCapable",
+        "SecureEraseCapable",
+        "FDECapable",
+        "SSD"
+      ],
+      "StorageCapabilities@odata.count": 4,
+      "DellPCIeSSD": {
+        "@odata.context": "/redfish/v1/$metadata#DellPCIeSSD.DellPCIeSSD",
+        "@odata.type": "#DellPCIeSSD.v1_11_0.DellPCIeSSD",
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Oem/Dell/DellPCIeSSDs/Disk.Direct.0-0:BOSS.Slot.14-1",
+        "Id": "Disk.Direct.0-0:BOSS.Slot.14-1",
+        "Name": "DellPCIeSSD",
+        "Description": "An instance of DellPCIeSSD will have PCIe Solid State Drive specific data.",
+        "Slot": 0,
+        "Bus": "0",
+        "Device": "0",
+        "Function": "0",
+        "BusProtocol": "NVME",
+        "MediaType": "SolidStateDrive",
+        "DriveFormFactor": "M.2",
+        "DriveState": "Online",
+        "RaidStatus": "Online",
+        "RAIDType": "Unknown",
+        "PowerStatus": "On",
+        "HotSpareStatus": "No",
+        "AvailableSparePercent": 100,
+        "UsedSizeInBytes": 960197124096,
+        "FreeSizeInBytes": 0,
+        "PCIeCapableLinkWidth": "x4",
+        "PCIeNegotiatedLinkWidth": "x2",
+        "DeviceProtocol": "NVMe 1.4",
+        "DeviceSidebandProtocol": "NVMe-MI1.1",
+        "SASAddress": "00000000",
+        "WWN": "00000000",
+        "ProductID": "18dc",
+        "Certified": "No",
+        "ErrorRecoverable": "NotApplicable",
+        "ErrorDescription": null,
+        "CryptographicEraseCapable": "Capable",
+        "SystemEraseCapability": "CryptographicErasePD",
+        "EncryptionProtocol": "TCGOpalSSC",
+        "T10PICapability": "NotSupported",
+        "NonRAIDDiskCachePolicy": "Unknown",
+        "ForeignKeyIdentifier": null,
+        "ManufacturingDay": null,
+        "ManufacturingWeek": null,
+        "ManufacturingYear": null
+      }
+    }
+  }
+}

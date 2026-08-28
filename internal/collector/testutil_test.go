@@ -14,6 +14,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -309,6 +310,44 @@ func jsonContentTypeMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// Simulate HTTP return with given status and body if match
+// is a substring of the request URL.
+func rejectURLsMiddleware(match string, status int, body string) testMiddleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.URL.String(), match) {
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(body))
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// Like rejectURLsMiddleware, but only the first matching request is rejected;
+// later matches pass through. Simulates a transient failure.
+func rejectURLOnceMiddleware(match string, status int, body string) testMiddleware {
+	var mu sync.Mutex
+	rejected := false
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.URL.String(), match) {
+				mu.Lock()
+				first := !rejected
+				rejected = true
+				mu.Unlock()
+				if first {
+					w.WriteHeader(status)
+					_, _ = w.Write([]byte(body))
+					return
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 type testWriter struct {

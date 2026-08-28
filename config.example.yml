@@ -22,6 +22,15 @@ modules:
     prober: chassis_collector
   gpu:
     prober: gpu_collector
+  # Same collector as gpu, additionally emitting the redfish_telemetry_* families
+  # from the per-GPU ProcessorMetrics/MemoryMetrics documents it already fetches.
+  # For platforms whose BMCs do not publish NVIDIA HGX_* MetricReports (e.g. Dell
+  # XE9780/iDRAC); do not combine with the telemetry module or the same series
+  # will be emitted twice.
+  gpu_with_telemetry:
+    prober: gpu_collector
+    gpu_collector:
+      enable_gpu_module_telemetry: true
   manager:
     prober: manager_collector
   system:

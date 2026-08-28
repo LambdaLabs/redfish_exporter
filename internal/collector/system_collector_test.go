@@ -9,6 +9,7 @@ import (
 
 	"github.com/LambdaLabs/redfish_exporter/internal/config"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stmcginnis/gofish"
 	"github.com/stmcginnis/gofish/schemas"
@@ -210,6 +211,38 @@ func TestDriveMetrics(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSystemCollectorDriveLocationArray guards against the gofish unmarshalling Drive.Location
+// as an object instead of an array and checks that the exporter scrapes the drive states and capacity
+func TestSystemCollectorDriveLocationArray(t *testing.T) {
+	_, client := setupTestServerClient(t, "testdata/drive_location_array")
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	collector, err := NewSystemCollector(t.Name(), client, logger, config.DefaultSystemCollector)
+	require.NoError(t, err)
+
+	seriesToCheck := []string{
+		"redfish_system_storage_drive_state",
+		"redfish_system_storage_drive_health_state",
+		"redfish_system_storage_drive_capacity",
+	}
+	assert.Equal(t, 6, testutil.CollectAndCount(collector, seriesToCheck...), "expected 3 drive series x 2 drives")
+	wantSeries := `
+# HELP redfish_system_storage_drive_capacity system storage drive capacity, Bytes
+# TYPE redfish_system_storage_drive_capacity gauge
+redfish_system_storage_drive_capacity{drive="NVMe 0",drive_id="Disk.Direct.0-0:BOSS.Slot.14-1",resource="drive",storage_controller_id="BOSS.Slot.14-1"} 960197124096
+redfish_system_storage_drive_capacity{drive="NVMe 1",drive_id="Disk.Direct.1-1:BOSS.Slot.14-1",resource="drive",storage_controller_id="BOSS.Slot.14-1"} 960197124096
+# HELP redfish_system_storage_drive_health_state system storage drive health state,1(OK),2(Warning),3(Critical)
+# TYPE redfish_system_storage_drive_health_state gauge
+redfish_system_storage_drive_health_state{drive="NVMe 0",drive_id="Disk.Direct.0-0:BOSS.Slot.14-1",resource="drive",storage_controller_id="BOSS.Slot.14-1"} 2
+redfish_system_storage_drive_health_state{drive="NVMe 1",drive_id="Disk.Direct.1-1:BOSS.Slot.14-1",resource="drive",storage_controller_id="BOSS.Slot.14-1"} 1
+# HELP redfish_system_storage_drive_state system storage drive state,1(Enabled),2(Disabled),3(StandbyOffinline),4(StandbySpare),5(InTest),6(Starting),7(Absent),8(UnavailableOffline),9(Deferring),10(Quiesced),11(Updating),12(Standby)
+# TYPE redfish_system_storage_drive_state gauge
+redfish_system_storage_drive_state{drive="NVMe 0",drive_id="Disk.Direct.0-0:BOSS.Slot.14-1",resource="drive",storage_controller_id="BOSS.Slot.14-1"} 1
+redfish_system_storage_drive_state{drive="NVMe 1",drive_id="Disk.Direct.1-1:BOSS.Slot.14-1",resource="drive",storage_controller_id="BOSS.Slot.14-1"} 1
+`
+	assert.NoError(t, testutil.CollectAndCompare(collector, strings.NewReader(wantSeries), seriesToCheck...))
 }
 
 // TestProcessorWithoutMetrics tests that processor collection works when ProcessorMetrics is not available

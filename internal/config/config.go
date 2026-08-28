@@ -76,6 +76,7 @@ func newViperInstance(envPrefix string) *viper.Viper {
 	v.SetDefault("shutdown_timeout", 60*time.Second)
 	v.SetDefault("redfish_client.max_concurrent_requests", DefaultRedfishConfig.MaxConcurrentRequests)
 	v.SetDefault("redfish_client.dial_timeout", DefaultRedfishConfig.DialTimeout)
+	v.SetDefault("redfish_client.basic_auth", false)
 
 	return v
 }
@@ -101,10 +102,29 @@ func unmarshalViperConfig(v *viper.Viper) (*Config, error) {
 }
 
 // ChassisCollectorConfig is a prober configuration.
-type ChassisCollectorConfig struct{}
+type ChassisCollectorConfig struct {
+	// ExcludeChassis is a regular expression matched against each "chassis ID"
+	// (the last segment of the collection member URL); matching chassis are
+	// skipped without fetching any of their resources. Empty disables
+	// filtering.
+	ExcludeChassis string `mapstructure:"exclude_chassis"`
+}
 
 // GPUCollectorConfig is a prober configuration.
-type GPUCollectorConfig struct{}
+type GPUCollectorConfig struct {
+	// EnableGPUModuleTelemetry additionally emits the redfish_telemetry_* metric families
+	// from the per-GPU ProcessorMetrics and MemoryMetrics resources this collector
+	// already fetches, at no additional request cost. Enable it on platforms whose
+	// BMCs do not publish the NVIDIA HGX_* MetricReports the telemetry module
+	// consumes (e.g. Dell XE9780/iDRAC); do not enable it in a scrape that also
+	// runs the telemetry module, or the same series will be emitted twice.
+	EnableGPUModuleTelemetry bool `mapstructure:"enable_gpu_module_telemetry"`
+	// SkipNVLinkExpand goes straight to the per-port NVLink walk without
+	// attempting the deep $expand first. Use on BMCs that always reject the
+	// expand (e.g. iDRAC), where the attempt costs one rejected request per
+	// GPU per scrape and possibly cause the BMC to start timing out requests.
+	SkipNVLinkExpand bool `mapstructure:"skip_nvlink_expand"`
+}
 
 type JSONCollectorConfig struct {
 	Timeout     time.Duration `mapstructure:"context_timeout"`
@@ -151,6 +171,7 @@ type RedfishClientConfig struct {
 	// MaxConcurrentRequests sets the gofish client maximum permitted concurrent requests.
 	MaxConcurrentRequests int64         `mapstructure:"max_concurrent_requests"`
 	DialTimeout           time.Duration `mapstructure:"dial_timeout"`
+	BasicAuth             bool          `mapstructure:"basic_auth"`
 }
 
 // Config represents the redfish_exporter config file

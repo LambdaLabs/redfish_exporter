@@ -1,0 +1,46 @@
+{
+  "@odata.type": "#ComputerSystem.v1_20_1.ComputerSystem",
+  "@odata.id": "/redfish/v1/Systems/System.Embedded.1",
+  "Id": "System.Embedded.1",
+  "Name": "System",
+  "Description": "Computer System which represents a machine (physical or virtual) and the local resources such as memory, cpu and other devices that can be accessed from that machine.",
+  "SystemType": "Physical",
+  "Manufacturer": "Dell Inc.",
+  "Model": "PowerEdge XE9780",
+  "SKU": "ABC1234",
+  "SerialNumber": "CNIVC0012345678",
+  "BiosVersion": "1.2.6",
+  "PowerState": "On",
+  "Status": {
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Enabled"
+  },
+  "ProcessorSummary": {
+    "Count": 2,
+    "Model": "Intel(R) Xeon(R) 6787P",
+    "Status": {
+      "Health": "OK",
+      "HealthRollup": "OK",
+      "State": "Enabled"
+    }
+  },
+  "MemorySummary": {
+    "TotalSystemMemoryGiB": 2048,
+    "Status": {
+      "Health": "OK",
+      "HealthRollup": "OK",
+      "State": "Enabled"
+    }
+  },
+  "Storage": {
+    "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage"
+  },
+  "Links": {
+    "Chassis": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1"
+      }
+    ]
+  }
+}
