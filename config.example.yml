@@ -12,6 +12,32 @@ groups:
 # loglevel can be one of "debug", "info", "warn", "error"
 loglevel: info
 
+# Tuning for the Redfish (gofish) client. Every value shown is the default.
+redfish_client:
+  # Maximum concurrent HTTP requests per scrape, per target.
+  max_concurrent_requests: 1
+  # Bounds TCP connect and TLS handshake.
+  dial_timeout: 10s
+  # Bounds the wait for response headers after a request is written. Raise this only if a
+  # BMC is legitimately slow to answer; the point of the bound is that a BMC which
+  # completes TCP and TLS and then goes silent must not park a request indefinitely.
+  response_header_timeout: 30s
+  # Bounds the session DELETE issued at the end of each scrape. This request runs on a
+  # context detached from the scrape's, because the scrape context is often already
+  # cancelled by then, so it needs a deadline of its own.
+  logout_timeout: 10s
+  # Authenticate each request with HTTP basic auth instead of creating a Redfish session.
+  #
+  # BMCs cap concurrent sessions — commonly around ten — and once the table is full they
+  # refuse every new session, which presents as HTTP 503 or Base.1.x.SessionLimitExceeded
+  # on a device that is otherwise perfectly reachable. Session auth costs one slot per
+  # scrape and any scrape whose session is not released leaves that slot occupied until
+  # the BMC's own idle timeout reclaims it. Basic auth opens no session at all, so the
+  # exporter stops competing for slots entirely, at the cost of re-authenticating per
+  # request. Enable it for targets that share a BMC with other Redfish clients, or that
+  # are already at their session cap. Requires the BMC to accept basic auth on Redfish.
+  basic_auth: false
+
 # The modules map defines various collectors the exporter may use, at client discretion.
 # Clients like Prometheus should specify one or more 'modules' HTTP query parameters
 # for each scrape, mapping to one or more of the defined modules below.

@@ -39,6 +39,15 @@ func TestConfigFromFile(t *testing.T) {
 	assert.Equal(t, "gpu_collector", config.Modules["foo"].Prober)
 }
 
+// redfishConfigWith returns DefaultRedfishConfig with the given overrides applied. Cases
+// below assert on the field under test rather than restating every default, so adding a
+// field with a new default does not invalidate unrelated cases.
+func redfishConfigWith(overrides func(*RedfishClientConfig)) RedfishClientConfig {
+	c := DefaultRedfishConfig
+	overrides(&c)
+	return c
+}
+
 func TestRedfishClientConfig(t *testing.T) {
 	tT := map[string]struct {
 		inputYAML     string
@@ -66,10 +75,9 @@ redfish_client:
 			wantErrString: "",
 			wantConfig: &Config{
 				ShutdownTimeout: 60 * time.Second,
-				RedfishClient: RedfishClientConfig{
-					MaxConcurrentRequests: 100,
-					DialTimeout:           10 * time.Second,
-				},
+				RedfishClient: redfishConfigWith(func(c *RedfishClientConfig) {
+					c.MaxConcurrentRequests = 100
+				}),
 			},
 		},
 		"happy path, all values changed": {
@@ -77,6 +85,9 @@ redfish_client:
 redfish_client:
   max_concurrent_requests: 100
   dial_timeout: 30s
+  response_header_timeout: 45s
+  logout_timeout: 5s
+  basic_auth: true
 `,
 			wantErrString: "",
 			wantConfig: &Config{
@@ -84,7 +95,19 @@ redfish_client:
 				RedfishClient: RedfishClientConfig{
 					MaxConcurrentRequests: 100,
 					DialTimeout:           30 * time.Second,
+					ResponseHeaderTimeout: 45 * time.Second,
+					LogoutTimeout:         5 * time.Second,
+					BasicAuth:             true,
 				},
+			},
+		},
+		"basic_auth defaults to false so session auth stays the default behaviour": {
+			inputYAML:     `loglevel: info`,
+			wantErrString: "",
+			wantConfig: &Config{
+				Loglevel:        "info",
+				ShutdownTimeout: 60 * time.Second,
+				RedfishClient:   DefaultRedfishConfig,
 			},
 		},
 		"LOGLEVEL overrides loglevel": {
@@ -102,10 +125,9 @@ redfish_client:
 			wantConfig: &Config{
 				Loglevel:        "info",
 				ShutdownTimeout: 60 * time.Second,
-				RedfishClient: RedfishClientConfig{
-					MaxConcurrentRequests: 5,
-					DialTimeout:           10 * time.Second,
-				},
+				RedfishClient: redfishConfigWith(func(c *RedfishClientConfig) {
+					c.MaxConcurrentRequests = 5
+				}),
 			},
 		},
 		"REDFISH_CLIENT_DIAL_TIMEOUT overrides redfish_client.dial_timeout": {
@@ -114,10 +136,42 @@ redfish_client:
 			wantConfig: &Config{
 				Loglevel:        "info",
 				ShutdownTimeout: 60 * time.Second,
-				RedfishClient: RedfishClientConfig{
-					MaxConcurrentRequests: 1,
-					DialTimeout:           30 * time.Second,
-				},
+				RedfishClient: redfishConfigWith(func(c *RedfishClientConfig) {
+					c.DialTimeout = 30 * time.Second
+				}),
+			},
+		},
+		"REDFISH_CLIENT_BASIC_AUTH overrides redfish_client.basic_auth": {
+			inputYAML: `loglevel: info`,
+			envVars:   map[string]string{"REDFISH_CLIENT_BASIC_AUTH": "true"},
+			wantConfig: &Config{
+				Loglevel:        "info",
+				ShutdownTimeout: 60 * time.Second,
+				RedfishClient: redfishConfigWith(func(c *RedfishClientConfig) {
+					c.BasicAuth = true
+				}),
+			},
+		},
+		"REDFISH_CLIENT_LOGOUT_TIMEOUT overrides redfish_client.logout_timeout": {
+			inputYAML: `loglevel: info`,
+			envVars:   map[string]string{"REDFISH_CLIENT_LOGOUT_TIMEOUT": "3s"},
+			wantConfig: &Config{
+				Loglevel:        "info",
+				ShutdownTimeout: 60 * time.Second,
+				RedfishClient: redfishConfigWith(func(c *RedfishClientConfig) {
+					c.LogoutTimeout = 3 * time.Second
+				}),
+			},
+		},
+		"REDFISH_CLIENT_RESPONSE_HEADER_TIMEOUT overrides redfish_client.response_header_timeout": {
+			inputYAML: `loglevel: info`,
+			envVars:   map[string]string{"REDFISH_CLIENT_RESPONSE_HEADER_TIMEOUT": "15s"},
+			wantConfig: &Config{
+				Loglevel:        "info",
+				ShutdownTimeout: 60 * time.Second,
+				RedfishClient: redfishConfigWith(func(c *RedfishClientConfig) {
+					c.ResponseHeaderTimeout = 15 * time.Second
+				}),
 			},
 		},
 		"prefix MYPREFIX applies to all env vars": {

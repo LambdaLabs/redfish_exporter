@@ -13,6 +13,7 @@ hosts:
 groups:
   [ <string>: <hostdetail> ]
 modules: [ <string>: <module> ]
+[ redfish_client: <redfish_client> ]
 ```
 
 ## `<hostdetail>`
@@ -22,6 +23,35 @@ password: <string>
 ```
 
 Note that the `default` entry above is useful in order to avoid the exporter failing when attempting to collect from a host not explicitly defined in `hosts`.
+
+## `<redfish_client>`
+
+Tuning for the underlying Redfish (gofish) client. Every value below is optional and shown with its default.
+
+```yaml
+[ max_concurrent_requests: <int> | default = 1 ]
+[ dial_timeout: <timeout> | default = 10s ]
+[ response_header_timeout: <timeout> | default = 30s ]
+[ logout_timeout: <timeout> | default = 10s ]
+[ basic_auth: <bool> | default = false ]
+```
+
+Each key may also be set from the environment as `REDFISH_CLIENT_<KEY>` (prefixed further if `--config.env-prefix` is given), e.g. `REDFISH_CLIENT_BASIC_AUTH=true`.
+
+### Session limits and `basic_auth`
+
+BMCs cap the number of concurrent Redfish sessions — commonly around ten — and once that table is full they refuse every new session. On a device in that state the exporter sees an immediate `HTTP 503` or an explicit `Base.1.x.SessionLimitExceeded`, and other Redfish clients on the same device see their own failures, typically a connect that completes TCP and TLS and then never gets an answer. Nothing is wrong with the network or the BMC; the device is simply out of slots.
+
+By default the exporter authenticates by creating a session, which costs one slot per scrape and returns it at the end of the scrape. That is fine on its own, but two things make slots scarce in practice:
+
+- **Churn.** Every scrape of every module is a separate session create and delete. Several modules scraped on a short interval, plus any other Redfish client polling the same BMC, can mean a double-digit number of create/delete cycles per BMC per interval against a cap of ten.
+- **Leaks.** A slot released late or not at all stays occupied until the BMC's own idle timeout reclaims it. Because the churn never stops, leaking even a small fraction fills the table within one idle-timeout period, after which the device refuses everything and never drains.
+
+Setting `basic_auth: true` authenticates each request with HTTP basic auth and creates no session at all, which removes the exporter from the competition for slots entirely. The trade-off is per-request re-authentication, and the requirement that the BMC accept basic auth on its Redfish endpoint. It is the right setting for targets that share a BMC with other Redfish clients, and the fastest remedy for targets already pinned at their cap.
+
+The two timeouts exist for the same failure. `response_header_timeout` bounds the wait for response headers once a request is written, so a BMC that completes TCP and TLS and then goes silent cannot park a request indefinitely. `logout_timeout` bounds the session delete at the end of a scrape specifically: that request deliberately runs on a context detached from the scrape's — the scrape context is frequently already cancelled by the time teardown is reached, and a cancelled context cannot carry the request that cleans up after it — so it needs a deadline of its own.
+
+To see whether a device is leaking, use `redfish_exporter_sessions_abandoned_total` and `redfish_exporter_session_logouts_total`. Both are labelled by `target`, i.e. the BMC address, so a leak is attributable to a device rather than to an exporter instance.
 
 ## `<module>`
 Users of `blackbox_exporter` will be familiar with the concept of [modules (aka probers)](https://github.com/prometheus/blackbox_exporter/blob/master/CONFIGURATION.md#module).

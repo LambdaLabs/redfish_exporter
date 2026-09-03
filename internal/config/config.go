@@ -56,6 +56,9 @@ var (
 	DefaultRedfishConfig = RedfishClientConfig{
 		MaxConcurrentRequests: 1,
 		DialTimeout:           10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		LogoutTimeout:         10 * time.Second,
+		BasicAuth:             false,
 	}
 )
 
@@ -76,6 +79,9 @@ func newViperInstance(envPrefix string) *viper.Viper {
 	v.SetDefault("shutdown_timeout", 60*time.Second)
 	v.SetDefault("redfish_client.max_concurrent_requests", DefaultRedfishConfig.MaxConcurrentRequests)
 	v.SetDefault("redfish_client.dial_timeout", DefaultRedfishConfig.DialTimeout)
+	v.SetDefault("redfish_client.response_header_timeout", DefaultRedfishConfig.ResponseHeaderTimeout)
+	v.SetDefault("redfish_client.logout_timeout", DefaultRedfishConfig.LogoutTimeout)
+	v.SetDefault("redfish_client.basic_auth", DefaultRedfishConfig.BasicAuth)
 
 	return v
 }
@@ -151,6 +157,19 @@ type RedfishClientConfig struct {
 	// MaxConcurrentRequests sets the gofish client maximum permitted concurrent requests.
 	MaxConcurrentRequests int64         `mapstructure:"max_concurrent_requests"`
 	DialTimeout           time.Duration `mapstructure:"dial_timeout"`
+	// ResponseHeaderTimeout bounds how long a request waits for the BMC's response headers
+	// after the request has been written. Without it, a BMC that completes TCP and TLS and
+	// then declines to answer parks the requesting goroutine for as long as it stays silent,
+	// which for a session teardown means holding a session slot open indefinitely.
+	ResponseHeaderTimeout time.Duration `mapstructure:"response_header_timeout"`
+	// LogoutTimeout bounds the session-delete request issued at the end of a scrape. It is
+	// separate from the scrape context, which is typically already cancelled by then.
+	LogoutTimeout time.Duration `mapstructure:"logout_timeout"`
+	// BasicAuth makes the client authenticate each request with HTTP basic auth instead of
+	// creating a Redfish session. BMCs cap concurrent sessions — commonly around ten — and
+	// refuse every new session once full, so basic auth removes this exporter from the
+	// competition for slots entirely at the cost of re-authenticating per request.
+	BasicAuth bool `mapstructure:"basic_auth"`
 }
 
 // Config represents the redfish_exporter config file

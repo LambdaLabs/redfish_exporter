@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -43,6 +44,26 @@ var (
 	)
 )
 
+// Session-lifecycle metrics. These are labelled by the BMC address rather than by the
+// exporter instance, because the quantity that matters is per-device: a BMC caps concurrent
+// sessions and refuses all new ones once full, so leaks have to be attributable to a device.
+var (
+	sessionLogoutsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName(namespace, exporter, "session_logouts_total"),
+		Help: "Redfish session teardown attempts by target and outcome (success, failure, skipped).",
+	}, []string{"target", "result"})
+
+	sessionsAbandonedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName(namespace, exporter, "sessions_abandoned_total"),
+		Help: "Redfish sessions this exporter opened but could not delete, by target. Each one occupies a session slot on the BMC until the BMC's own idle timeout reclaims it.",
+	}, []string{"target"})
+)
+
+// SessionMetrics returns the session-lifecycle metrics so the caller can register them.
+func SessionMetrics() []prometheus.Collector {
+	return []prometheus.Collector{sessionLogoutsTotal, sessionsAbandonedTotal}
+}
+
 // redfishCollector is an aggregation of various other prometheus.Collector.
 // It implements prometheus.Collector, and at Describe or Collect time will iterate all of
 // its own collectors to yield data.
@@ -52,6 +73,12 @@ type redfishCollector struct {
 	redfishClient *gofish.APIClient
 	collectors    []ContextAwareCollector
 	redfishUp     prometheus.Gauge
+
+	// host and logoutTimeout are retained for Close(), which has to be able to tear the
+	// session down after the scrape context is gone.
+	host          string
+	logoutTimeout time.Duration
+	closeOnce     sync.Once
 
 	// collectorsSucceeded and collectorsFailed track how many sub-collectors
 	// completed successfully or failed in the most recent Collect() call.
@@ -70,10 +97,17 @@ func NewRedfishCollector(ctx context.Context, logger *slog.Logger, host string, 
 		return nil, err
 	}
 
+	logoutTimeout := rfConfig.LogoutTimeout
+	if logoutTimeout <= 0 {
+		logoutTimeout = config.DefaultRedfishConfig.LogoutTimeout
+	}
+
 	return &redfishCollector{
 		ctx:           ctx,
 		logger:        logger,
 		redfishClient: redfishClient,
+		host:          host,
+		logoutTimeout: logoutTimeout,
 		redfishUp: prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Namespace: namespace,
@@ -100,6 +134,52 @@ func (r *redfishCollector) Client() *gofish.APIClient {
 	return r.redfishClient
 }
 
+// Close releases the Redfish session that NewRedfishCollector opened. It is idempotent and
+// safe to call on a collector whose Collect() never ran.
+//
+// The session has to be released on every exit path, not only the one where collection
+// actually happened. BMCs cap concurrent sessions — commonly around ten — and once the table
+// is full they refuse every new session, so a session abandoned by an aborted scrape denies
+// service to the next scrape until the BMC's own idle timeout reclaims the slot. Callers
+// should defer Close() as soon as the collector is constructed.
+//
+// The delete deliberately runs on a context detached from the scrape's. By the time Close()
+// is reached the scrape context is frequently already cancelled — that is precisely the case
+// that leaks — and a cancelled context cannot carry the request that would clean up after it.
+// The detached context gets its own timeout so a BMC that completes TCP and TLS and then goes
+// silent cannot park this goroutine, and the request itself, indefinitely.
+func (r *redfishCollector) Close() {
+	r.closeOnce.Do(func() {
+		if r.redfishClient == nil {
+			return
+		}
+		session, err := r.redfishClient.GetSession()
+		if err != nil {
+			// No session to release: basic auth, or a session already deleted.
+			sessionLogoutsTotal.WithLabelValues(r.host, "skipped").Inc()
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.ctx), r.logoutTimeout)
+		defer cancel()
+
+		client := r.redfishClient.WithContext(ctx)
+		defer client.HTTPClient.CloseIdleConnections()
+
+		// DeleteSession is called directly rather than through gofish's Logout(), which
+		// discards the error and would leave a failed teardown invisible.
+		if err := client.Service.DeleteSession(session.ID); err != nil {
+			sessionLogoutsTotal.WithLabelValues(r.host, "failure").Inc()
+			sessionsAbandonedTotal.WithLabelValues(r.host).Inc()
+			r.logger.Error("failed to delete redfish session; the session slot stays occupied on the BMC until its own timeout reclaims it",
+				slog.String("session", session.ID),
+				slog.Any("error", err))
+			return
+		}
+		sessionLogoutsTotal.WithLabelValues(r.host, "success").Inc()
+	})
+}
+
 // Describe implements prometheus.Collector.
 func (r *redfishCollector) Describe(ch chan<- *prometheus.Desc) {
 	for _, collector := range r.collectors {
@@ -120,7 +200,8 @@ func (r *redfishCollector) Collect(ch chan<- prometheus.Metric) {
 		r.redfishUp.Set(0)
 	} else {
 		r.redfishUp.Set(1)
-		defer r.redfishClient.Logout()
+		// Session teardown is the caller's responsibility via Close(), so that it also
+		// happens on the branch above and on any path where Collect() is never reached.
 		eg := newRecoverGroup(r.ctx)
 		for _, collector := range r.collectors {
 			eg.Go(func() error {
@@ -165,16 +246,26 @@ func newRedfishClient(ctx context.Context, host string, username string, passwor
 		KeepAlive: 30 * time.Second,
 	}
 
+	responseHeaderTimeout := rfConfig.ResponseHeaderTimeout
+	if responseHeaderTimeout <= 0 {
+		responseHeaderTimeout = config.DefaultRedfishConfig.ResponseHeaderTimeout
+	}
+
 	transport := &http.Transport{
 		DialContext:         dialer.DialContext,
 		TLSHandshakeTimeout: rfConfig.DialTimeout,
+		// A silent-but-reachable BMC is the common failure here: TCP and TLS complete and
+		// the response headers never arrive. Requests carrying a scrape context are bounded
+		// by that context, but the session teardown intentionally runs on a detached one, so
+		// the transport needs a bound of its own.
+		ResponseHeaderTimeout: responseHeaderTimeout,
 	}
 
 	client := &http.Client{
 		Transport: transport,
 	}
 
-	config := gofish.ClientConfig{
+	clientConfig := gofish.ClientConfig{
 		HTTPClient:            client,
 		MaxConcurrentRequests: rfConfig.MaxConcurrentRequests,
 		Endpoint:              url,
@@ -182,8 +273,11 @@ func newRedfishClient(ctx context.Context, host string, username string, passwor
 		Password:              password,
 		Insecure:              true,
 		ReuseConnections:      true, // Enable HTTP keepalive for connection reuse
+		// With BasicAuth the client authenticates per request and never creates a Redfish
+		// session, so the exporter stops consuming the BMC's limited session slots at all.
+		BasicAuth: rfConfig.BasicAuth,
 	}
-	redfishClient, err := gofish.ConnectContext(ctx, config)
+	redfishClient, err := gofish.ConnectContext(ctx, clientConfig)
 	if err != nil {
 		return nil, err
 	}
