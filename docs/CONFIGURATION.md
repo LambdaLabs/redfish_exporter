@@ -52,7 +52,7 @@ Both fall back to the defaults above when set to zero, so a config file predatin
 ### Observing session teardown
 
 ```
-# HELP redfish_exporter_session_logouts_total Redfish session teardown attempts by target and outcome. result=failure means the session slot stays occupied on the BMC until its own idle timeout reclaims it.
+# HELP redfish_exporter_session_logouts_total Redfish session teardown attempts by target and outcome. result=failure means the session slot may stay occupied on the BMC until its own idle timeout reclaims it.
 # TYPE redfish_exporter_session_logouts_total counter
 ```
 
@@ -637,4 +637,4 @@ Maybe a good automation target? Until then, for a given `${TARGET}` representing
 
 ```shell
 curl -s "http://localhost:9610/redfish?target=${TARGET}&module=${MODULE}" | awk '/^# (TYPE|HELP)/ { if (/^# TYPE/) {print; print ""} else {print} }'
-``` 
+```

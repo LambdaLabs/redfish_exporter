@@ -54,7 +54,7 @@ var (
 // exposed on /metrics.
 var sessionLogoutsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Name: prometheus.BuildFQName(namespace, exporter, "session_logouts_total"),
-	Help: "Redfish session teardown attempts by target and outcome. result=failure means the session slot stays occupied on the BMC until its own idle timeout reclaims it.",
+	Help: "Redfish session teardown attempts by target and outcome. result=failure means the session slot may stay occupied on the BMC until its own idle timeout reclaims it.",
 }, []string{"target", "result"})
 
 // SessionMetrics returns the session-lifecycle metrics for the caller to register.
