@@ -12,6 +12,22 @@ groups:
 # loglevel can be one of "debug", "info", "warn", "error"
 loglevel: info
 
+# Tuning for the Redfish (gofish) client. Every value here is the default; the whole block
+# may be omitted. See docs/CONFIGURATION.md for detail.
+redfish_client:
+  # Maximum concurrent HTTP requests per scrape, per target.
+  max_concurrent_requests: 1
+  # Bounds TCP connect and the TLS handshake.
+  dial_timeout: 10s
+  # Bounds the wait for response headers once a request has been written, so a BMC that
+  # connects and then goes silent cannot hold a request open indefinitely. Raise this only
+  # for a BMC that is legitimately slow to answer.
+  response_header_timeout: 30s
+  # Bounds the session delete at the end of a scrape. That request runs on a context
+  # detached from the scrape's, which is usually already cancelled by then, so it needs a
+  # deadline of its own.
+  logout_timeout: 10s
+
 # The modules map defines various collectors the exporter may use, at client discretion.
 # Clients like Prometheus should specify one or more 'modules' HTTP query parameters
 # for each scrape, mapping to one or more of the defined modules below.

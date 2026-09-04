@@ -103,6 +103,7 @@ func registerMetaMetrics() {
 		collectorModuleUnknown,
 		scrapeSuccessesTotal,
 	}
+	custom = append(custom, collector.SessionMetrics()...)
 
 	prometheus.DefaultRegisterer.MustRegister(custom...)
 }
@@ -213,6 +214,12 @@ func metricsHandler() http.HandlerFunc {
 			http.Error(w, fmt.Sprintf("unable to construct aggregate collector: %s", err), statusCode)
 			return
 		}
+		// NewRedfishCollector has opened a session on the BMC, so release it on every exit
+		// from here on: the normal path, the one where the scrape context is already
+		// cancelled and Collect() declines to do any work, and a panic unwinding out of
+		// MustRegister or a sub-collector. A session left behind occupies one of the BMC's
+		// limited slots until the BMC's own idle timeout reclaims it.
+		defer aggregateCollector.Close()
 
 		collectors := buildCollectorsFor(r.Context(), sr.Modules, safeConfig.GetModules(), aggregateCollector.Client(), scrapeLogger)
 		aggregateCollector.WithCollectors(collectors)

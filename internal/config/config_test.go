@@ -69,6 +69,8 @@ redfish_client:
 				RedfishClient: RedfishClientConfig{
 					MaxConcurrentRequests: 100,
 					DialTimeout:           10 * time.Second,
+					ResponseHeaderTimeout: 30 * time.Second,
+					LogoutTimeout:         10 * time.Second,
 				},
 			},
 		},
@@ -77,6 +79,8 @@ redfish_client:
 redfish_client:
   max_concurrent_requests: 100
   dial_timeout: 30s
+  response_header_timeout: 45s
+  logout_timeout: 5s
 `,
 			wantErrString: "",
 			wantConfig: &Config{
@@ -84,6 +88,8 @@ redfish_client:
 				RedfishClient: RedfishClientConfig{
 					MaxConcurrentRequests: 100,
 					DialTimeout:           30 * time.Second,
+					ResponseHeaderTimeout: 45 * time.Second,
+					LogoutTimeout:         5 * time.Second,
 				},
 			},
 		},
@@ -105,6 +111,8 @@ redfish_client:
 				RedfishClient: RedfishClientConfig{
 					MaxConcurrentRequests: 5,
 					DialTimeout:           10 * time.Second,
+					ResponseHeaderTimeout: 30 * time.Second,
+					LogoutTimeout:         10 * time.Second,
 				},
 			},
 		},
@@ -117,6 +125,36 @@ redfish_client:
 				RedfishClient: RedfishClientConfig{
 					MaxConcurrentRequests: 1,
 					DialTimeout:           30 * time.Second,
+					ResponseHeaderTimeout: 30 * time.Second,
+					LogoutTimeout:         10 * time.Second,
+				},
+			},
+		},
+		"REDFISH_CLIENT_LOGOUT_TIMEOUT overrides redfish_client.logout_timeout": {
+			inputYAML: `loglevel: info`,
+			envVars:   map[string]string{"REDFISH_CLIENT_LOGOUT_TIMEOUT": "3s"},
+			wantConfig: &Config{
+				Loglevel:        "info",
+				ShutdownTimeout: 60 * time.Second,
+				RedfishClient: RedfishClientConfig{
+					MaxConcurrentRequests: 1,
+					DialTimeout:           10 * time.Second,
+					ResponseHeaderTimeout: 30 * time.Second,
+					LogoutTimeout:         3 * time.Second,
+				},
+			},
+		},
+		"REDFISH_CLIENT_RESPONSE_HEADER_TIMEOUT overrides redfish_client.response_header_timeout": {
+			inputYAML: `loglevel: info`,
+			envVars:   map[string]string{"REDFISH_CLIENT_RESPONSE_HEADER_TIMEOUT": "15s"},
+			wantConfig: &Config{
+				Loglevel:        "info",
+				ShutdownTimeout: 60 * time.Second,
+				RedfishClient: RedfishClientConfig{
+					MaxConcurrentRequests: 1,
+					DialTimeout:           10 * time.Second,
+					ResponseHeaderTimeout: 15 * time.Second,
+					LogoutTimeout:         10 * time.Second,
 				},
 			},
 		},

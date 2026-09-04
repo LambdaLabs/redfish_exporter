@@ -56,6 +56,8 @@ var (
 	DefaultRedfishConfig = RedfishClientConfig{
 		MaxConcurrentRequests: 1,
 		DialTimeout:           10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		LogoutTimeout:         10 * time.Second,
 	}
 )
 
@@ -76,6 +78,8 @@ func newViperInstance(envPrefix string) *viper.Viper {
 	v.SetDefault("shutdown_timeout", 60*time.Second)
 	v.SetDefault("redfish_client.max_concurrent_requests", DefaultRedfishConfig.MaxConcurrentRequests)
 	v.SetDefault("redfish_client.dial_timeout", DefaultRedfishConfig.DialTimeout)
+	v.SetDefault("redfish_client.response_header_timeout", DefaultRedfishConfig.ResponseHeaderTimeout)
+	v.SetDefault("redfish_client.logout_timeout", DefaultRedfishConfig.LogoutTimeout)
 
 	return v
 }
@@ -151,6 +155,15 @@ type RedfishClientConfig struct {
 	// MaxConcurrentRequests sets the gofish client maximum permitted concurrent requests.
 	MaxConcurrentRequests int64         `mapstructure:"max_concurrent_requests"`
 	DialTimeout           time.Duration `mapstructure:"dial_timeout"`
+	// ResponseHeaderTimeout bounds the wait for a BMC's response headers after the request
+	// has been written. Without it the scrape context is the only limit on a request, so a
+	// BMC that completes TCP and TLS and then declines to answer holds the request open for
+	// as long as it stays silent.
+	ResponseHeaderTimeout time.Duration `mapstructure:"response_header_timeout"`
+	// LogoutTimeout bounds the session delete issued at the end of a scrape. That request
+	// runs on a context detached from the scrape's, which is typically already cancelled by
+	// then, so it needs a deadline of its own.
+	LogoutTimeout time.Duration `mapstructure:"logout_timeout"`
 }
 
 // Config represents the redfish_exporter config file

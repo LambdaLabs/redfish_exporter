@@ -13,6 +13,7 @@ hosts:
 groups:
   [ <string>: <hostdetail> ]
 modules: [ <string>: <module> ]
+[ redfish_client: <redfish_client> ]
 ```
 
 ## `<hostdetail>`
@@ -22,6 +23,44 @@ password: <string>
 ```
 
 Note that the `default` entry above is useful in order to avoid the exporter failing when attempting to collect from a host not explicitly defined in `hosts`.
+
+## `<redfish_client>`
+
+Tuning for the underlying Redfish (gofish) client. Every key is optional and shown with its default.
+
+``` yaml
+[ max_concurrent_requests: <int> | default = 1 ]
+[ dial_timeout: <timeout> | default = 10s ]
+[ response_header_timeout: <timeout> | default = 30s ]
+[ logout_timeout: <timeout> | default = 10s ]
+```
+
+Any key may also be set from the environment as `REDFISH_CLIENT_<KEY>`, prefixed further if `--config.env-prefix` is given — e.g. `REDFISH_CLIENT_LOGOUT_TIMEOUT=5s`.
+
+### Timeouts and session teardown
+
+The exporter opens one Redfish session per scrape request and deletes it when the request finishes. BMCs limit how many sessions may be open at once, and refuse new ones once that limit is reached, so a session that is not released denies service to later scrapes until the BMC's own idle timeout reclaims the slot. The two timeouts below exist to keep that from happening.
+
+`response_header_timeout` bounds how long a request waits for response headers after it has been written. Without it, the scrape's context is the only limit on any request, so a BMC that completes TCP and TLS and then declines to answer holds the request open for as long as it stays silent. It deliberately bounds only the wait for headers, so a slow but progressing response body is unaffected.
+
+Set it below the scrape timeout of whatever is calling `/redfish`, or it will not take effect: the scrape context is cancelled first and that becomes the operative limit. Its purpose is to cap how much of a scrape's budget any *single* stalled request can consume — which matters most at `max_concurrent_requests: 1`, where requests are issued one at a time and one stalled call would otherwise spend the remainder of the budget on its own.
+
+`logout_timeout` bounds the session delete issued at the end of a scrape. That request runs on a context deliberately detached from the scrape's: by the time teardown happens the scrape context is frequently already cancelled — which is exactly the case where a session would otherwise be stranded — and a cancelled context cannot carry the request that cleans up after it. Detached, it needs a deadline of its own.
+
+Both fall back to the defaults above when set to zero, so a config file predating these keys cannot leave a request unbounded.
+
+### Observing session teardown
+
+```
+# HELP redfish_exporter_session_logouts_total Redfish session teardown attempts by target and outcome. result=failure means the session slot may stay occupied on the BMC until its own idle timeout reclaims it.
+# TYPE redfish_exporter_session_logouts_total counter
+```
+
+Exposed on `/metrics`, not on `/redfish`, because teardown happens after a scrape's response has already been written. Labels are `target` (the BMC address) and `result` (`success` or `failure`). It is labelled per device because a session limit is a per-device property; the `http.client.*` metrics cannot answer "which BMC is holding sessions we failed to release", since they identify the exporter rather than the target.
+
+A rising `result="failure"` rate for a target means sessions are accumulating on that BMC. Read it against `result="success"` for the same target to get a rate rather than a bare count.
+
+**Known limitation.** If a session creation reaches the BMC but the exporter stops waiting before reading the response, the BMC may create a session whose identifier arrives in a response header the exporter never read. Nothing can delete that session, and it is not counted by the metric above, because no teardown is ever attempted for it. It is released by the BMC's own idle timeout.
 
 ## `<module>`
 Users of `blackbox_exporter` will be familiar with the concept of [modules (aka probers)](https://github.com/prometheus/blackbox_exporter/blob/master/CONFIGURATION.md#module).
@@ -598,4 +637,4 @@ Maybe a good automation target? Until then, for a given `${TARGET}` representing
 
 ```shell
 curl -s "http://localhost:9610/redfish?target=${TARGET}&module=${MODULE}" | awk '/^# (TYPE|HELP)/ { if (/^# TYPE/) {print; print ""} else {print} }'
-``` 
+```
