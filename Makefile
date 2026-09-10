@@ -1,4 +1,4 @@
-.PHONY: benchmark build test mock-test capture clean help lint fmt fmt-check gotests unit-test integration-test coverage check ci perf-mock perf-live perf-help validate-live
+.PHONY: benchmark build test mock-test capture clean help lint fmt fmt-check gotests unit-test integration-test coverage check ci perf-mock perf-live perf-help validate-live serve-live
 
 # Default target
 help:
@@ -15,6 +15,7 @@ help:
 	@echo "  ci          - Run all CI checks"
 	@echo "  mock-test   - Run mock server with exporter for testing"
 	@echo "  validate-live - Scrape a live system and assert metrics are healthy"
+	@echo "  serve-live  - Run the exporter locally against live systems (no tests, stays up)"
 	@echo "  capture     - Capture Redfish data from a BMC"
 	@echo "  perf-mock   - Run performance analysis against mock server"
 	@echo "  perf-live   - Run performance analysis against live system"
@@ -31,6 +32,10 @@ help:
 	@echo "For validate-live, specify TARGET (and optionally MODULES + credentials):"
 	@echo "  make validate-live TARGET=10.0.0.1"
 	@echo "  REDFISH_USER=admin REDFISH_PASS=pass make validate-live TARGET=10.0.0.1 MODULES=powershelf"
+	@echo ""
+	@echo "For serve-live, TARGET is optional (it only shapes the scrape URL printed for you):"
+	@echo "  REDFISH_USER=admin REDFISH_PASS=pass make serve-live TARGET=10.0.0.1"
+	@echo "  LOGLEVEL=debug REDFISH_USER=admin REDFISH_PASS=pass make serve-live TARGET=10.0.0.1"
 
 # Build the exporter
 build:
@@ -103,6 +108,14 @@ validate-live:
 	@TARGET="$(TARGET)" MODULES="$(MODULES)" REDFISH_USER="$(REDFISH_USER)" REDFISH_PASS="$(REDFISH_PASS)" \
 		CONFIG_FILE="$(CONFIG_FILE)" EXPORTER_PORT="$(EXPORTER_PORT)" \
 		./tools/validate-live/validate.sh
+
+# Run the exporter locally against live Redfish systems, and leave it running.
+# Unlike validate-live this asserts nothing and scrapes nothing — it just serves, so you can
+# drive real BMCs by hand and watch the logs.
+serve-live:
+	@TARGET="$(TARGET)" MODULES="$(MODULES)" REDFISH_USER="$(REDFISH_USER)" REDFISH_PASS="$(REDFISH_PASS)" \
+		CONFIG_FILE="$(CONFIG_FILE)" EXPORTER_PORT="$(EXPORTER_PORT)" LOGLEVEL="$(LOGLEVEL)" \
+		./tools/serve-live/serve.sh
 
 # Clean build artifacts
 clean:

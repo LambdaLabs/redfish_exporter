@@ -44,24 +44,6 @@ var (
 	)
 )
 
-// sessionLogoutsTotal counts session teardown attempts. It is labelled by BMC address
-// because a session cap is a per-device limit, so "which device is holding sessions we
-// failed to release" is the only useful form of the question. The HTTP-level metrics from
-// otelhttp cannot answer it: they label the exporter instance, not the target.
-//
-// Teardown happens after the scrape response has already been gathered and written, so this
-// cannot live on the per-scrape registry — it is registered on the default registerer and
-// exposed on /metrics.
-var sessionLogoutsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Name: prometheus.BuildFQName(namespace, exporter, "session_logouts_total"),
-	Help: "Redfish session teardown attempts by target and outcome. result=failure means the session slot may stay occupied on the BMC until its own idle timeout reclaims it.",
-}, []string{"target", "result"})
-
-// SessionMetrics returns the session-lifecycle metrics for the caller to register.
-func SessionMetrics() []prometheus.Collector {
-	return []prometheus.Collector{sessionLogoutsTotal}
-}
-
 // redfishCollector is an aggregation of various other prometheus.Collector.
 // It implements prometheus.Collector, and at Describe or Collect time will iterate all of
 // its own collectors to yield data.
@@ -83,7 +65,12 @@ type redfishCollector struct {
 
 	// host is the BMC address, retained so Close() can attribute its outcome to a device.
 	host string
-	// logoutTimeout bounds the session delete in Close().
+	// username and password are retained for the direct DELETE fallback in Close(): gofish
+	// only ever presents the session token, so releasing a slot whose token the BMC has
+	// already invalidated means re-authenticating the request ourselves.
+	username string
+	password string
+	// logoutTimeout bounds each session delete attempt in Close().
 	logoutTimeout time.Duration
 	// closeOnce guards the session teardown in Close().
 	closeOnce sync.Once
@@ -93,7 +80,25 @@ type redfishCollector struct {
 func NewRedfishCollector(ctx context.Context, logger *slog.Logger, host string, username string, password string, rfConfig config.RedfishClientConfig) (*redfishCollector, error) {
 	redfishClient, err := newRedfishClient(ctx, host, username, password, rfConfig)
 	if err != nil {
+		// The attempt may still have cost the BMC a slot: if the session was created and the
+		// exporter stopped waiting before reading the Location header, nothing here ever
+		// learns the identifier, so nothing can delete it.
+		logger.Error("failed to create redfish session",
+			slog.Int("status_code", httpStatusOf(err)),
+			slog.Any("error", err))
 		return nil, err
+	}
+
+	// Record the session as soon as it exists. A slot left occupied on a BMC can only be
+	// traced back to the scrape that opened it if the identifier the BMC assigned was logged
+	// at creation; by teardown time a failure may leave nothing else to correlate against.
+	// At debug, because this is one line per scrape per target on the healthy path — the
+	// counterpart signal that belongs in production is redfish_sessions_open.
+	if session, sessErr := redfishClient.GetSession(); sessErr == nil {
+		sessionLogger(logger, session.ID).Debug("redfish session created")
+	} else {
+		// A client holding no session — basic auth — has no slot to release either.
+		logger.Debug("redfish client created without a session", slog.Any("error", sessErr))
 	}
 
 	logoutTimeout := rfConfig.LogoutTimeout
@@ -106,6 +111,8 @@ func NewRedfishCollector(ctx context.Context, logger *slog.Logger, host string, 
 		logger:        logger,
 		redfishClient: redfishClient,
 		host:          host,
+		username:      username,
+		password:      password,
 		logoutTimeout: logoutTimeout,
 		redfishUp: prometheus.NewGauge(
 			prometheus.GaugeOpts{
@@ -133,60 +140,6 @@ func (r *redfishCollector) Client() *gofish.APIClient {
 	return r.redfishClient
 }
 
-// Close releases the Redfish session opened by NewRedfishCollector. It is idempotent and
-// safe to call on a collector whose Collect() never ran.
-//
-// Session teardown belongs to whoever caused the session to be created, which is the scrape
-// handler, not Collect(). BMCs cap concurrent sessions and refuse every new one once the cap
-// is reached, so a session that outlives its scrape denies service to later scrapes until the
-// BMC's own idle timeout reclaims the slot. Callers should defer Close() as soon as the
-// collector is constructed: a deferred call also runs while a panic unwinds, so it covers the
-// paths where Collect() is never reached or does no work.
-//
-// The delete runs on a context detached from the scrape's. By the time Close() is reached the
-// scrape context is frequently already cancelled — that is precisely the case that leaks — and
-// a cancelled context cannot carry the request that cleans up after it. Detaching keeps the
-// scrape's context values, so the collector attribute on the HTTP metrics survives, while
-// dropping its cancellation. The replacement carries its own deadline: gofish's Logout()
-// substitutes context.Background() for a cancelled context, which would otherwise leave this
-// request with no limit at all and park the handler goroutine on a silent BMC.
-func (r *redfishCollector) Close() {
-	// A double DELETE would target a slot the BMC may have already reissued, hence the once.
-	r.closeOnce.Do(func() {
-		if r.redfishClient == nil {
-			return
-		}
-		session, err := r.redfishClient.GetSession()
-		if err != nil {
-			// No session was established, so there is nothing to release.
-			return
-		}
-
-		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.ctx), r.logoutTimeout)
-		defer cancel()
-
-		// Operate on a WithContext copy rather than on the client itself: the copy shares the
-		// auth pointer, so the session is still identified correctly, but no field of a client
-		// that other goroutines may still be reading gets mutated.
-		api := r.redfishClient.WithContext(ctx)
-		// gofish's Logout() does this for us; since we bypass it, close the idle connections
-		// the keepalive settings would otherwise hold for up to a minute after the scrape.
-		defer api.HTTPClient.CloseIdleConnections()
-
-		// DeleteSession is called directly rather than through gofish's Logout(), which
-		// discards the returned error and so makes a failed teardown indistinguishable from
-		// a successful one.
-		if err := api.Service.DeleteSession(session.ID); err != nil {
-			sessionLogoutsTotal.WithLabelValues(r.host, "failure").Inc()
-			r.logger.Error("failed to delete redfish session; the slot stays occupied on the BMC until its own idle timeout reclaims it",
-				slog.String("session", session.ID),
-				slog.Any("error", err))
-			return
-		}
-		sessionLogoutsTotal.WithLabelValues(r.host, "success").Inc()
-	})
-}
-
 // Describe implements prometheus.Collector.
 func (r *redfishCollector) Describe(ch chan<- *prometheus.Desc) {
 	for _, collector := range r.collectors {
@@ -194,6 +147,7 @@ func (r *redfishCollector) Describe(ch chan<- *prometheus.Desc) {
 	}
 	ch <- collectorsSucceededDesc
 	ch <- collectorsFailedDesc
+	ch <- sessionsOpenDesc
 }
 
 // Collect implements prometheus.Collector.
@@ -207,6 +161,16 @@ func (r *redfishCollector) Collect(ch chan<- prometheus.Metric) {
 		r.redfishUp.Set(0)
 	} else {
 		r.redfishUp.Set(1)
+
+		// Read the BMC's slot usage before the sub-collectors run, so the value describes the
+		// device as this scrape found it. A failure here is not a scrape failure — the metric
+		// simply goes absent, which is itself legible in a query.
+		if open, err := r.openSessionCount(); err != nil {
+			r.logger.Debug("could not read the BMC's open session count", slog.Any("error", err))
+		} else {
+			ch <- prometheus.MustNewConstMetric(sessionsOpenDesc, prometheus.GaugeValue, float64(open))
+		}
+
 		// Session teardown is the caller's responsibility via Close(), so that it also
 		// happens on the branch above and on paths where Collect() is never reached.
 		eg := newRecoverGroup(r.ctx)
