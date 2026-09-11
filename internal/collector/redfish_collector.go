@@ -162,18 +162,29 @@ func (r *redfishCollector) Collect(ch chan<- prometheus.Metric) {
 	} else {
 		r.redfishUp.Set(1)
 
-		// Read the BMC's slot usage before the sub-collectors run, so the value describes the
-		// device as this scrape found it. A failure here is not a scrape failure — the metric
-		// simply goes absent, which is itself legible in a query.
-		if open, err := r.openSessionCount(); err != nil {
-			r.logger.Debug("could not read the BMC's open session count", slog.Any("error", err))
-		} else {
-			ch <- prometheus.MustNewConstMetric(sessionsOpenDesc, prometheus.GaugeValue, float64(open))
-		}
-
 		// Session teardown is the caller's responsibility via Close(), so that it also
 		// happens on the branch above and on paths where Collect() is never reached.
 		eg := newRecoverGroup(r.ctx)
+
+		// Read the BMC's slot usage alongside the sub-collectors rather than ahead of them.
+		// The value does not depend on the ordering — nothing a sub-collector does opens or
+		// releases a session — and serialising it would add a whole request's latency to every
+		// scrape, worst of all on the slow and silent BMCs this metric exists to watch, where it
+		// would burn the response header timeout before collection had started.
+		//
+		// It deliberately does not touch collectorsSucceeded: that counter is reported against
+		// len(r.collectors), so a non-collector goroutine incrementing it would overcount
+		// successes and drive collectorsFailed negative. A failure here is not a scrape failure
+		// either — the metric simply goes absent, which is itself legible in a query.
+		eg.Go(func() error {
+			if open, err := r.openSessionCount(); err != nil {
+				r.logger.Debug("could not read the BMC's open session count", slog.Any("error", err))
+			} else {
+				ch <- prometheus.MustNewConstMetric(sessionsOpenDesc, prometheus.GaugeValue, float64(open))
+			}
+			return nil
+		})
+
 		for _, collector := range r.collectors {
 			eg.Go(func() error {
 				collector.CollectWithContext(r.ctx, ch)

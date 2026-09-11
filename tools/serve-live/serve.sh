@@ -70,8 +70,8 @@ if [ -n "$REDFISH_USER" ] && [ -n "$REDFISH_PASS" ]; then
   cat > "$USE_CONFIG" <<EOF
 hosts:
   default:
-    username: ${REDFISH_USER}
-    password: ${REDFISH_PASS}
+    username: '${REDFISH_USER_YAML}'
+    password: '${REDFISH_PASS_YAML}'
 loglevel: ${LOGLEVEL:-info}
 modules:
   chassis:
