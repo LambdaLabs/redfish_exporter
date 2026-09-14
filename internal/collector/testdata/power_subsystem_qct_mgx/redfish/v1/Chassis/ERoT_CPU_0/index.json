@@ -1,0 +1,7 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/ERoT_CPU_0",
+  "@odata.type": "#Chassis.v1_17_0.Chassis",
+  "Id": "ERoT_CPU_0",
+  "Name": "ERoT_CPU_0",
+  "ChassisType": "Module"
+}

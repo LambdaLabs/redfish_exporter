@@ -1,0 +1,14 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/NVMeSSD.1.Group.0.StorageBackplane",
+  "@odata.type": "#Chassis.v1_27_0.Chassis",
+  "Id": "NVMeSSD.1.Group.0.StorageBackplane",
+  "Name": "Backplane",
+  "ChassisType": "StorageEnclosure",
+  "Manufacturer": "Supermicro",
+  "Model": "Backplane",
+  "PowerState": "On",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  }
+}

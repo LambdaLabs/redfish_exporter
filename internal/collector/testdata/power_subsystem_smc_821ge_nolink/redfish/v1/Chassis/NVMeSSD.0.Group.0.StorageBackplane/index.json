@@ -1,0 +1,8 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/NVMeSSD.0.Group.0.StorageBackplane",
+  "@odata.type": "#Chassis.v1_14_0.Chassis",
+  "Id": "NVMeSSD.0.Group.0.StorageBackplane",
+  "Name": "Backplane",
+  "ChassisType": "Enclosure",
+  "Model": "Backplane"
+}

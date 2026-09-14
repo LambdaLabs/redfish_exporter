@@ -1,0 +1,18 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/System.Embedded.1",
+  "@odata.type": "#Chassis.v1_27_0.Chassis",
+  "Id": "System.Embedded.1",
+  "Name": "Computer System Chassis",
+  "ChassisType": "RackMount",
+  "Manufacturer": "Dell Inc.",
+  "Model": "PowerEdge XE9780",
+  "PowerState": "On",
+  "Status": {
+    "Health": "Critical",
+    "HealthRollup": "Critical",
+    "State": "Enabled"
+  },
+  "PowerSubsystem": {
+    "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PowerSubsystem"
+  }
+}
