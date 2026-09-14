@@ -91,6 +91,8 @@ func createChassisMetricMap() map[string]Metric {
 
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_health", fmt.Sprintf("chassis leak detector health state,%s", CommonHealthHelp), ChassisLeakDetectorLabelNames)
 
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "power_subsystem_health", fmt.Sprintf("health of the chassis power subsystem,%s", CommonHealthHelp), ChassisLabelNames)
+
 	// Note: chassis_gpu_total_power_watts is now collected via TelemetryService (HGX_PlatformEnvironmentMetrics_0)
 
 	return chassisMetrics
@@ -265,6 +267,15 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 			}
 		}
 
+		chassisPowerSubsystem, err := chassis.PowerSubsystem()
+		if err != nil {
+			chassisLogger.Error("error getting power subsystem from chassis", slog.String("operation", "chassis.PowerSubsystem()"), slog.Any("error", err))
+		} else if chassisPowerSubsystem == nil {
+			chassisLogger.Info("no power subsystem found", slog.String("operation", "chassis.PowerSubsystem()"))
+		} else {
+			parseChassisPowerSubsystem(ch, chassisID, chassisPowerSubsystem)
+		}
+
 		// process NetworkAdapter
 		networkAdapters, err := chassis.NetworkAdapters()
 		if err != nil {
@@ -420,6 +431,13 @@ func parseChassisFan(ch chan<- prometheus.Metric, chassisID string, chassisFan s
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_upper_threshold_critical"].desc, prometheus.GaugeValue, chassisFanRPMUpperCriticalThreshold, chassisFanLabelvalues...)
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_lower_threshold_fatal"].desc, prometheus.GaugeValue, chassisFanRPMLowerFatalThreshold, chassisFanLabelvalues...)
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_upper_threshold_fatal"].desc, prometheus.GaugeValue, chassisFanRPMUpperFatalThreshold, chassisFanLabelvalues...)
+}
+
+func parseChassisPowerSubsystem(ch chan<- prometheus.Metric, chassisID string, ps *schemas.PowerSubsystem) {
+	labelValues := []string{"power_subsystem", chassisID}
+	if statusHealth, ok := parseCommonStatusHealth(ps.Status.Health); ok {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_subsystem_health"].desc, prometheus.GaugeValue, statusHealth, labelValues...)
+	}
 }
 
 func parseLeakDetector(ch chan<- prometheus.Metric, chassisID string, ld *schemas.LeakDetector) {

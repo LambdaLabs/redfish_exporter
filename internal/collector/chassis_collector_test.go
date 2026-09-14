@@ -233,6 +233,33 @@ func TestParseLeakDetector(t *testing.T) {
 	}
 }
 
+// TestCollectPowerSubsystemHealth pins that the chassis PowerSubsystem's Status.Health is
+// emitted as redfish_chassis_power_subsystem_health, labelled by chassis.
+func TestCollectPowerSubsystemHealth(t *testing.T) {
+	server := newTestRedfishServer(t)
+	server.addRouteFromFixture("/redfish/v1/Chassis", "chassis_collection.json")
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0", "chassis_main.json")
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/PowerSubsystem", "power_subsystem.json")
+
+	client := connectToTestServer(t, server.Server)
+	t.Cleanup(func() {
+		client.Logout()
+		server.Close()
+	})
+
+	collector, err := NewChassisCollector(t.Name(), client, NewTestLogger(t, slog.LevelDebug), config.DefaultChassisCollector)
+	require.NoError(t, err)
+
+	ch := make(chan prometheus.Metric, 128)
+	collector.CollectWithContext(context.Background(), ch)
+	metrics := drainMetrics(t, ch)
+
+	health := requireMetric(t, metrics, "redfish_chassis_power_subsystem_health")
+	require.Equal(t, "Chassis_0", health.labels["chassis_id"])
+	require.Equal(t, "power_subsystem", health.labels["resource"])
+	require.Equal(t, float64(2), health.value, "fixture reports Health=Warning")
+}
+
 // TestCollectTotalGPUPower tests the collection of total GPU power metric
 // Note: This metric is now collected via TelemetryService (HGX_PlatformEnvironmentMetrics_0)
 func TestCollectTotalGPUPower(t *testing.T) {
