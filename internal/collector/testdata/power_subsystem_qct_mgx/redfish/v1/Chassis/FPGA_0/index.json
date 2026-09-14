@@ -1,0 +1,11 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/FPGA_0",
+  "@odata.type": "#Chassis.v1_17_0.Chassis",
+  "Id": "FPGA_0",
+  "Name": "FPGA_0",
+  "ChassisType": "Component",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/HA-RAID.0.StorageEnclosure.0",
+  "@odata.type": "#Chassis.v1_27_0.Chassis",
+  "Id": "HA-RAID.0.StorageEnclosure.0",
+  "Name": "Internal Enclosure 0",
+  "ChassisType": "StorageEnclosure",
+  "Manufacturer": "Supermicro",
+  "Model": "Internal Enclosure",
+  "PowerState": "On",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  }
+}

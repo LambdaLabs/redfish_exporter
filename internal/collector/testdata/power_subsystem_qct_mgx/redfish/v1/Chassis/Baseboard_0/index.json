@@ -1,0 +1,11 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/Baseboard_0",
+  "@odata.type": "#Chassis.v1_17_0.Chassis",
+  "Id": "Baseboard_0",
+  "Name": "Baseboard_0",
+  "ChassisType": "Zone",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  }
+}

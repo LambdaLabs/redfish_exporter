@@ -1,0 +1,18 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/1",
+  "@odata.type": "#Chassis.v1_27_0.Chassis",
+  "Id": "1",
+  "Name": "Computer System Chassis",
+  "ChassisType": "RackMount",
+  "Manufacturer": "Supermicro",
+  "Model": "X14SBHM",
+  "PowerState": "On",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK",
+    "HealthRollup": "OK"
+  },
+  "PowerSubsystem": {
+    "@odata.id": "/redfish/v1/Chassis/1/PowerSubsystem"
+  }
+}

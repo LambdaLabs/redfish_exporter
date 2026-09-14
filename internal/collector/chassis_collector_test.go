@@ -233,6 +233,103 @@ func TestParseLeakDetector(t *testing.T) {
 	}
 }
 
+// TestCollectPowerSubsystemHealth pins that the chassis PowerSubsystem's Status.Health is
+// emitted as redfish_chassis_power_subsystem_health, labelled by chassis.
+func TestCollectPowerSubsystemHealth(t *testing.T) {
+	server := newTestRedfishServer(t)
+	server.addRouteFromFixture("/redfish/v1/Chassis", "chassis_collection.json")
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0", "chassis_main.json")
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/PowerSubsystem", "power_subsystem.json")
+
+	client := connectToTestServer(t, server.Server)
+	t.Cleanup(func() {
+		client.Logout()
+		server.Close()
+	})
+
+	collector, err := NewChassisCollector(t.Name(), client, NewTestLogger(t, slog.LevelDebug), config.DefaultChassisCollector)
+	require.NoError(t, err)
+
+	ch := make(chan prometheus.Metric, 128)
+	collector.CollectWithContext(context.Background(), ch)
+	metrics := drainMetrics(t, ch)
+
+	health := requireMetric(t, metrics, "redfish_chassis_power_subsystem_health")
+	require.Equal(t, "Chassis_0", health.labels["chassis_id"])
+	require.Equal(t, "power_subsystem", health.labels["resource"])
+	require.Equal(t, float64(2), health.value, "fixture reports Health=Warning")
+}
+
+// TestCollectPowerSubsystemHealthVendors runs the chassis collector against fixture trees
+// captured from real BMCs (2026-09-14) and pins which chassis carry a PowerSubsystem on each
+// platform. The Supermicro SYS-821GE-TNHR (H100) firmware exposes no PowerSubsystem link at
+// all, so that platform must emit chassis health but no power_subsystem_health.
+func TestCollectPowerSubsystemHealthVendors(t *testing.T) {
+	cases := []struct {
+		name    string
+		fixture string
+		// chassis_id -> expected power_subsystem_health value; nil means the metric must be absent
+		want map[string]float64
+		// chassis ids that must still emit redfish_chassis_health, proving the fixture was walked
+		chassis []string
+	}{
+		{
+			name:    "dell xe9780 (iDRAC)",
+			fixture: "testdata/power_subsystem_dell_xe9780",
+			want:    map[string]float64{"System.Embedded.1": 1},
+			chassis: []string{"System.Embedded.1", "Enclosure.Internal.0-1", "Enclosure.Internal.0-2"},
+		},
+		{
+			name:    "supermicro x13 cpu node",
+			fixture: "testdata/power_subsystem_smc_x13",
+			want:    map[string]float64{"1": 1},
+			chassis: []string{"1", "HA-RAID.0.StorageEnclosure.0"},
+		},
+		{
+			name:    "qct s74g mgx",
+			fixture: "testdata/power_subsystem_qct_mgx",
+			want:    map[string]float64{"BMC_0": 1},
+			chassis: []string{"BMC_0", "Baseboard_0"},
+		},
+		{
+			name:    "supermicro 821ge h100, no PowerSubsystem link",
+			fixture: "testdata/power_subsystem_smc_821ge_nolink",
+			want:    nil,
+			chassis: []string{"1"}, // UBB_1 reports no Status on this firmware
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, client := setupTestServerClient(t, tc.fixture)
+			collector, err := NewChassisCollector(t.Name(), client, NewTestLogger(t, slog.LevelDebug), config.DefaultChassisCollector)
+			require.NoError(t, err)
+
+			ch := make(chan prometheus.Metric, 256)
+			collector.CollectWithContext(context.Background(), ch)
+			metrics := drainMetrics(t, ch)
+
+			seen := map[string]bool{}
+			for _, m := range metrics["redfish_chassis_health"] {
+				seen[m.labels["chassis_id"]] = true
+			}
+			for _, id := range tc.chassis {
+				require.True(t, seen[id], "expected redfish_chassis_health for chassis %q", id)
+			}
+
+			got := map[string]float64{}
+			for _, m := range metrics["redfish_chassis_power_subsystem_health"] {
+				require.Equal(t, "power_subsystem", m.labels["resource"])
+				got[m.labels["chassis_id"]] = m.value
+			}
+			if tc.want == nil {
+				require.Empty(t, got, "platform without a PowerSubsystem link must not emit the metric")
+				return
+			}
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
 // TestCollectTotalGPUPower tests the collection of total GPU power metric
 // Note: This metric is now collected via TelemetryService (HGX_PlatformEnvironmentMetrics_0)
 func TestCollectTotalGPUPower(t *testing.T) {

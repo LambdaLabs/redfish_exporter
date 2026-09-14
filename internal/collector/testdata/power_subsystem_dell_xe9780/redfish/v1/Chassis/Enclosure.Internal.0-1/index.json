@@ -1,0 +1,15 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/Enclosure.Internal.0-1",
+  "@odata.type": "#Chassis.v1_27_0.Chassis",
+  "Id": "Enclosure.Internal.0-1",
+  "Name": "PCIe SSD Backplane 1",
+  "ChassisType": "StorageEnclosure",
+  "Manufacturer": null,
+  "Model": "PCIe SSD Backplane 1",
+  "PowerState": "On",
+  "Status": {
+    "HealthRollup": "OK",
+    "State": "Enabled",
+    "Health": "OK"
+  }
+}

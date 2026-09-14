@@ -1,0 +1,20 @@
+{
+  "@odata.id": "/redfish/v1/Chassis",
+  "@odata.type": "#ChassisCollection.ChassisCollection",
+  "Name": "Chassis Collection",
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/BMC_0"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/Baseboard_0"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/ERoT_CPU_0"
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/FPGA_0"
+    }
+  ],
+  "Members@odata.count": 4
+}
