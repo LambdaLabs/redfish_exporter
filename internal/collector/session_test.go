@@ -8,12 +8,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -35,6 +37,24 @@ type sessionBMC struct {
 	// refuseDeletes makes the session service answer a DELETE with 503, as a BMC at its
 	// session cap does. The slot stays occupied.
 	refuseDeletes bool
+
+	// refuseDeleteAttempts makes the session service answer that many DELETEs with 503
+	// before behaving normally, reproducing a teardown that only a retry gets through.
+	refuseDeleteAttempts int
+
+	// refuseTokenDeletes makes the session service answer 401 to a DELETE authenticated with
+	// the session token, while still honouring one authenticated with credentials. Real BMCs
+	// do this once they have invalidated a token whose slot they are still holding — the case
+	// gofish cannot recover from, since it will only ever send the token.
+	refuseTokenDeletes bool
+
+	// authSeen records the authentication of every DELETE the session service received, in
+	// order, as "token", "basic" or "none".
+	authSeen []string
+
+	// refuseSessionList makes a GET of the session collection answer 403, as a BMC does for
+	// an account behind a forced password change.
+	refuseSessionList bool
 
 	// stall, when non-nil, holds a handler until the channel is closed, after that handler
 	// has already applied its side effect. It reproduces a BMC that accepts a request and
@@ -87,19 +107,40 @@ func newSessionBMC(t *testing.T) *sessionBMC {
 	})
 
 	mux.HandleFunc("/redfish/v1/SessionService/Sessions", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		b.mu.Lock()
-		b.created++
-		uri := fmt.Sprintf("/redfish/v1/SessionService/Sessions/%d", b.created)
-		b.open[uri] = true
-		b.mu.Unlock()
+		switch r.Method {
+		case http.MethodGet:
+			// The session collection, as the exporter counts open slots from.
+			b.mu.Lock()
+			refused := b.refuseSessionList
+			members := make([]map[string]string, 0, len(b.open))
+			for uri := range b.open {
+				members = append(members, map[string]string{"@odata.id": uri})
+			}
+			b.mu.Unlock()
 
-		w.Header().Set("Location", uri)
-		w.Header().Set("X-Auth-Token", "token")
-		w.WriteHeader(http.StatusCreated)
+			b.waitIfStalled()
+			if refused {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			writeJSON(w, map[string]any{
+				"@odata.id":           "/redfish/v1/SessionService/Sessions",
+				"Members":             members,
+				"Members@odata.count": len(members),
+			})
+		case http.MethodPost:
+			b.mu.Lock()
+			b.created++
+			uri := fmt.Sprintf("/redfish/v1/SessionService/Sessions/%d", b.created)
+			b.open[uri] = true
+			b.mu.Unlock()
+
+			w.Header().Set("Location", uri)
+			w.Header().Set("X-Auth-Token", "token")
+			w.WriteHeader(http.StatusCreated)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
 	})
 
 	mux.HandleFunc("/redfish/v1/SessionService/Sessions/", func(w http.ResponseWriter, r *http.Request) {
@@ -107,20 +148,36 @@ func newSessionBMC(t *testing.T) *sessionBMC {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
+
+		_, _, hasBasic := r.BasicAuth()
+		auth := "none"
+		switch {
+		case hasBasic:
+			auth = "basic"
+		case r.Header.Get("X-Auth-Token") != "":
+			auth = "token"
+		}
+
 		b.mu.Lock()
 		b.deleted++
-		refused := b.refuseDeletes
-		if !refused {
+		b.authSeen = append(b.authSeen, auth)
+		status := http.StatusNoContent
+		switch {
+		case b.refuseDeletes:
+			status = http.StatusServiceUnavailable
+		case b.refuseDeleteAttempts > 0:
+			b.refuseDeleteAttempts--
+			status = http.StatusServiceUnavailable
+		case b.refuseTokenDeletes && auth != "basic":
+			status = http.StatusUnauthorized
+		}
+		if status == http.StatusNoContent {
 			delete(b.open, r.URL.Path)
 		}
 		b.mu.Unlock()
 
 		b.waitIfStalled()
-		if refused {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+		w.WriteHeader(status)
 	})
 
 	// TLS, so tests exercise the real newRedfishClient path, which builds an https://
@@ -134,6 +191,13 @@ func (b *sessionBMC) counts() (openSlots, created, deleted int) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return len(b.open), b.created, b.deleted
+}
+
+// deleteAuth reports how each DELETE the session service received was authenticated.
+func (b *sessionBMC) deleteAuth() []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]string(nil), b.authSeen...)
 }
 
 func (b *sessionBMC) host(t *testing.T) string {
@@ -310,8 +374,11 @@ func TestClose_BoundedWhenScrapeContextCancelled(t *testing.T) {
 		"a cancelled scrape context must not short-circuit the delete; it should have been attempted")
 	assert.Less(t, elapsed, 5*time.Second, "and it must still be bounded by LogoutTimeout")
 
+	// Not an exact count: a refused teardown is retried, and how many of those retries reach
+	// the network before the shared fallback budget runs out is a matter of timing. What this
+	// test is about is that the cancelled scrape context did not stop the delete being sent.
 	_, _, deleted := bmc.counts()
-	assert.Equal(t, 1, deleted, "the BMC should have received the DELETE")
+	assert.GreaterOrEqual(t, deleted, 1, "the BMC should have received the DELETE")
 }
 
 // TestNewRedfishCollector_ZeroTimeoutsFallBackToBounded confirms a config predating these
@@ -377,11 +444,93 @@ func TestClose_CountsSuccessfulTeardown(t *testing.T) {
 	target := bmc.host(t)
 	rc := newBMCCollector(t, context.Background(), bmc)
 
-	before := logoutCount(t, target, "success")
+	before := logoutCount(t, target, resultSuccess)
 	rc.Close()
 
-	assert.Equal(t, before+1, logoutCount(t, target, "success"))
-	assert.Equal(t, float64(0), logoutCount(t, target, "failure"))
+	assert.Equal(t, before+1, logoutCount(t, target, resultSuccess))
+	assert.Equal(t, float64(0), logoutCount(t, target, resultFailure))
+}
+
+// constMetricValue drains ch and returns the value of the metric whose descriptor names
+// fqName, and whether it was emitted at all. Absence is meaningful for redfish_sessions_open:
+// it is simply not reported when the BMC declines to list its sessions.
+func constMetricValue(t *testing.T, ch chan prometheus.Metric, fqName string) (float64, bool) {
+	t.Helper()
+	want := fmt.Sprintf("fqName: %q", fqName)
+	for {
+		select {
+		case m := <-ch:
+			if !strings.Contains(m.Desc().String(), want) {
+				continue
+			}
+			var pb dto.Metric
+			require.NoError(t, m.Write(&pb))
+			require.NotNil(t, pb.Gauge, "%s should be a gauge", fqName)
+			return pb.Gauge.GetValue(), true
+		default:
+			return 0, false
+		}
+	}
+}
+
+// TestCollect_ReportsOpenSessionCount is the point of the metric: it counts what the device
+// holds, not what this process opened. The second collector stands in for a slot held by
+// anything else — an earlier scrape that leaked, a previous build, another client — and that
+// slot consumes the cap just the same, so a count that missed it would miss the accumulation
+// the metric exists to show.
+func TestCollect_ReportsOpenSessionCount(t *testing.T) {
+	bmc := newSessionBMC(t)
+
+	other := newBMCCollector(t, context.Background(), bmc)
+	defer other.Close()
+
+	rc := newBMCCollector(t, context.Background(), bmc)
+	defer rc.Close()
+
+	openSlots, _, _ := bmc.counts()
+	require.Equal(t, 2, openSlots)
+
+	ch := make(chan prometheus.Metric, 32)
+	rc.Collect(ch)
+
+	open, found := constMetricValue(t, ch, "redfish_sessions_open")
+	require.True(t, found, "redfish_sessions_open should have been emitted")
+	assert.Equal(t, float64(2), open, "both open slots must be counted, not just our own")
+}
+
+// TestCollect_OmitsOpenSessionCountWhenRefused covers the live case that prompted this metric:
+// an account behind a forced password change gets 403 on the session collection. That must not
+// fail the scrape — the metric goes absent, which a query can see, and everything else in the
+// scrape still reports.
+func TestCollect_OmitsOpenSessionCountWhenRefused(t *testing.T) {
+	bmc := newSessionBMC(t)
+	bmc.mu.Lock()
+	bmc.refuseSessionList = true
+	bmc.mu.Unlock()
+
+	rc := newBMCCollector(t, context.Background(), bmc)
+	defer rc.Close()
+
+	ch := make(chan prometheus.Metric, 32)
+	assert.NotPanics(t, func() { rc.Collect(ch) })
+
+	_, found := constMetricValue(t, ch, "redfish_sessions_open")
+	assert.False(t, found, "a refused session listing must omit the metric, not report a wrong number")
+
+	succeeded, failed := rc.CollectorOutcome()
+	assert.Equal(t, int64(0), succeeded)
+	assert.Equal(t, int64(0), failed, "the refusal is not a collector failure")
+}
+
+// TestSessionsCollectionOf pins the derivation the count depends on. The collection is the
+// parent of our own session's URI, which is more reliable than a hardcoded path — but only
+// while degenerate inputs stay degenerate rather than becoming "." or "/".
+func TestSessionsCollectionOf(t *testing.T) {
+	assert.Equal(t, "/redfish/v1/SessionService/Sessions",
+		sessionsCollectionOf("/redfish/v1/SessionService/Sessions/42"))
+	assert.Equal(t, "", sessionsCollectionOf(""))
+	assert.Equal(t, "", sessionsCollectionOf("42"))
+	assert.Equal(t, "", sessionsCollectionOf("/42"))
 }
 
 // TestClose_CountsRefusedTeardown is the case gofish's Logout() hid entirely: it discards the
@@ -396,15 +545,17 @@ func TestClose_CountsRefusedTeardown(t *testing.T) {
 	target := bmc.host(t)
 	rc := newBMCCollector(t, context.Background(), bmc)
 
-	before := logoutCount(t, target, "failure")
+	before := logoutCount(t, target, resultFailure)
 	rc.Close()
 
-	assert.Equal(t, before+1, logoutCount(t, target, "failure"),
+	assert.Equal(t, before+1, logoutCount(t, target, resultFailure),
 		"a refused teardown must be attributed to the target BMC")
-	assert.Equal(t, float64(0), logoutCount(t, target, "success"))
+	assert.Equal(t, float64(0), logoutCount(t, target, resultSuccess))
+	assert.Equal(t, float64(0), logoutCount(t, target, resultRecovered),
+		"nothing recovered the slot, so the outcome is a plain failure")
 
 	openSlots, _, deleted := bmc.counts()
-	assert.Equal(t, 1, deleted, "the DELETE was attempted")
+	assert.Equal(t, 3, deleted, "gofish's delete plus both direct attempts were made")
 	assert.Equal(t, 1, openSlots, "and the BMC kept the slot")
 }
 
@@ -419,10 +570,70 @@ func TestClose_CountsTimedOutTeardown(t *testing.T) {
 	rc := newBMCCollectorWithConfig(t, context.Background(), bmc, cfg)
 	bmc.stallHandlers(t)
 
-	before := logoutCount(t, target, "failure")
+	before := logoutCount(t, target, resultFailure)
 	rc.Close()
 
-	assert.Equal(t, before+1, logoutCount(t, target, "failure"))
+	assert.Equal(t, before+1, logoutCount(t, target, resultFailure))
+}
+
+// TestClose_DirectDeleteRecoversTransientRefusal is the plainest reason to retry: a 503 says
+// the BMC would not release the slot now, not that it cannot. gofish's delete is a single
+// attempt, so before this the slot was written off on the first refusal.
+func TestClose_DirectDeleteRecoversTransientRefusal(t *testing.T) {
+	bmc := newSessionBMC(t)
+	bmc.mu.Lock()
+	bmc.refuseDeleteAttempts = 1
+	bmc.mu.Unlock()
+
+	target := bmc.host(t)
+	rc := newBMCCollector(t, context.Background(), bmc)
+
+	rc.Close()
+
+	openSlots, _, deleted := bmc.counts()
+	assert.Equal(t, 0, openSlots, "the retry must return the slot to the BMC")
+	assert.Equal(t, 2, deleted, "the refused delete, then the direct one")
+
+	assert.Equal(t, float64(1), logoutCount(t, target, resultRecovered),
+		"a slot the fallback rescued is neither a clean success nor a leak")
+	assert.Equal(t, float64(0), logoutCount(t, target, resultFailure))
+	assert.Equal(t, float64(0), logoutCount(t, target, resultSuccess))
+}
+
+// TestClose_DirectDeleteRecoversRejectedToken is the failure gofish cannot recover from at
+// all. A BMC that has invalidated the session token while still holding its slot answers 401
+// to the only request gofish can make, and the slot is releasable the whole time — by asking
+// again with credentials, which is why the fallback issues the DELETE itself.
+func TestClose_DirectDeleteRecoversRejectedToken(t *testing.T) {
+	bmc := newSessionBMC(t)
+	bmc.mu.Lock()
+	bmc.refuseTokenDeletes = true
+	bmc.mu.Unlock()
+
+	target := bmc.host(t)
+	rc := newBMCCollector(t, context.Background(), bmc)
+
+	rc.Close()
+
+	openSlots, _, _ := bmc.counts()
+	assert.Equal(t, 0, openSlots, "the credentialed delete must return the slot")
+	assert.Equal(t, []string{"token", "token", "basic"}, bmc.deleteAuth(),
+		"the fallback should escalate from the token to credentials, not repeat the token forever")
+
+	assert.Equal(t, float64(1), logoutCount(t, target, resultRecovered))
+	assert.Equal(t, float64(0), logoutCount(t, target, resultFailure))
+}
+
+// TestClose_NoDirectDeleteOnSuccess keeps the fallback off the ordinary path. A second DELETE
+// after a delete the BMC accepted would target a slot it may have already reissued.
+func TestClose_NoDirectDeleteOnSuccess(t *testing.T) {
+	bmc := newSessionBMC(t)
+	rc := newBMCCollector(t, context.Background(), bmc)
+
+	rc.Close()
+
+	_, _, deleted := bmc.counts()
+	assert.Equal(t, 1, deleted, "a confirmed teardown must not be retried")
 }
 
 // TestClose_CountsNothingWithoutASession keeps every recorded value meaningful: no client
@@ -433,8 +644,17 @@ func TestClose_CountsNothingWithoutASession(t *testing.T) {
 
 	rc.Close()
 
-	assert.Equal(t, float64(0), logoutCount(t, "no-client.test", "success"))
-	assert.Equal(t, float64(0), logoutCount(t, "no-client.test", "failure"))
+	assert.Equal(t, float64(0), logoutCount(t, "no-client.test", resultSuccess))
+	assert.Equal(t, float64(0), logoutCount(t, "no-client.test", resultFailure))
+}
+
+// TestSessionIDOf covers the reduction from the session URI gofish reports to the identifier
+// the BMC's own session list shows, which is the value that ends up in a metric label.
+func TestSessionIDOf(t *testing.T) {
+	assert.Equal(t, "42", sessionIDOf("/redfish/v1/SessionService/Sessions/42"))
+	assert.Equal(t, "42", sessionIDOf("42"))
+	// An unset URI must not become a "." label, which path.Base would otherwise produce.
+	assert.Equal(t, "", sessionIDOf(""))
 }
 
 // TestSessionMetrics_Registers guards against a malformed or duplicate metric definition,

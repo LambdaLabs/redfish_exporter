@@ -47,20 +47,54 @@ Set it below the scrape timeout of whatever is calling `/redfish`, or it will no
 
 `logout_timeout` bounds the session delete issued at the end of a scrape. That request runs on a context deliberately detached from the scrape's: by the time teardown happens the scrape context is frequently already cancelled — which is exactly the case where a session would otherwise be stranded — and a cancelled context cannot carry the request that cleans up after it. Detached, it needs a deadline of its own.
 
+It bounds each attempt, not the teardown as a whole. A delete the BMC refuses is retried directly (see below), and those retries share a second budget of the same size, so teardown of a silent BMC takes up to roughly twice `logout_timeout` — on a goroutine whose scrape response has already been written.
+
 Both fall back to the defaults above when set to zero, so a config file predating these keys cannot leave a request unbounded.
+
+### Observing sessions on the device
+
+```
+# HELP redfish_sessions_open Sessions currently open on the BMC, including the one this scrape opened.
+# TYPE redfish_sessions_open gauge
+```
+
+Exposed on `/redfish?target=<host>` alongside `redfish_up`, so Prometheus attributes it to the target it scraped and it carries no labels of its own. It costs one extra GET per scrape: the session collection document, read for its member count rather than by walking each member.
+
+This is the only session signal that describes the device rather than the exporter. The counters below can only see what this process did — a slot stranded by an earlier scrape, by a previous build, or by another client entirely occupies the device's cap just the same and is invisible to them. A BMC refusing new sessions is a device at its limit, and this is the metric that shows the limit approaching, and shows it receding once a fix is deployed.
+
+It is absent, rather than zero, when the BMC declines to list its sessions — a 403 for an account behind a forced password change, for instance. That is deliberate: a wrong number is worse than a gap, and `absent()` is queryable.
 
 ### Observing session teardown
 
 ```
-# HELP redfish_exporter_session_logouts_total Redfish session teardown attempts by target and outcome. result=failure means the session slot may stay occupied on the BMC until its own idle timeout reclaims it.
+# HELP redfish_exporter_session_logouts_total Redfish session teardown attempts by target and outcome. result=success is a delete the BMC accepted, result=recovered means that delete failed and the direct DELETE fallback released the slot, and result=failure means every attempt failed and the session may stay occupied on the BMC until its own idle timeout reclaims it.
 # TYPE redfish_exporter_session_logouts_total counter
 ```
 
-Exposed on `/metrics`, not on `/redfish`, because teardown happens after a scrape's response has already been written. Labels are `target` (the BMC address) and `result` (`success` or `failure`). It is labelled per device because a session limit is a per-device property; the `http.client.*` metrics cannot answer "which BMC is holding sessions we failed to release", since they identify the exporter rather than the target.
+Exposed on `/metrics`, not on `/redfish`, because teardown happens after a scrape's response has already been written. Labels are `target` (the BMC address) and `result` (`success`, `recovered` or `failure`). It is labelled per device because a session limit is a per-device property; the `http.client.*` metrics cannot answer "which BMC is holding sessions we failed to release", since they identify the exporter rather than the target.
 
-A rising `result="failure"` rate for a target means sessions are accumulating on that BMC. Read it against `result="success"` for the same target to get a rate rather than a bare count.
+There is deliberately no session-id label. BMCs that mint a random identifier per session would make every scrape a new series, in Prometheus and in the exporter's own memory, since a counter never releases a child once created. The identifier is in the logs instead, where it costs nothing to keep.
 
-**Known limitation.** If a session creation reaches the BMC but the exporter stops waiting before reading the response, the BMC may create a session whose identifier arrives in a response header the exporter never read. Nothing can delete that session, and it is not counted by the metric above, because no teardown is ever attempted for it. It is released by the BMC's own idle timeout.
+A rising `result="failure"` rate for a target means sessions are accumulating on that BMC — read against `redfish_sessions_open` for the same target to see whether they are actually piling up. `result="recovered"` is a slot that was only released because the fallback asked again: the teardown path is working but the BMC is not answering the first request, which is worth watching before it turns into failures.
+
+Session actions are logged at `debug`, since on the healthy path they are two lines per scrape per target — `redfish_sessions_open` is the signal to run in production. Failures stay at `error` regardless of level, so a stranded slot is never silent. Every line carries `session_id` and `session_uri`:
+
+```
+level=DEBUG msg="redfish session created" scrape_host=10.0.0.1 session_id=42 session_uri=/redfish/v1/SessionService/Sessions/42
+level=DEBUG msg="redfish session deleted" scrape_host=10.0.0.1 session_id=42 session_uri=/redfish/v1/SessionService/Sessions/42 elapsed=41ms
+```
+
+At `debug`, a `created` line with no matching `deleted` or `failed to delete` line for the same `session_id` is a session the exporter stopped tracking without releasing.
+
+### Recovering a refused teardown
+
+A delete the BMC refuses is not the end of the attempt. The exporter issues the `DELETE` against the session URI itself, first with the session token and then, if that is rejected, with the configured credentials, and records the outcome as `result="recovered"` if either is accepted.
+
+Both retries are worth making. A timeout or a 5xx says only that this attempt did not release the slot, not that it cannot be released. And a BMC that has already invalidated the session token while still holding its slot answers `401` to the only request the Redfish client can make — there the credentialed attempt is the only one that can succeed.
+
+Nothing is retried after a delete the BMC accepted: a second `DELETE` would target a slot the device may have already reissued.
+
+**Known limitation.** If a session creation reaches the BMC but the exporter stops waiting before reading the response, the BMC may create a session whose identifier arrives in a response header the exporter never read. Nothing can delete that session, and it is not counted by the metric above, because no teardown is ever attempted for it. It is released by the BMC's own idle timeout. The `failed to create redfish session` log line marks the scrapes where this may have happened.
 
 ## `<module>`
 Users of `blackbox_exporter` will be familiar with the concept of [modules (aka probers)](https://github.com/prometheus/blackbox_exporter/blob/master/CONFIGURATION.md#module).
