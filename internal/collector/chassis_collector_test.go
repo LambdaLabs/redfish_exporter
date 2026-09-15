@@ -55,8 +55,6 @@ func drainMetrics(t *testing.T, ch chan prometheus.Metric) map[string][]collecte
 }
 
 // requireMetric asserts exactly one sample exists for name and returns it.
-//
-//nolint:unused // part of the drainMetrics harness; its first callers land with the Sensors and telemetry tests.
 func requireMetric(t *testing.T, metrics map[string][]collectedMetric, name string) collectedMetric {
 	t.Helper()
 	samples, ok := metrics[name]
@@ -101,6 +99,89 @@ func TestCollectSurvivesOneUnreachableChassis(t *testing.T) {
 	health := metrics["redfish_chassis_health"]
 	require.Len(t, health, 1, "the healthy chassis must still be collected")
 	require.Equal(t, "Chassis_0", health[0].labels["chassis_id"])
+}
+
+// requireSample asserts exactly one of samples carries labelValue under labelKey, and returns it.
+func requireSample(t *testing.T, samples []collectedMetric, labelKey, labelValue string) collectedMetric {
+	t.Helper()
+	var found []collectedMetric
+	for _, sample := range samples {
+		if sample.labels[labelKey] == labelValue {
+			found = append(found, sample)
+		}
+	}
+	require.Len(t, found, 1, "expected exactly one sample with %s=%q, got %v", labelKey, labelValue, samples)
+	return found[0]
+}
+
+// TestCollectThermalSubsystem covers the ThermalSubsystem path: fan readings, the temperature
+// readings hanging off ThermalMetrics, and the leak detectors that already lived there.
+func TestCollectThermalSubsystem(t *testing.T) {
+	server := newTestRedfishServer(t)
+	server.addRouteFromFixture("/redfish/v1/Chassis", "chassis_collection.json")
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0", "chassis_main.json")
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem", "thermal_subsystem.json")
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/Fans", "thermal_subsystem_fans.json")
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/ThermalMetrics", "thermal_metrics.json")
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection", "single_leak_detection.json")
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors", "leak_detectors_single.json")
+	server.addRouteFromFixture("/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/LeakDetection/LeakDetectors/Chassis_0_LeakDetector_0_ColdPlate", "leak_detector_ok.json")
+
+	client := connectToTestServer(t, server.Server)
+	t.Cleanup(func() {
+		client.Logout()
+		server.Close()
+	})
+
+	collector, err := NewChassisCollector(t.Name(), client, NewTestLogger(t, slog.LevelDebug), config.DefaultChassisCollector)
+	require.NoError(t, err)
+
+	ch := make(chan prometheus.Metric, 256)
+	collector.CollectWithContext(context.Background(), ch)
+	metrics := drainMetrics(t, ch)
+
+	// Fan_1 reports no SpeedRPM and no RatedSpeedRPM, and one temperature reading has no
+	// Reading at all, so those samples must be absent rather than reported as zero.
+	for name, want := range map[string]int{
+		"redfish_chassis_thermal_subsystem_fan_health":           2,
+		"redfish_chassis_thermal_subsystem_fan_state":            2,
+		"redfish_chassis_thermal_subsystem_fan_speed_percentage": 2,
+		"redfish_chassis_thermal_subsystem_fan_rpm":              1,
+		"redfish_chassis_thermal_subsystem_fan_rpm_max":          1,
+		"redfish_chassis_thermal_subsystem_temperature_celsius":  2,
+	} {
+		require.Len(t, metrics[name], want, "unexpected sample count for %s", name)
+	}
+
+	fanRPM := requireMetric(t, metrics, "redfish_chassis_thermal_subsystem_fan_rpm")
+	require.Equal(t, "Fan_0", fanRPM.labels["fan_id"])
+	require.Equal(t, "Chassis Fan 0", fanRPM.labels["fan"])
+	require.Equal(t, "Chassis_0", fanRPM.labels["chassis_id"])
+	require.InDelta(t, 8500, fanRPM.value, 0.01)
+
+	require.InDelta(t, 20000, requireMetric(t, metrics, "redfish_chassis_thermal_subsystem_fan_rpm_max").value, 0.01)
+
+	speeds := metrics["redfish_chassis_thermal_subsystem_fan_speed_percentage"]
+	require.InDelta(t, 42.5, requireSample(t, speeds, "fan_id", "Fan_0").value, 0.01)
+	require.InDelta(t, 55.0, requireSample(t, speeds, "fan_id", "Fan_1").value, 0.01)
+
+	health := metrics["redfish_chassis_thermal_subsystem_fan_health"]
+	require.InDelta(t, 1, requireSample(t, health, "fan_id", "Fan_0").value, 0.01)
+	require.InDelta(t, 2, requireSample(t, health, "fan_id", "Fan_1").value, 0.01)
+
+	temperatures := metrics["redfish_chassis_thermal_subsystem_temperature_celsius"]
+	inlet := requireSample(t, temperatures, "sensor_id", "Inlet_Temp")
+	require.Equal(t, "Inlet Air Temp", inlet.labels["sensor"])
+	require.InDelta(t, 24.5, inlet.value, 0.01)
+
+	// The exhaust reading names no device and no sensor resource, so it falls back to its
+	// index in TemperatureReadingsCelsius for both labels.
+	exhaust := requireSample(t, temperatures, "sensor_id", "1")
+	require.Equal(t, "1", exhaust.labels["sensor"])
+	require.InDelta(t, 41.0, exhaust.value, 0.01)
+
+	leak := requireMetric(t, metrics, "redfish_chassis_leak_detector_health")
+	require.Equal(t, "Chassis_0_LeakDetector_0_ColdPlate", leak.labels["leak_detector_id"])
 }
 
 func TestGetLeakDetectors(t *testing.T) {
