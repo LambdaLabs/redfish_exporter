@@ -185,23 +185,11 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 			chassisLogger.Info("no thermal data found", slog.String("operation", "chassis.Thermal()"))
 		} else {
 			// process temperature and fans
-			chassisTemperatures := chassisThermal.Temperatures
-			chassisFans := chassisThermal.Fans
-			eg := newRecoverGroup(ctx)
-			for _, chassisTemperature := range chassisTemperatures {
-				eg.Go(func() error {
-					parseChassisTemperature(ch, chassisID, chassisTemperature)
-					return nil
-				})
+			for _, chassisTemperature := range chassisThermal.Temperatures {
+				parseChassisTemperature(ch, chassisID, chassisTemperature)
 			}
-			for _, chassisFan := range chassisFans {
-				eg.Go(func() error {
-					parseChassisFan(ch, chassisID, chassisFan)
-					return nil
-				})
-			}
-			if err := eg.Wait(); err != nil {
-				chassisLogger.Error("goroutine error", slog.Any("error", err))
+			for _, chassisFan := range chassisThermal.Fans {
+				parseChassisFan(ch, chassisID, chassisFan)
 			}
 		}
 		chassisThermalSubsystem, err := chassis.ThermalSubsystem()
@@ -214,15 +202,8 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 			leakDetectors := c.getLeakDetectors(chassisThermalSubsystem, chassisLogger)
 
 			if len(leakDetectors) > 0 {
-				egLD := newRecoverGroup(ctx)
 				for _, ld := range leakDetectors {
-					egLD.Go(func() error {
-						parseLeakDetector(ch, chassisID, ld)
-						return nil
-					})
-				}
-				if err := egLD.Wait(); err != nil {
-					chassisLogger.Error("goroutine error", slog.Any("error", err))
+					parseLeakDetector(ch, chassisID, ld)
 				}
 			} else {
 				chassisLogger.Info("no leak detectors found")
@@ -235,33 +216,19 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 		} else if chassisPowerInfo == nil {
 			chassisLogger.Info("no power data found", slog.String("operation", "chassis.Power()"))
 		} else {
-			egPower := newRecoverGroup(ctx)
-
 			// power voltages
 			for _, chassisPowerInfoVoltage := range chassisPowerInfo.Voltages {
-				egPower.Go(func() error {
-					parseChassisPowerInfoVoltage(ch, chassisID, chassisPowerInfoVoltage)
-					return nil
-				})
+				parseChassisPowerInfoVoltage(ch, chassisID, chassisPowerInfoVoltage)
 			}
 
 			// power control
 			for _, chassisPowerInfoPowerControl := range chassisPowerInfo.PowerControl {
-				egPower.Go(func() error {
-					parseChassisPowerInfoPowerControl(ch, chassisID, chassisPowerInfoPowerControl)
-					return nil
-				})
+				parseChassisPowerInfoPowerControl(ch, chassisID, chassisPowerInfoPowerControl)
 			}
 
 			// powerSupply
 			for _, chassisPowerInfoPowerSupply := range chassisPowerInfo.PowerSupplies {
-				egPower.Go(func() error {
-					parseChassisPowerInfoPowerSupply(ch, chassisID, chassisPowerInfoPowerSupply)
-					return nil
-				})
-			}
-			if err := egPower.Wait(); err != nil {
-				chassisLogger.Error("goroutine error", slog.Any("error", err))
+				parseChassisPowerInfoPowerSupply(ch, chassisID, chassisPowerInfoPowerSupply)
 			}
 		}
 
@@ -275,7 +242,7 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 			egNA := newRecoverGroup(ctx)
 			for _, networkAdapter := range networkAdapters {
 				egNA.Go(func() error {
-					return parseNetworkAdapter(ctx, ch, chassisID, networkAdapter)
+					return parseNetworkAdapter(ch, chassisID, networkAdapter)
 				})
 			}
 			if err := egNA.Wait(); err != nil {
@@ -485,7 +452,7 @@ func parseChassisPowerInfoPowerSupply(ch chan<- prometheus.Metric, chassisID str
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_output_watts"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisPowerInfoPowerSupplyPowerOutputWatts), chassisPowerSupplyLabelvalues...)
 }
 
-func parseNetworkAdapter(ctx context.Context, ch chan<- prometheus.Metric, chassisID string, networkAdapter *schemas.NetworkAdapter) error {
+func parseNetworkAdapter(ch chan<- prometheus.Metric, chassisID string, networkAdapter *schemas.NetworkAdapter) error {
 	networkAdapterName := networkAdapter.Name
 	networkAdapterID := networkAdapter.ID
 	networkAdapterState := networkAdapter.Status.State
@@ -502,15 +469,8 @@ func parseNetworkAdapter(ctx context.Context, ch chan<- prometheus.Metric, chass
 	if err != nil {
 		return err
 	}
-	egPort := newRecoverGroup(ctx)
 	for _, networkPort := range networkPorts {
-		egPort.Go(func() error {
-			parseNetworkPort(ch, chassisID, networkPort, networkAdapterName, networkAdapterID)
-			return nil
-		})
-	}
-	if err := egPort.Wait(); err != nil {
-		return err
+		parseNetworkPort(ch, chassisID, networkPort, networkAdapterName, networkAdapterID)
 	}
 	return nil
 }
