@@ -65,12 +65,8 @@ Source: `Chassis/{id}/Thermal` → `Temperatures[]` · `resource="temperature"`
 | Metric | Value | Labels | Description | Read instead |
 |---|---|---|---|---|
 | `temperature_celsius` | Celsius | `chassis_id`, `sensor`, `sensor_id` | Temperature reading | `thermal_subsystem_temperature_celsius` |
-| `temperature_sensor_health` | Health — but see below | same | Sensor health | *no direct equivalent* — see note |
+| `temperature_sensor_health` | Health | same | Sensor health | *no direct equivalent* — see note |
 | `temperature_sensor_state` | State | same | Sensor state | *no direct equivalent* — see note |
-
-> **`temperature_sensor_health` has a wrong `HELP` string.** It emits Health values (`1`–`3`) but
-> its `HELP` text carries the State legend (`1`–`12`). Trust the Health encoding, not what
-> `/metrics` says about this one metric.
 
 **Note on sensor health and state.** `ThermalMetrics.TemperatureReadingsCelsius[]` is an array of
 sensor *excerpts*: each entry carries a reading, a device name and a `DataSourceUri`, but no
