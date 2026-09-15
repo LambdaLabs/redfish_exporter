@@ -143,6 +143,9 @@ func TestCollectThermalSubsystem(t *testing.T) {
 	// Fan_1 reports no SpeedRPM and no RatedSpeedRPM, and one temperature reading has no
 	// Reading at all, so those samples must be absent rather than reported as zero.
 	for name, want := range map[string]int{
+		"redfish_chassis_thermal_subsystem_health":               1,
+		"redfish_chassis_thermal_subsystem_health_rollup":        1,
+		"redfish_chassis_thermal_subsystem_state":                1,
 		"redfish_chassis_thermal_subsystem_fan_health":           2,
 		"redfish_chassis_thermal_subsystem_fan_state":            2,
 		"redfish_chassis_thermal_subsystem_fan_speed_percentage": 2,
@@ -152,6 +155,12 @@ func TestCollectThermalSubsystem(t *testing.T) {
 	} {
 		require.Len(t, metrics[name], want, "unexpected sample count for %s", name)
 	}
+
+	subsystemHealth := requireMetric(t, metrics, "redfish_chassis_thermal_subsystem_health")
+	require.Equal(t, "thermal_subsystem", subsystemHealth.labels["resource"])
+	require.Equal(t, "Chassis_0", subsystemHealth.labels["chassis_id"])
+	require.InDelta(t, 1, subsystemHealth.value, 0.01)
+	require.InDelta(t, 1, requireMetric(t, metrics, "redfish_chassis_thermal_subsystem_state").value, 0.01)
 
 	fanRPM := requireMetric(t, metrics, "redfish_chassis_thermal_subsystem_fan_rpm")
 	require.Equal(t, "Fan_0", fanRPM.labels["fan_id"])

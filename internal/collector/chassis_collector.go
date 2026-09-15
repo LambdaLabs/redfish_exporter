@@ -72,6 +72,10 @@ func createChassisMetricMap() map[string]Metric {
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "fan_rpm_upper_threshold_non_critical", "threshold above the normal range fan RPM or percentage, but not critical, on this chassis component", ChassisFanLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "fan_rpm_upper_threshold_fatal", "threshold above the normal range fan RPM or percentage, and is fatal, on this chassis component", ChassisFanLabelNames)
 
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "thermal_subsystem_health", fmt.Sprintf("health of the chassis ThermalSubsystem,%s", CommonHealthHelp), ChassisLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "thermal_subsystem_health_rollup", fmt.Sprintf("health rollup of the chassis ThermalSubsystem,%s", CommonHealthHelp), ChassisLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "thermal_subsystem_state", fmt.Sprintf("state of the chassis ThermalSubsystem,%s", CommonStateHelp), ChassisLabelNames)
+
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "thermal_subsystem_fan_health", fmt.Sprintf("fan health reported by the chassis ThermalSubsystem,%s", CommonHealthHelp), ChassisThermalSubsystemFanLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "thermal_subsystem_fan_state", fmt.Sprintf("fan state reported by the chassis ThermalSubsystem,%s", CommonStateHelp), ChassisThermalSubsystemFanLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "thermal_subsystem_fan_rpm", "fan rotational speed in RPM reported by the chassis ThermalSubsystem", ChassisThermalSubsystemFanLabelNames)
@@ -292,10 +296,24 @@ func collectThermal(ch chan<- prometheus.Metric, chassisID string, thermal *sche
 	}
 }
 
-// collectThermalSubsystem emits fan, temperature and leak detector metrics from the chassis
-// ThermalSubsystem resource, the replacement for the Thermal resource read by collectThermal.
-// Fans, ThermalMetrics and LeakDetection are each a separate GET, so they are fetched concurrently.
+// collectThermalSubsystem emits status, fan, temperature and leak detector metrics from the
+// chassis ThermalSubsystem resource, the replacement for the Thermal resource read by
+// collectThermal. Fans, ThermalMetrics and LeakDetection are each a separate GET, so they are
+// fetched concurrently.
 func (c *ChassisCollector) collectThermalSubsystem(ctx context.Context, ch chan<- prometheus.Metric, chassisID string, thermalSubsystem *schemas.ThermalSubsystem, logger *slog.Logger) {
+	// Status came with the ThermalSubsystem body the caller already fetched, so it needs no
+	// goroutine of its own.
+	labelValues := []string{"thermal_subsystem", chassisID}
+	if healthValue, ok := parseCommonStatusHealth(thermalSubsystem.Status.Health); ok {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_thermal_subsystem_health"].desc, prometheus.GaugeValue, healthValue, labelValues...)
+	}
+	if healthRollupValue, ok := parseCommonStatusHealth(thermalSubsystem.Status.HealthRollup); ok {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_thermal_subsystem_health_rollup"].desc, prometheus.GaugeValue, healthRollupValue, labelValues...)
+	}
+	if stateValue, ok := parseCommonStatusState(thermalSubsystem.Status.State); ok {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_thermal_subsystem_state"].desc, prometheus.GaugeValue, stateValue, labelValues...)
+	}
+
 	eg := newRecoverGroup(ctx)
 
 	eg.Go(func() error {
