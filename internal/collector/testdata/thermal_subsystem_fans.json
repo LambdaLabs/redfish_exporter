@@ -1,0 +1,38 @@
+{
+  "@odata.id": "/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/Fans",
+  "@odata.type": "#FanCollection.FanCollection",
+  "Name": "Fan Collection",
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/Fans/Fan_0",
+      "@odata.type": "#Fan.v1_5_0.Fan",
+      "Id": "Fan_0",
+      "Name": "Chassis Fan 0",
+      "Status": {
+        "Health": "OK",
+        "State": "Enabled"
+      },
+      "SpeedPercent": {
+        "DataSourceUri": "/redfish/v1/Chassis/Chassis_0/Sensors/Fan_0_Speed",
+        "Reading": 42.5,
+        "SpeedRPM": 8500
+      },
+      "RatedSpeedRPM": 20000
+    },
+    {
+      "@odata.id": "/redfish/v1/Chassis/Chassis_0/ThermalSubsystem/Fans/Fan_1",
+      "@odata.type": "#Fan.v1_5_0.Fan",
+      "Id": "Fan_1",
+      "Name": "Chassis Fan 1",
+      "Status": {
+        "Health": "Warning",
+        "State": "Enabled"
+      },
+      "SpeedPercent": {
+        "DataSourceUri": "/redfish/v1/Chassis/Chassis_0/Sensors/Fan_1_Speed",
+        "Reading": 55.0
+      }
+    }
+  ],
+  "Members@odata.count": 2
+}
