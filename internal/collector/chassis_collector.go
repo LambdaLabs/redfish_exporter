@@ -2,9 +2,11 @@ package collector
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
+	"path"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -16,11 +18,15 @@ import (
 
 // ChassisSubsystem is the chassis subsystem
 var (
-	ChassisSubsystem                  = "chassis"
-	ChassisLabelNames                 = []string{"resource", "chassis_id"}
-	ChassisModel                      = []string{"resource", "chassis_id", "manufacturer", "model", "part_number", "sku"}
-	ChassisTemperatureLabelNames      = []string{"resource", "chassis_id", "sensor", "sensor_id"}
-	ChassisFanLabelNames              = []string{"resource", "chassis_id", "fan", "fan_id", "fan_unit"}
+	ChassisSubsystem             = "chassis"
+	ChassisLabelNames            = []string{"resource", "chassis_id"}
+	ChassisModel                 = []string{"resource", "chassis_id", "manufacturer", "model", "part_number", "sku"}
+	ChassisTemperatureLabelNames = []string{"resource", "chassis_id", "sensor", "sensor_id"}
+	ChassisFanLabelNames         = []string{"resource", "chassis_id", "fan", "fan_id", "fan_unit"}
+
+	ChassisThermalSubsystemFanLabelNames         = []string{"resource", "chassis_id", "fan", "fan_id"}
+	ChassisThermalSubsystemTemperatureLabelNames = []string{"resource", "chassis_id", "sensor", "sensor_id"}
+
 	ChassisPowerVoltageLabelNames     = []string{"resource", "chassis_id", "power_voltage", "power_voltage_id"}
 	ChassisPowerSupplyLabelNames      = []string{"resource", "chassis_id", "power_supply", "power_supply_id"}
 	ChassisNetworkAdapterLabelNames   = []string{"resource", "chassis_id", "network_adapter", "network_adapter_id"}
@@ -50,7 +56,7 @@ func createChassisMetricMap() map[string]Metric {
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "model_info", "organization responsible for producing the chassis, the name by which the manufacturer generally refers to the chassis, and a part number and sku assigned by the organization that is responsible for producing or manufacturing the chassis", ChassisModel)
 
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "temperature_sensor_state", fmt.Sprintf("status state of temperature on this chassis component,%s", CommonStateHelp), ChassisTemperatureLabelNames)
-	addToMetricMap(chassisMetrics, ChassisSubsystem, "temperature_sensor_health", fmt.Sprintf("status health of temperature on this chassis component,%s", CommonStateHelp), ChassisTemperatureLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "temperature_sensor_health", fmt.Sprintf("status health of temperature on this chassis component,%s", CommonHealthHelp), ChassisTemperatureLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "temperature_celsius", "celsius of temperature on this chassis component", ChassisTemperatureLabelNames)
 
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "fan_health", fmt.Sprintf("fan health on this chassis component,%s", CommonHealthHelp), ChassisFanLabelNames)
@@ -65,6 +71,18 @@ func createChassisMetricMap() map[string]Metric {
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "fan_rpm_upper_threshold_critical", "threshold above the normal range fan RPM or percentage, but not fatal, on this chassis component", ChassisFanLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "fan_rpm_upper_threshold_non_critical", "threshold above the normal range fan RPM or percentage, but not critical, on this chassis component", ChassisFanLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "fan_rpm_upper_threshold_fatal", "threshold above the normal range fan RPM or percentage, and is fatal, on this chassis component", ChassisFanLabelNames)
+
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "thermal_subsystem_health", fmt.Sprintf("health of the chassis ThermalSubsystem,%s", CommonHealthHelp), ChassisLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "thermal_subsystem_health_rollup", fmt.Sprintf("health rollup of the chassis ThermalSubsystem,%s", CommonHealthHelp), ChassisLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "thermal_subsystem_state", fmt.Sprintf("state of the chassis ThermalSubsystem,%s", CommonStateHelp), ChassisLabelNames)
+
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "thermal_subsystem_fan_health", fmt.Sprintf("fan health reported by the chassis ThermalSubsystem,%s", CommonHealthHelp), ChassisThermalSubsystemFanLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "thermal_subsystem_fan_state", fmt.Sprintf("fan state reported by the chassis ThermalSubsystem,%s", CommonStateHelp), ChassisThermalSubsystemFanLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "thermal_subsystem_fan_rpm", "fan rotational speed in RPM reported by the chassis ThermalSubsystem", ChassisThermalSubsystemFanLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "thermal_subsystem_fan_speed_percentage", "fan speed as a percentage of its rated speed, reported by the chassis ThermalSubsystem", ChassisThermalSubsystemFanLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "thermal_subsystem_fan_rpm_max", "rated maximum fan rotational speed in RPM, reported by the chassis ThermalSubsystem", ChassisThermalSubsystemFanLabelNames)
+
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "thermal_subsystem_temperature_celsius", "celsius of temperature reported by the chassis ThermalSubsystem metrics", ChassisThermalSubsystemTemperatureLabelNames)
 
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "power_voltage_state", fmt.Sprintf("power voltage state of chassis component,%s", CommonStateHelp), ChassisPowerVoltageLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "power_voltage_volts", "power voltage volts number of chassis component", ChassisPowerVoltageLabelNames)
@@ -184,49 +202,16 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 		} else if chassisThermal == nil {
 			chassisLogger.Info("no thermal data found", slog.String("operation", "chassis.Thermal()"))
 		} else {
-			// process temperature and fans
-			chassisTemperatures := chassisThermal.Temperatures
-			chassisFans := chassisThermal.Fans
-			eg := newRecoverGroup(ctx)
-			for _, chassisTemperature := range chassisTemperatures {
-				eg.Go(func() error {
-					parseChassisTemperature(ch, chassisID, chassisTemperature)
-					return nil
-				})
-			}
-			for _, chassisFan := range chassisFans {
-				eg.Go(func() error {
-					parseChassisFan(ch, chassisID, chassisFan)
-					return nil
-				})
-			}
-			if err := eg.Wait(); err != nil {
-				chassisLogger.Error("goroutine error", slog.Any("error", err))
-			}
+			collectThermal(ch, chassisID, chassisThermal)
 		}
+
 		chassisThermalSubsystem, err := chassis.ThermalSubsystem()
 		if err != nil {
 			chassisLogger.Error("error getting thermal subsystem from chassis", slog.String("operation", "chassis.ThermalSubsystem()"), slog.Any("error", err))
 		} else if chassisThermalSubsystem == nil {
 			chassisLogger.Info("no thermal subsystem found", slog.String("operation", "chassis.ThermalSubsystem()"))
 		} else {
-			// NOTE: Handles some odd (maybe even buggy) OEM implementations of LeakDeteactor
-			leakDetectors := c.getLeakDetectors(chassisThermalSubsystem, chassisLogger)
-
-			if len(leakDetectors) > 0 {
-				egLD := newRecoverGroup(ctx)
-				for _, ld := range leakDetectors {
-					egLD.Go(func() error {
-						parseLeakDetector(ch, chassisID, ld)
-						return nil
-					})
-				}
-				if err := egLD.Wait(); err != nil {
-					chassisLogger.Error("goroutine error", slog.Any("error", err))
-				}
-			} else {
-				chassisLogger.Info("no leak detectors found")
-			}
+			c.collectThermalSubsystem(ctx, ch, chassisID, chassisThermalSubsystem, chassisLogger)
 		}
 
 		chassisPowerInfo, err := chassis.Power()
@@ -235,33 +220,19 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 		} else if chassisPowerInfo == nil {
 			chassisLogger.Info("no power data found", slog.String("operation", "chassis.Power()"))
 		} else {
-			egPower := newRecoverGroup(ctx)
-
 			// power voltages
 			for _, chassisPowerInfoVoltage := range chassisPowerInfo.Voltages {
-				egPower.Go(func() error {
-					parseChassisPowerInfoVoltage(ch, chassisID, chassisPowerInfoVoltage)
-					return nil
-				})
+				parseChassisPowerInfoVoltage(ch, chassisID, chassisPowerInfoVoltage)
 			}
 
 			// power control
 			for _, chassisPowerInfoPowerControl := range chassisPowerInfo.PowerControl {
-				egPower.Go(func() error {
-					parseChassisPowerInfoPowerControl(ch, chassisID, chassisPowerInfoPowerControl)
-					return nil
-				})
+				parseChassisPowerInfoPowerControl(ch, chassisID, chassisPowerInfoPowerControl)
 			}
 
 			// powerSupply
 			for _, chassisPowerInfoPowerSupply := range chassisPowerInfo.PowerSupplies {
-				egPower.Go(func() error {
-					parseChassisPowerInfoPowerSupply(ch, chassisID, chassisPowerInfoPowerSupply)
-					return nil
-				})
-			}
-			if err := egPower.Wait(); err != nil {
-				chassisLogger.Error("goroutine error", slog.Any("error", err))
+				parseChassisPowerInfoPowerSupply(ch, chassisID, chassisPowerInfoPowerSupply)
 			}
 		}
 
@@ -275,7 +246,7 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 			egNA := newRecoverGroup(ctx)
 			for _, networkAdapter := range networkAdapters {
 				egNA.Go(func() error {
-					return parseNetworkAdapter(ctx, ch, chassisID, networkAdapter)
+					return parseNetworkAdapter(ch, chassisID, networkAdapter)
 				})
 			}
 			if err := egNA.Wait(); err != nil {
@@ -308,6 +279,108 @@ func (c *ChassisCollector) Describe(ch chan<- *prometheus.Desc) {
 	}
 	c.collectorScrapeStatus.Describe(ch)
 
+}
+
+// collectThermal emits fan and temperature metrics from the chassis Thermal resource.
+//
+// Redfish deprecated Thermal in release 2020.4 in favour of ThermalSubsystem -- the Redfish
+// Resource and Schema Guide lists it as "Thermal 1.7.0 (deprecated)", see
+// https://redfish.dmtf.org/schemas/DSP2046_2020.4.html -- but BMCs still serve it, so both
+// are collected. collectThermalSubsystem reads the replacement.
+func collectThermal(ch chan<- prometheus.Metric, chassisID string, thermal *schemas.Thermal) {
+	for _, chassisTemperature := range thermal.Temperatures {
+		parseChassisTemperature(ch, chassisID, chassisTemperature)
+	}
+	for _, chassisFan := range thermal.Fans {
+		parseChassisFan(ch, chassisID, chassisFan)
+	}
+}
+
+// collectThermalSubsystem emits status, fan, temperature and leak detector metrics from the
+// chassis ThermalSubsystem resource, the replacement for the Thermal resource read by
+// collectThermal. Fans, ThermalMetrics and LeakDetection are each a separate GET, so they are
+// fetched concurrently.
+func (c *ChassisCollector) collectThermalSubsystem(ctx context.Context, ch chan<- prometheus.Metric, chassisID string, thermalSubsystem *schemas.ThermalSubsystem, logger *slog.Logger) {
+	// Status came with the ThermalSubsystem body the caller already fetched, so it needs no
+	// goroutine of its own.
+	labelValues := []string{"thermal_subsystem", chassisID}
+	if healthValue, ok := parseCommonStatusHealth(thermalSubsystem.Status.Health); ok {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_thermal_subsystem_health"].desc, prometheus.GaugeValue, healthValue, labelValues...)
+	}
+	if healthRollupValue, ok := parseCommonStatusHealth(thermalSubsystem.Status.HealthRollup); ok {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_thermal_subsystem_health_rollup"].desc, prometheus.GaugeValue, healthRollupValue, labelValues...)
+	}
+	if stateValue, ok := parseCommonStatusState(thermalSubsystem.Status.State); ok {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_thermal_subsystem_state"].desc, prometheus.GaugeValue, stateValue, labelValues...)
+	}
+
+	eg := newRecoverGroup(ctx)
+
+	eg.Go(func() error {
+		fans, err := thermalSubsystemFans(c.redfishClient.Service.GetClient(), thermalSubsystem)
+		if err != nil {
+			logger.Error("error getting fans from thermal subsystem", slog.String("operation", "thermalSubsystemFans()"), slog.Any("error", err))
+			return nil
+		}
+		if len(fans) == 0 {
+			logger.Info("no thermal subsystem fans found", slog.String("operation", "thermalSubsystemFans()"))
+			return nil
+		}
+		for _, fan := range fans {
+			parseThermalSubsystemFan(ch, chassisID, fan)
+		}
+		return nil
+	})
+
+	eg.Go(func() error {
+		thermalMetrics, err := thermalSubsystem.ThermalMetrics()
+		if err != nil {
+			logger.Error("error getting thermal metrics from thermal subsystem", slog.String("operation", "thermalSubsystem.ThermalMetrics()"), slog.Any("error", err))
+			return nil
+		}
+		if thermalMetrics == nil {
+			logger.Info("no thermal metrics found", slog.String("operation", "thermalSubsystem.ThermalMetrics()"))
+			return nil
+		}
+		for i, temperature := range thermalMetrics.TemperatureReadingsCelsius {
+			parseThermalSubsystemTemperature(ch, chassisID, i, temperature)
+		}
+		return nil
+	})
+
+	eg.Go(func() error {
+		// NOTE: Handles some odd (maybe even buggy) OEM implementations of LeakDeteactor
+		leakDetectors := c.getLeakDetectors(thermalSubsystem, logger)
+		if len(leakDetectors) == 0 {
+			logger.Info("no leak detectors found")
+			return nil
+		}
+		for _, ld := range leakDetectors {
+			parseLeakDetector(ch, chassisID, ld)
+		}
+		return nil
+	})
+
+	if err := eg.Wait(); err != nil {
+		logger.Error("goroutine error", slog.Any("error", err))
+	}
+}
+
+// thermalSubsystemFans fetches the ThermalSubsystem Fans collection as Fan resources.
+// gofish's ThermalSubsystem.Fans() decodes the members into the deprecated Thermal resource's
+// fan struct, which has no SpeedPercent, so every reading comes back empty. The collection link
+// is unexported, so take it from the raw payload and decode the members as what they are.
+func thermalSubsystemFans(client schemas.Client, thermalSubsystem *schemas.ThermalSubsystem) ([]*schemas.Fan, error) {
+	var links struct {
+		Fans schemas.Link `json:"Fans"`
+	}
+	if err := json.Unmarshal(thermalSubsystem.RawData, &links); err != nil {
+		return nil, err
+	}
+	if links.Fans == "" {
+		return nil, nil
+	}
+	return schemas.ListReferencedFans(client, links.Fans.String())
 }
 
 // getLeakDetectors works around an unfortunate fact that the LeakDetection schema is not yet standard, and some OEMs return
@@ -422,6 +495,50 @@ func parseChassisFan(ch chan<- prometheus.Metric, chassisID string, chassisFan s
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_fan_rpm_upper_threshold_fatal"].desc, prometheus.GaugeValue, chassisFanRPMUpperFatalThreshold, chassisFanLabelvalues...)
 }
 
+func parseThermalSubsystemFan(ch chan<- prometheus.Metric, chassisID string, fan *schemas.Fan) {
+	fanLabelValues := []string{"fan", chassisID, fan.Name, fan.ID}
+
+	if fanHealthValue, ok := parseCommonStatusHealth(fan.Status.Health); ok {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_thermal_subsystem_fan_health"].desc, prometheus.GaugeValue, fanHealthValue, fanLabelValues...)
+	}
+	if fanStateValue, ok := parseCommonStatusState(fan.Status.State); ok {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_thermal_subsystem_fan_state"].desc, prometheus.GaugeValue, fanStateValue, fanLabelValues...)
+	}
+
+	// Every speed property is optional here, and a fan reporting a percentage need not report
+	// RPM, so an absent reading is skipped rather than reported as a stopped fan.
+	if fan.SpeedPercent.SpeedRPM != nil {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_thermal_subsystem_fan_rpm"].desc, prometheus.GaugeValue, *fan.SpeedPercent.SpeedRPM, fanLabelValues...)
+	}
+	if fan.SpeedPercent.Reading != nil {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_thermal_subsystem_fan_speed_percentage"].desc, prometheus.GaugeValue, *fan.SpeedPercent.Reading, fanLabelValues...)
+	}
+	if fan.RatedSpeedRPM != nil {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_thermal_subsystem_fan_rpm_max"].desc, prometheus.GaugeValue, intPtrToFloat64(fan.RatedSpeedRPM), fanLabelValues...)
+	}
+}
+
+func parseThermalSubsystemTemperature(ch chan<- prometheus.Metric, chassisID string, index int, temperature schemas.SensorArrayExcerpt) {
+	if temperature.Reading == nil {
+		return
+	}
+
+	// TemperatureReadingsCelsius is an array of sensor excerpts rather than of addressable
+	// resources, so fall back to the array index to keep two unnamed readings from collapsing
+	// into one series.
+	sensorID := fmt.Sprint(index)
+	if temperature.DataSourceURI != "" {
+		sensorID = path.Base(temperature.DataSourceURI)
+	}
+	sensorName := temperature.DeviceName
+	if sensorName == "" {
+		sensorName = sensorID
+	}
+
+	temperatureLabelValues := []string{"temperature", chassisID, sensorName, sensorID}
+	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_thermal_subsystem_temperature_celsius"].desc, prometheus.GaugeValue, *temperature.Reading, temperatureLabelValues...)
+}
+
 func parseLeakDetector(ch chan<- prometheus.Metric, chassisID string, ld *schemas.LeakDetector) {
 	ldID := ld.ID
 	labelValues := []string{"leak_detector", chassisID, "LeakDetection", ldID}
@@ -485,7 +602,7 @@ func parseChassisPowerInfoPowerSupply(ch chan<- prometheus.Metric, chassisID str
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_output_watts"].desc, prometheus.GaugeValue, float32PtrToFloat64(chassisPowerInfoPowerSupplyPowerOutputWatts), chassisPowerSupplyLabelvalues...)
 }
 
-func parseNetworkAdapter(ctx context.Context, ch chan<- prometheus.Metric, chassisID string, networkAdapter *schemas.NetworkAdapter) error {
+func parseNetworkAdapter(ch chan<- prometheus.Metric, chassisID string, networkAdapter *schemas.NetworkAdapter) error {
 	networkAdapterName := networkAdapter.Name
 	networkAdapterID := networkAdapter.ID
 	networkAdapterState := networkAdapter.Status.State
@@ -502,15 +619,8 @@ func parseNetworkAdapter(ctx context.Context, ch chan<- prometheus.Metric, chass
 	if err != nil {
 		return err
 	}
-	egPort := newRecoverGroup(ctx)
 	for _, networkPort := range networkPorts {
-		egPort.Go(func() error {
-			parseNetworkPort(ch, chassisID, networkPort, networkAdapterName, networkAdapterID)
-			return nil
-		})
-	}
-	if err := egPort.Wait(); err != nil {
-		return err
+		parseNetworkPort(ch, chassisID, networkPort, networkAdapterName, networkAdapterID)
 	}
 	return nil
 }

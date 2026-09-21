@@ -41,3 +41,6 @@ tools/capture/capture
 # Performance analysis
 tools/performance-analysis/analyze
 tools/performance-analysis/temp-config.yml
+
+# Claude Code local settings
+.claude/settings.local.json
