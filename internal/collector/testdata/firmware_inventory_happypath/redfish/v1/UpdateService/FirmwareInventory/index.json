@@ -1,0 +1,14 @@
+{
+  "@odata.type": "#SoftwareInventoryCollection.SoftwareInventoryCollection",
+  "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory",
+  "Name": "Firmware Inventory Collection",
+  "Members@odata.count": 6,
+  "Members": [
+    {"@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/HGX_FW_BMC_0"},
+    {"@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BMC"},
+    {"@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/BIOS"},
+    {"@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/GPU1"},
+    {"@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/HGX_FW_ERoT_BMC_0"},
+    {"@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Backup_BMC"}
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "@odata.type": "#SoftwareInventory.v1_4_0.SoftwareInventory",
+  "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/CRITICAL_FW",
+  "Id": "CRITICAL_FW",
+  "Name": "Critical Firmware",
+  "Version": "1.0.0-crit",
+  "Manufacturer": "TestVendor",
+  "Status": {
+    "State": "Disabled",
+    "Health": "Critical"
+  },
+  "Updateable": false,
+  "WriteProtected": false
+}

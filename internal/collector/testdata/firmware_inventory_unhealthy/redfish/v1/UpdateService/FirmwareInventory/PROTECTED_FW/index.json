@@ -1,0 +1,14 @@
+{
+  "@odata.type": "#SoftwareInventory.v1_4_0.SoftwareInventory",
+  "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/PROTECTED_FW",
+  "Id": "PROTECTED_FW",
+  "Name": "Protected Firmware",
+  "Version": "1.0.0-locked",
+  "Manufacturer": "TestVendor",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "Updateable": false,
+  "WriteProtected": true
+}
