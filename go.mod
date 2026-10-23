@@ -1,8 +1,6 @@
 module github.com/LambdaLabs/redfish_exporter
 
-go 1.26
-
-toolchain go1.26.10
+go 1.26.10
 
 require (
 	github.com/golangci/golangci-lint v1.58.1
