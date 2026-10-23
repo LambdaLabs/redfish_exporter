@@ -459,7 +459,7 @@ func getJSON(rfClient *gofish.APIClient, rfPath string, v any) error {
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
+	defer response.Body.Close() // nolint:errcheck // Close() errors on read are not actionable
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return err
