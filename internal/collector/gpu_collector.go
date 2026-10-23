@@ -3,6 +3,7 @@ package collector
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -432,22 +433,44 @@ func (g *GPUCollector) emitGPUOem(ch chan<- prometheus.Metric, gpu SystemGPU, pr
 	}
 }
 
-func (g *GPUCollector) emitNVLinkTelemetry(ctx context.Context, ch chan<- prometheus.Metric, gpu SystemGPU) {
-	rfClient := g.redfishClient.WithContext(ctx)
-	rfPath := fmt.Sprintf(`%s/Ports?$expand=.($levels=2)`, gpu.ODataID)
+// gatherNVLinkPorts reads a GPU's Ports collection with the ports and their Metrics expanded
+// inline. The Supermicro X14 BMC in front of the HGX B300 answers 404 to any query string on
+// the Ports collection, yet expands it when the processor itself is asked three levels deep,
+// so that is the fallback.
+func (g *GPUCollector) gatherNVLinkPorts(rfClient *gofish.APIClient, gpu SystemGPU) (GPUNVLinkCollection, error) {
+	var agg GPUNVLinkCollection
+	err := getJSON(rfClient, fmt.Sprintf(`%s/Ports?$expand=.($levels=2)`, gpu.ODataID), &agg)
+	if err == nil {
+		return agg, nil
+	}
+	g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Debug("Ports expand query rejected, expanding from the processor instead")
+	var processor struct {
+		Ports GPUNVLinkCollection `json:"Ports"`
+	}
+	if fallbackErr := getJSON(rfClient, fmt.Sprintf(`%s?$expand=.($levels=3)`, gpu.ODataID), &processor); fallbackErr != nil {
+		return agg, errors.Join(err, fallbackErr)
+	}
+	return processor.Ports, nil
+}
+
+// getJSON GETs a Redfish path and decodes the body into v.
+func getJSON(rfClient *gofish.APIClient, rfPath string, v any) error {
 	response, err := rfClient.Get(rfPath)
 	if err != nil {
-		g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("unable to gather NVLink data, skipping")
-		return
+		return err
 	}
+	defer response.Body.Close()
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("unable to read in NVLink data, skipping")
-		return
+		return err
 	}
-	var agg GPUNVLinkCollection
-	if err := json.Unmarshal(body, &agg); err != nil {
-		g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("unable to unmarshal NVLink data, skipping")
+	return json.Unmarshal(body, v)
+}
+
+func (g *GPUCollector) emitNVLinkTelemetry(ctx context.Context, ch chan<- prometheus.Metric, gpu SystemGPU) {
+	agg, err := g.gatherNVLinkPorts(g.redfishClient.WithContext(ctx), gpu)
+	if err != nil {
+		g.logger.With("error", err, "gpu_id", gpu.ID, "system_name", gpu.SystemName).Error("unable to gather NVLink data, skipping")
 		return
 	}
 	for _, port := range agg.Members {
