@@ -1,0 +1,29 @@
+{
+  "@odata.type": "#SoftwareInventory.v1_11_0.SoftwareInventory",
+  "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Golden_BIOS",
+  "Id": "Golden_BIOS",
+  "Name": "BIOS Golden",
+  "Updateable": true,
+  "Version": "BIOS Date: 08/04/2023 Ver 1.4",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "RelatedItem": [
+    {
+      "@odata.id": "/redfish/v1/Systems/1/Bios"
+    }
+  ],
+  "Actions": {
+    "Oem": {}
+  },
+  "Oem": {
+    "Supermicro": {
+      "@odata.type": "#SmcSoftwareInventoryExtensions.v1_0_0.SoftwareInventory",
+      "UniqueFilename": "BIOS_X13DEG-OAD-1D14_20230804_1.4_STDsp.bin"
+    }
+  },
+  "Manufacturer": "Supermicro",
+  "WriteProtected": false,
+  "@odata.etag": "\"be92594bb415a14952e54f1ebdb04b37\""
+}

@@ -1,0 +1,29 @@
+{
+  "@odata.type": "#SoftwareInventory.v1_11_0.SoftwareInventory",
+  "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Backup_BMC",
+  "Id": "Backup_BMC",
+  "Name": "BMC Backup",
+  "Updateable": true,
+  "Version": "01.01.06",
+  "Status": {
+    "State": "Enabled",
+    "Health": "OK"
+  },
+  "RelatedItem": [
+    {
+      "@odata.id": "/redfish/v1/Managers/1"
+    }
+  ],
+  "Actions": {
+    "Oem": {}
+  },
+  "Oem": {
+    "Supermicro": {
+      "@odata.type": "#SmcSoftwareInventoryExtensions.v1_0_0.SoftwareInventory",
+      "UniqueFilename": "BMC_X13AST2600-ROT-5501MS_20240210_01.01.06_STDsp.bin"
+    }
+  },
+  "Manufacturer": "Supermicro",
+  "WriteProtected": false,
+  "@odata.etag": "\"71e8c24298e24e98c85505c4dd1f2542\""
+}
