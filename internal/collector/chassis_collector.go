@@ -219,6 +219,7 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 			chassisLogger.Error("error getting power data from chassis", slog.String("operation", "chassis.Power()"), slog.Any("error", err))
 		} else if chassisPowerInfo == nil {
 			chassisLogger.Info("no power data found", slog.String("operation", "chassis.Power()"))
+			c.collectPoweredBy(ch, chassis, chassisLogger)
 		} else {
 			// power voltages
 			for _, chassisPowerInfoVoltage := range chassisPowerInfo.Voltages {
@@ -545,6 +546,83 @@ func parseLeakDetector(ch chan<- prometheus.Metric, chassisID string, ld *schema
 
 	if statusHealth, ok := parseCommonStatusHealth(ld.Status.Health); ok {
 		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_leak_detector_health"].desc, prometheus.GaugeValue, statusHealth, labelValues...)
+	}
+}
+
+// collectPoweredBy emits power supply and consumed-watts metrics for a chassis that serves no
+// Power resource. Redfish deprecated Power in release 2020.4 in favour of PowerSubsystem, and
+// the Supermicro X14 BMC no longer serves it. The chassis' Links.PoweredBy names the power
+// supplies that feed it, so those are read directly rather than walking PowerSubsystem on
+// every chassis: an HGX host lists dozens of component chassis whose PowerSubsystem holds
+// nothing, and each read of one is a round trip through the BMC's HGX proxy.
+func (c *ChassisCollector) collectPoweredBy(ch chan<- prometheus.Metric, chassis *schemas.Chassis, logger *slog.Logger) {
+	var raw struct {
+		Links struct {
+			PoweredBy schemas.Links `json:"PoweredBy"`
+		} `json:"Links"`
+	}
+	if err := json.Unmarshal(chassis.RawData, &raw); err != nil || len(raw.Links.PoweredBy) == 0 {
+		return
+	}
+	client := c.redfishClient.Service.GetClient()
+	for _, link := range raw.Links.PoweredBy.ToStrings() {
+		powerSupply, err := schemas.GetPowerSupplyUnit(client, link)
+		if err != nil {
+			logger.Error("error getting power supply from chassis", slog.String("operation", "schemas.GetPowerSupplyUnit()"), slog.String("link", link), slog.Any("error", err))
+			continue
+		}
+		if !strings.Contains(powerSupply.ODataType, "PowerSupply") {
+			continue
+		}
+		parsePowerSupplyUnit(ch, chassis.ID, powerSupply, logger)
+	}
+
+	environmentMetrics, err := chassis.EnvironmentMetrics()
+	if err != nil {
+		logger.Error("error getting environment metrics from chassis", slog.String("operation", "chassis.EnvironmentMetrics()"), slog.Any("error", err))
+		return
+	}
+	if environmentMetrics == nil || environmentMetrics.PowerWatts.Reading == nil {
+		return
+	}
+	labelValues := []string{"power_wattage", chassis.ID, environmentMetrics.Name, environmentMetrics.ID}
+	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_average_consumed_watts"].desc, prometheus.GaugeValue, *environmentMetrics.PowerWatts.Reading, labelValues...)
+}
+
+// parsePowerSupplyUnit emits the same power supply metrics as parseChassisPowerInfoPowerSupply
+// from a PowerSupply resource, whose readings live in its Metrics resource.
+func parsePowerSupplyUnit(ch chan<- prometheus.Metric, chassisID string, powerSupply *schemas.PowerSupplyUnit, logger *slog.Logger) {
+	labelValues := []string{"power_supply", chassisID, powerSupply.Name, powerSupply.ID}
+	if stateValue, ok := parseCommonStatusState(powerSupply.Status.State); ok {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_state"].desc, prometheus.GaugeValue, stateValue, labelValues...)
+	}
+	if healthValue, ok := parseCommonStatusHealth(powerSupply.Status.Health); ok {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_health"].desc, prometheus.GaugeValue, healthValue, labelValues...)
+	}
+	if powerSupply.PowerCapacityWatts != nil {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_capacity_watts"].desc, prometheus.GaugeValue, *powerSupply.PowerCapacityWatts, labelValues...)
+	}
+	for _, rating := range powerSupply.EfficiencyRatings {
+		if rating.EfficiencyPercent != nil {
+			ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_efficiency_percentage"].desc, prometheus.GaugeValue, *rating.EfficiencyPercent, labelValues...)
+			break
+		}
+	}
+
+	metrics, err := powerSupply.Metrics()
+	if err != nil {
+		logger.Error("error getting power supply metrics", slog.String("operation", "powerSupply.Metrics()"), slog.String("power_supply_id", powerSupply.ID), slog.Any("error", err))
+		return
+	}
+	if metrics == nil {
+		return
+	}
+	if metrics.InputPowerWatts.Reading != nil {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_input_watts"].desc, prometheus.GaugeValue, *metrics.InputPowerWatts.Reading, labelValues...)
+	}
+	if metrics.OutputPowerWatts.Reading != nil {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_power_output_watts"].desc, prometheus.GaugeValue, *metrics.OutputPowerWatts.Reading, labelValues...)
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_power_powersupply_last_power_output_watts"].desc, prometheus.GaugeValue, *metrics.OutputPowerWatts.Reading, labelValues...)
 	}
 }
 
