@@ -26,7 +26,8 @@ func TestTelemetryCollector_FetchesOnlyParsedReports(t *testing.T) {
 		"/redfish/v1/Systems":                         `{"@odata.type":"#ComputerSystemCollection.ComputerSystemCollection","Members":[{"@odata.id":"/redfish/v1/Systems/HGX_Baseboard_0"}]}`,
 		"/redfish/v1/Systems/HGX_Baseboard_0":         `{"@odata.id":"/redfish/v1/Systems/HGX_Baseboard_0","@odata.type":"#ComputerSystem.v1_20_0.ComputerSystem","Id":"HGX_Baseboard_0","Name":"HGX_Baseboard_0"}`,
 		"/redfish/v1/TelemetryService":                `{"@odata.id":"/redfish/v1/TelemetryService","@odata.type":"#TelemetryService.v1_3_0.TelemetryService","Id":"TelemetryService","MetricReports":{"@odata.id":"` + reports + `"}}`,
-		reports:                                       `{"@odata.type":"#MetricReportCollection.MetricReportCollection","Members":[{"@odata.id":"` + reports + `/HGX_PlatformEnvironmentMetrics_0"},{"@odata.id":"` + reports + `/AvgPowerConsumptionHour"}]}`,
+		reports:                                       `{"@odata.type":"#MetricReportCollection.MetricReportCollection","Members":[{"@odata.id":"` + reports + `/AvgPowerConsumptionHour"}],"Members@odata.nextLink":"` + reports + `?$skip=1"}`,
+		reports + "?$skip=1":                          `{"@odata.type":"#MetricReportCollection.MetricReportCollection","Members":[{"@odata.id":"` + reports + `/HGX_PlatformEnvironmentMetrics_0"}]}`,
 		reports + "/HGX_PlatformEnvironmentMetrics_0": `{"@odata.id":"` + reports + `/HGX_PlatformEnvironmentMetrics_0","@odata.type":"#MetricReport.v1_4_2.MetricReport","Id":"HGX_PlatformEnvironmentMetrics_0","MetricValues":[{"MetricProperty":"/redfish/v1/Chassis/HGX_GPU_0/Sensors/HGX_GPU_0_DRAM_0_Temp_0","MetricValue":"36","Oem":{"Nvidia":{"MetricValueStale":false}}}]}`,
 		reports + "/AvgPowerConsumptionHour":          `{"@odata.id":"` + reports + `/AvgPowerConsumptionHour","@odata.type":"#MetricReport.v1_4_2.MetricReport","Id":"AvgPowerConsumptionHour","MetricValues":[]}`,
 	}
@@ -36,7 +37,7 @@ func TestTelemetryCollector_FetchesOnlyParsedReports(t *testing.T) {
 		mu.Lock()
 		requested = append(requested, r.URL.Path)
 		mu.Unlock()
-		body, ok := routes[r.URL.Path]
+		body, ok := routes[r.URL.RequestURI()]
 		if !ok {
 			http.NotFound(w, r)
 			return
@@ -61,7 +62,7 @@ func TestTelemetryCollector_FetchesOnlyParsedReports(t *testing.T) {
 	}
 
 	require.Positive(t, telemetry, "the parsed report still yields metrics")
-	require.Contains(t, requested, reports+"/HGX_PlatformEnvironmentMetrics_0")
+	require.Contains(t, requested, reports+"/HGX_PlatformEnvironmentMetrics_0", "a report on the collection's second page is fetched")
 	require.NotContains(t, requested, reports+"/AvgPowerConsumptionHour", "a report with no parser is never fetched")
 	require.Equal(t, float64(1), testutil.ToFloat64(collector.collectorScrapeStatus.WithLabelValues("telemetry")), "every parsed report was fetched")
 }

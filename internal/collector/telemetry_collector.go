@@ -381,11 +381,19 @@ func metricReportLinks(client schemas.Client, telemetryService *schemas.Telemetr
 	if links.MetricReports == "" {
 		return nil, nil
 	}
-	collection, err := schemas.GetCollection(client, links.MetricReports.String())
-	if err != nil {
-		return nil, err
+	// A BMC can page the collection; a next link already read ends the walk.
+	var reportLinks []string
+	seen := map[string]bool{}
+	for uri := links.MetricReports.String(); uri != "" && !seen[uri]; {
+		seen[uri] = true
+		collection, err := schemas.GetCollection(client, uri)
+		if err != nil {
+			return nil, err
+		}
+		reportLinks = append(reportLinks, collection.ItemLinks...)
+		uri = collection.MembersNextLink
 	}
-	return collection.ItemLinks, nil
+	return reportLinks, nil
 }
 
 // reportParser returns the function that processes the metric report with this ID, or nil for
