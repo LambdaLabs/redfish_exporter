@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 
 	"github.com/LambdaLabs/redfish_exporter/internal/config"
@@ -62,4 +63,5 @@ func TestTelemetryCollector_FetchesOnlyParsedReports(t *testing.T) {
 	require.Positive(t, telemetry, "the parsed report still yields metrics")
 	require.Contains(t, requested, reports+"/HGX_PlatformEnvironmentMetrics_0")
 	require.NotContains(t, requested, reports+"/AvgPowerConsumptionHour", "a report with no parser is never fetched")
+	require.Equal(t, float64(1), testutil.ToFloat64(collector.collectorScrapeStatus.WithLabelValues("telemetry")), "every parsed report was fetched")
 }

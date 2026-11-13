@@ -9,6 +9,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/prometheus/client_golang/prometheus"
 	isoDuration "github.com/sosodev/duration"
@@ -334,6 +335,7 @@ func (t *TelemetryCollector) collect(ctx context.Context, ch chan<- prometheus.M
 
 	// Fetch and process each metric report this collector parses. The collection can list
 	// many it does not, and each is a request.
+	var fetchFailed atomic.Bool
 	eg := newRecoverGroup(ctx)
 	for _, link := range reportLinks {
 		if ctx.Err() != nil {
@@ -347,6 +349,7 @@ func (t *TelemetryCollector) collect(ctx context.Context, ch chan<- prometheus.M
 			report, err := schemas.GetMetricReport(t.redfishClient.Service.GetClient(), link)
 			if err != nil {
 				t.logger.Error("failed to get metric report", slog.String("report", link), slog.Any("error", err))
+				fetchFailed.Store(true)
 				return nil
 			}
 			if parse := t.reportParser(report.ID); parse != nil {
@@ -358,6 +361,10 @@ func (t *TelemetryCollector) collect(ctx context.Context, ch chan<- prometheus.M
 
 	if err := eg.Wait(); err != nil {
 		t.logger.Error("goroutine error", slog.Any("error", err))
+	}
+	// A report that failed to fetch leaves the status at 0; the reports that answered are kept.
+	if fetchFailed.Load() {
+		return
 	}
 	t.collectorScrapeStatus.WithLabelValues("telemetry").Set(float64(1))
 }
