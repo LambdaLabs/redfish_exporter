@@ -146,6 +146,15 @@ The Chassis Collector primarily exposes health data from the Chassis API. Agains
 # HELP redfish_chassis_leak_detector_health chassis leak detector health state,1(OK),2(Warning),3(Critical)
 # TYPE redfish_chassis_leak_detector_health gauge
 
+# HELP redfish_chassis_leak_detector_lower_threshold_critical_volts BMC lower critical threshold of the leak detector sensor, in volts
+# TYPE redfish_chassis_leak_detector_lower_threshold_critical_volts gauge
+
+# HELP redfish_chassis_leak_detector_upper_threshold_critical_volts BMC upper critical threshold of the leak detector sensor, in volts
+# TYPE redfish_chassis_leak_detector_upper_threshold_critical_volts gauge
+
+# HELP redfish_chassis_leak_detector_volts leak detector sensor reading in volts, from the chassis Sensor resource that shares the detector's Id
+# TYPE redfish_chassis_leak_detector_volts gauge
+
 # HELP redfish_chassis_model_info organization responsible for producing the chassis, the name by which the manufacturer generally refers to the chassis, and a part number and sku assigned by the organization that is responsible for producing or manufacturing the chassis
 # TYPE redfish_chassis_model_info gauge
 

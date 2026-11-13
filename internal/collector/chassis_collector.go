@@ -108,6 +108,9 @@ func createChassisMetricMap() map[string]Metric {
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "log_service_health_state", fmt.Sprintf("chassis log service health state,%s", CommonHealthHelp), ChassisLogServiceLabelNames)
 
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_health", fmt.Sprintf("chassis leak detector health state,%s", CommonHealthHelp), ChassisLeakDetectorLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_volts", "leak detector sensor reading in volts, from the chassis Sensor resource that shares the detector's Id", ChassisLeakDetectorLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_lower_threshold_critical_volts", "BMC lower critical threshold of the leak detector sensor, in volts", ChassisLeakDetectorLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "leak_detector_upper_threshold_critical_volts", "BMC upper critical threshold of the leak detector sensor, in volts", ChassisLeakDetectorLabelNames)
 
 	// Note: chassis_gpu_total_power_watts is now collected via TelemetryService (HGX_PlatformEnvironmentMetrics_0)
 
@@ -211,7 +214,7 @@ func (c *ChassisCollector) collect(ctx context.Context, ch chan<- prometheus.Met
 		} else if chassisThermalSubsystem == nil {
 			chassisLogger.Info("no thermal subsystem found", slog.String("operation", "chassis.ThermalSubsystem()"))
 		} else {
-			c.collectThermalSubsystem(ctx, ch, chassisID, chassisThermalSubsystem, chassisLogger)
+			c.collectThermalSubsystem(ctx, ch, chassisID, chassisThermalSubsystem, leakDetectorSensorRoot(chassis), chassisLogger)
 		}
 
 		chassisPowerInfo, err := chassis.Power()
@@ -299,8 +302,10 @@ func collectThermal(ch chan<- prometheus.Metric, chassisID string, thermal *sche
 // collectThermalSubsystem emits status, fan, temperature and leak detector metrics from the
 // chassis ThermalSubsystem resource, the replacement for the Thermal resource read by
 // collectThermal. Fans, ThermalMetrics and LeakDetection are each a separate GET, so they are
-// fetched concurrently.
-func (c *ChassisCollector) collectThermalSubsystem(ctx context.Context, ch chan<- prometheus.Metric, chassisID string, thermalSubsystem *schemas.ThermalSubsystem, logger *slog.Logger) {
+// fetched concurrently. sensorRoot is the chassis Sensors collection URI when the platform
+// mirrors each leak detector with a same-Id Sensor (see leakDetectorSensorRoot), or "" to skip
+// that fetch.
+func (c *ChassisCollector) collectThermalSubsystem(ctx context.Context, ch chan<- prometheus.Metric, chassisID string, thermalSubsystem *schemas.ThermalSubsystem, sensorRoot string, logger *slog.Logger) {
 	// Status came with the ThermalSubsystem body the caller already fetched, so it needs no
 	// goroutine of its own.
 	labelValues := []string{"thermal_subsystem", chassisID}
@@ -357,6 +362,19 @@ func (c *ChassisCollector) collectThermalSubsystem(ctx context.Context, ch chan<
 		}
 		for _, ld := range leakDetectors {
 			parseLeakDetector(ch, chassisID, ld)
+			if sensorRoot == "" {
+				continue
+			}
+			sensor, err := schemas.GetSensor(c.redfishClient.Service.GetClient(), sensorRoot+"/"+ld.ID)
+			if err != nil {
+				logger.Error("error getting sensor for leak detector", slog.String("operation", "schemas.GetSensor()"), slog.String("leak_detector_id", ld.ID), slog.Any("error", err))
+				continue
+			}
+			if sensor == nil {
+				logger.Info("no sensor found for leak detector", slog.String("operation", "schemas.GetSensor()"), slog.String("leak_detector_id", ld.ID))
+				continue
+			}
+			parseLeakDetectorSensor(ch, chassisID, ld.ID, sensor)
 		}
 		return nil
 	})
@@ -539,12 +557,50 @@ func parseThermalSubsystemTemperature(ch chan<- prometheus.Metric, chassisID str
 	ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_thermal_subsystem_temperature_celsius"].desc, prometheus.GaugeValue, *temperature.Reading, temperatureLabelValues...)
 }
 
+// leakDetectorLabelValues is the one label set shared by every leak detector family, so the
+// sensor gauges join leak_detector_health on leak_detector_id.
+func leakDetectorLabelValues(chassisID, ldID string) []string {
+	return []string{"leak_detector", chassisID, "LeakDetection", ldID}
+}
+
 func parseLeakDetector(ch chan<- prometheus.Metric, chassisID string, ld *schemas.LeakDetector) {
-	ldID := ld.ID
-	labelValues := []string{"leak_detector", chassisID, "LeakDetection", ldID}
+	labelValues := leakDetectorLabelValues(chassisID, ld.ID)
 
 	if statusHealth, ok := parseCommonStatusHealth(ld.Status.Health); ok {
 		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_leak_detector_health"].desc, prometheus.GaugeValue, statusHealth, labelValues...)
+	}
+}
+
+// leakDetectorSensorRoot returns the chassis Sensors collection URI on platforms whose leak
+// detectors are mirrored by a voltage Sensor with the same Id, so the raw reading and the BMC's
+// critical thresholds can be collected next to the detector's health. The LeakDetector payload
+// carries no link to that Sensor; the shared Id is an observed convention, not a schema rule,
+// hence the gate. Observed on Supermicro GB200 NVL (Chassis_0 Manufacturer "Supermicro", Model
+// "GB NVL"). Any other chassis returns "" and no Sensor is fetched.
+func leakDetectorSensorRoot(chassis *schemas.Chassis) string {
+	if chassis.ODataID == "" {
+		return ""
+	}
+	if !strings.EqualFold(chassis.Manufacturer, "Supermicro") || chassis.Model != "GB NVL" {
+		return ""
+	}
+	return chassis.ODataID + "/Sensors"
+}
+
+// parseLeakDetectorSensor emits the leak detector's sensor reading and the BMC's critical
+// thresholds, each only when the BMC reported it. Readings are passed through as volts without
+// interpretation; what a value means is for the consumer to decide.
+func parseLeakDetectorSensor(ch chan<- prometheus.Metric, chassisID, ldID string, sensor *schemas.Sensor) {
+	labelValues := leakDetectorLabelValues(chassisID, ldID)
+
+	if sensor.Reading != nil {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_leak_detector_volts"].desc, prometheus.GaugeValue, *sensor.Reading, labelValues...)
+	}
+	if lower := sensor.Thresholds.LowerCritical.Reading; lower != nil {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_leak_detector_lower_threshold_critical_volts"].desc, prometheus.GaugeValue, *lower, labelValues...)
+	}
+	if upper := sensor.Thresholds.UpperCritical.Reading; upper != nil {
+		ch <- prometheus.MustNewConstMetric(chassisMetrics["chassis_leak_detector_upper_threshold_critical_volts"].desc, prometheus.GaugeValue, *upper, labelValues...)
 	}
 }
 

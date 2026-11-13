@@ -159,10 +159,19 @@ Source: `Chassis/{id}/ThermalSubsystem/LeakDetection/LeakDetectors/{id}` · `res
 | Metric | Value | Labels | Description |
 |---|---|---|---|
 | `leak_detector_health` | Health | `chassis_id`, `leak_detection_id`, `leak_detector_id` | Leak detector health |
+| `leak_detector_volts` | Volts | same | Sensor reading, from `Chassis/{id}/Sensors/{leak_detector_id}` → `Reading` |
+| `leak_detector_lower_threshold_critical_volts` | Volts | same | BMC's `Thresholds.LowerCritical.Reading` on that sensor |
+| `leak_detector_upper_threshold_critical_volts` | Volts | same | BMC's `Thresholds.UpperCritical.Reading` on that sensor |
 
 Some OEMs return a single `LeakDetection` object where the schema calls for a collection. The
 collector tries the standard path first and falls back to the OEM shape
 (`getLeakDetectors`), so both are covered.
+
+For Supermicro GB200 NVL BMCs the three `_volts` families come from a separate `Sensor` resource, not from the `LeakDetector`.
+The `LeakDetector` payload does not contain the raw sensor values needed to properly tune alerts. Supermicro GB200 NVL hosts the sensor shares the detector's `Id`, so the collector fetches
+`Chassis/{id}/Sensors/{leak_detector_id}` only if the chassis reports `Manufacturer`
+`Supermicro` and `Model` `GB NVL` (`leakDetectorSensorRoot`). Other chassis get
+`leak_detector_health` alone and no extra GET.
 
 ## Power — deprecated source
 
