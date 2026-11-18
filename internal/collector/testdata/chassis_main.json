@@ -5,7 +5,7 @@
   "Name": "Chassis_0",
   "ChassisType": "Shelf",
   "Manufacturer": "Supermicro",
-  "Model": "GB200 NVL",
+  "Model": "GB NVL",
   "SerialNumber": "Foo",
   "PartNumber": "Foo-Part-Number",
   "AssetTag": "$PRODUCT_ASSET_TAG",
