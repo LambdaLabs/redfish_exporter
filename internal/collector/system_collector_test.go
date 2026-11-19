@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"strings"
@@ -15,6 +16,25 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestDriveLocationOrdinal(t *testing.T) {
+	for _, tt := range []struct {
+		name, payload, want string
+	}{
+		{"no location", `{}`, ""},
+		{"missing ordinal", `{"PhysicalLocation":{"PartLocation":{"ServiceLabel":"Bay 7"}}}`, ""},
+		{"null ordinal", `{"PhysicalLocation":{"PartLocation":{"LocationOrdinalValue":null}}}`, ""},
+		{"zero ordinal", `{"PhysicalLocation":{"PartLocation":{"LocationOrdinalValue":0}}}`, "0"},
+		{"quoted zero", `{"PhysicalLocation":{"PartLocation":{"LocationOrdinalValue":"0"}}}`, "0"},
+		{"nonzero ordinal", `{"PhysicalLocation":{"PartLocation":{"LocationOrdinalValue":4}}}`, "4"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var drive schemas.Drive
+			require.NoError(t, json.Unmarshal([]byte(tt.payload), &drive))
+			assert.Equal(t, tt.want, driveLocationOrdinal(&drive))
+		})
+	}
+}
 
 // TestDriveMetrics tests drive metric generation with controller dimension
 func TestDriveMetrics(t *testing.T) {
@@ -390,4 +410,87 @@ func TestDuplicateDriveListingGathers(t *testing.T) {
 		"redfish_system_storage_drive_health_state": 1,
 		"redfish_system_storage_drive_capacity":     1,
 	}, got, "each drive metric family should carry exactly one deduped series")
+}
+
+// TestSameDriveIDInTwoEnclosuresGathers reproduces a BMC that numbers the bays
+// of each enclosure from zero under one storage resource, so two drives share
+// an Id and a Name. Both must be emitted, told apart by their path.
+func TestSameDriveIDInTwoEnclosuresGathers(t *testing.T) {
+	srv := newTestRedfishServer(t)
+
+	systemPath := "/redfish/v1/Systems/System1"
+	storagePath := systemPath + "/Storage/Storage.1"
+	drivePaths := []string{
+		"/redfish/v1/Chassis/Enclosure.0/Drives/Disk.Bay.0",
+		"/redfish/v1/Chassis/Enclosure.1/Drives/Disk.Bay.0",
+	}
+	ordinals := []int{0, 4}
+
+	system := srv.loadFixture("system1.json")
+	system["Storage"] = map[string]string{"@odata.id": systemPath + "/Storage"}
+	delete(system, "Processors") // keep the mock focused on storage
+	srv.addRoute(systemPath, system)
+
+	srv.addRoute(systemPath+"/Storage", map[string]any{
+		"@odata.type": "#StorageCollection.StorageCollection",
+		"Members": []map[string]string{
+			{"@odata.id": storagePath},
+		},
+	})
+
+	srv.addRoute(storagePath, map[string]any{
+		"@odata.type": "#Storage.v1_13_0.Storage",
+		"@odata.id":   storagePath,
+		"Id":          "Storage.1",
+		"Name":        "Storage.1",
+		"Drives": []map[string]string{
+			{"@odata.id": drivePaths[0]},
+			{"@odata.id": drivePaths[1]},
+		},
+	})
+
+	for i, drivePath := range drivePaths {
+		srv.addRoute(drivePath, map[string]any{
+			"@odata.type":   "#Drive.v1_16_0.Drive",
+			"@odata.id":     drivePath,
+			"Id":            "Disk.Bay.0",
+			"Name":          "Disk.Bay.0",
+			"CapacityBytes": 1920398934016,
+			"Status":        map[string]string{"State": "Enabled", "Health": "OK"},
+			"PhysicalLocation": map[string]any{
+				"PartLocation": map[string]any{"LocationType": "Bay", "LocationOrdinalValue": ordinals[i]},
+			},
+		})
+	}
+
+	client := connectToTestServer(t, srv.Server)
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	collector, err := NewSystemCollector(t.Name(), client, logger, config.DefaultSystemCollector)
+	require.NoError(t, err)
+
+	registry := prometheus.NewPedanticRegistry()
+	require.NoError(t, registry.Register(collector))
+
+	families, err := registry.Gather()
+	require.NoError(t, err, "gather must not fail when two drives share an Id")
+
+	got := map[string]string{} // drive_path -> location_ordinal
+	for _, mf := range families {
+		if mf.GetName() != "redfish_system_storage_drive_health_state" {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			labels := map[string]string{}
+			for _, label := range m.GetLabel() {
+				labels[label.GetName()] = label.GetValue()
+			}
+			assert.Equal(t, "Disk.Bay.0", labels["drive_id"])
+			got[labels["drive_path"]] = labels["location_ordinal"]
+		}
+	}
+	assert.Equal(t, map[string]string{
+		drivePaths[0]: "0",
+		drivePaths[1]: "4",
+	}, got, "each drive should have its own series, labelled with its path and location ordinal")
 }
