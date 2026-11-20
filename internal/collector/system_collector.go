@@ -418,6 +418,8 @@ func parseProcessor(ch chan<- prometheus.Metric, processor *schemas.Processor, l
 	if err != nil {
 		logger.Error("error getting processor metrics", slog.String("processor", processorID), slog.Any("error", err))
 	} else if processorMetrics != nil {
+		// TODO: a counter the BMC does not expose is emitted as 0 today. In the future don't emit at all.
+
 		// Emit PCIe error metrics
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_l0_to_recovery_count"].desc, prometheus.GaugeValue, float64(gofish.Deref(processorMetrics.PCIeErrors.L0ToRecoveryCount)), systemProcessorLabelValues...)
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_correctable_count"].desc, prometheus.GaugeValue, float64(gofish.Deref(processorMetrics.PCIeErrors.CorrectableErrorCount)), systemProcessorLabelValues...)
