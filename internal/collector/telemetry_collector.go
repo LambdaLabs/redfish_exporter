@@ -1628,6 +1628,7 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 	var bmcTemp float64
 	var hasBMCTemp bool
 	var totalGPUPower float64
+	var totalGPUPowerChassisID string
 	var hasTotalGPUPower bool
 	var chassisID string
 
@@ -1677,6 +1678,7 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 		} else if strings.HasPrefix(sensorID, sensorPrefixHGXChassis) && strings.Contains(sensorID, sensorInfixTotalGPUPower) {
 			// Backward-compatible total GPU power metric (replaces chassis collector)
 			totalGPUPower = value
+			totalGPUPowerChassisID = chassisIDFromPath
 			hasTotalGPUPower = true
 		} else if strings.HasPrefix(sensorID, sensorPrefixProcessorModule) && strings.Contains(sensorID, sensorInfixCPU) {
 			t.parseCPUSensorMetric(sensorID, value, cpuMetrics)
@@ -1731,7 +1733,7 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 			t.metrics["chassis_gpu_total_power_watts"].desc,
 			prometheus.GaugeValue,
 			totalGPUPower,
-			"chassis", chassisID,
+			"chassis", totalGPUPowerChassisID,
 		)
 	}
 
