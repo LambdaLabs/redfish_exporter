@@ -527,7 +527,7 @@ func parseEthernetInterface(ch chan<- prometheus.Metric, ethernetInterface *sche
 	ethernetInterfaceID := ethernetInterface.ID
 	ethernetInterfaceLinkStatus := ethernetInterface.LinkStatus
 	ethernetInterfaceEnabled := ethernetInterface.InterfaceEnabled
-	ethernetInterfaceSpeed := fmt.Sprintf("%d Mbps", ethernetInterface.SpeedMbps)
+	ethernetInterfaceSpeed := fmt.Sprintf("%d Mbps", gofish.Deref(ethernetInterface.SpeedMbps))
 	ethernetInterfaceState := ethernetInterface.Status.State
 	ethernetInterfaceHealthState := ethernetInterface.Status.Health
 	systemEthernetInterfaceLabelValues := []string{"ethernet_interface", ethernetInterfaceName, ethernetInterfaceID, ethernetInterfaceSpeed}

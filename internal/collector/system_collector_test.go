@@ -232,6 +232,40 @@ func TestDriveMetrics(t *testing.T) {
 	}
 }
 
+// TestEthernetInterfaceSpeedLabel checks that the speed label carries the reported speed.
+// It once carried the address of the decoded value, which changed on every scrape.
+func TestEthernetInterfaceSpeedLabel(t *testing.T) {
+	for _, tt := range []struct {
+		name, payload, want string
+	}{
+		{"reported speed", `{"Id":"1","Name":"LAN 1","SpeedMbps":200000}`, "200000 Mbps"},
+		{"link down", `{"Id":"1","Name":"LAN 1","SpeedMbps":0}`, "0 Mbps"},
+		{"speed not reported", `{"Id":"1","Name":"LAN 1"}`, "0 Mbps"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// Two scrapes decode the same response into two separate values.
+			for scrape := 0; scrape < 2; scrape++ {
+				var ethernetInterface schemas.EthernetInterface
+				require.NoError(t, json.Unmarshal([]byte(tt.payload), &ethernetInterface))
+
+				ch := make(chan prometheus.Metric, 10)
+				parseEthernetInterface(ch, &ethernetInterface)
+				close(ch)
+
+				for metric := range ch {
+					m := &dto.Metric{}
+					require.NoError(t, metric.Write(m))
+					for _, label := range m.GetLabel() {
+						if label.GetName() == "ethernet_interface_speed" {
+							assert.Equal(t, tt.want, label.GetValue())
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
 // TestProcessorWithoutMetrics tests that processor collection works when ProcessorMetrics is not available
 func TestProcessorWithoutMetrics(t *testing.T) {
 	// Mock processor without metrics (no metrics field means Metrics() returns nil)
