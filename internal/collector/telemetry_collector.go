@@ -211,6 +211,16 @@ func createTelemetryMetricMap() map[string]Metric {
 	addToMetricMap(metrics, TelemetrySubsystem, "gpu_temperature_celsius", "GPU core temperature in Celsius", telemetryBaseLabels)
 	addToMetricMap(metrics, TelemetrySubsystem, "gpu_memory_temperature_celsius", "GPU memory temperature in Celsius", telemetryMemoryLabels)
 
+	// The same readings for a GPU's module (HGX_GPU_SXM_<n>), when a report names both.
+	moduleLabels := []string{"system_id", "module_id"}
+	moduleMemoryLabels := []string{"system_id", "module_id", "memory_id"}
+	addToMetricMap(metrics, TelemetrySubsystem, "gpu_module_energy_joules_total", "GPU module energy consumption in joules", moduleLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "gpu_module_power_watts", "GPU module power consumption in watts", moduleLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "gpu_module_temperature_celsius", "Temperature reported by the GPU SXM module in Celsius", moduleLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "gpu_module_temperature_tlimit_celsius", "GPU module TLIMIT temperature headroom in Celsius", moduleLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "gpu_module_memory_power_watts", "GPU module memory (DRAM) power consumption in watts", moduleMemoryLabels)
+	addToMetricMap(metrics, TelemetrySubsystem, "gpu_module_memory_temperature_celsius", "GPU module memory temperature in Celsius", moduleMemoryLabels)
+
 	// CPU environment metrics
 	addToMetricMap(metrics, TelemetrySubsystem, "cpu_energy_joules_total", "Total CPU energy consumption in joules", telemetryCPULabels)
 	addToMetricMap(metrics, TelemetrySubsystem, "cpu_power_watts", "CPU power consumption in watts", telemetryCPULabels)
@@ -1612,13 +1622,21 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 	// Group metrics by component to enable batch emission with all related values
 	// This reduces the number of Prometheus metric emissions and improves efficiency
 	gpuMetrics := make(map[string]map[string]float64)                // gpuID -> metricType -> value
+	moduleMetrics := make(map[string]map[string]float64)             // module number as GPU_<n> -> metricType -> value
 	cpuMetrics := make(map[string]map[string]float64)                // cpuID -> metricType -> value
 	ambientMetrics := make(map[string]map[string]map[string]float64) // locationID -> sensorID -> metricType -> value
 	var bmcTemp float64
 	var hasBMCTemp bool
 	var totalGPUPower float64
+	var totalGPUPowerChassisID string
 	var hasTotalGPUPower bool
 	var chassisID string
+
+	// A report that names sensors for the GPUs (HGX_GPU_0_*) also names them for the modules
+	// that hold the GPUs (HGX_GPU_SXM_1_*). Modules are numbered from one, so the two are kept
+	// apart. A report with module sensors only is still emitted in the GPU families,
+	// with each module's number as the gpu_id (SXM_1 -> GPU_1), as before.
+	ownGPUSensors := reportHasOwnGPUSensors(report.MetricValues)
 
 	staleMarker := []byte(`"MetricValueStale": true`)
 	totalStaleReports := 0.0
@@ -1653,11 +1671,14 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 		}
 
 		// Route to component-specific parser based on sensor ID prefix
-		if strings.HasPrefix(sensorID, sensorPrefixHGXGPU) {
+		if ownGPUSensors && strings.HasPrefix(sensorID, sensorPrefixHGXGPUSXM) {
+			t.parseGPUSensorMetric(sensorID, value, moduleMetrics)
+		} else if strings.HasPrefix(sensorID, sensorPrefixHGXGPU) {
 			t.parseGPUSensorMetric(sensorID, value, gpuMetrics)
 		} else if strings.HasPrefix(sensorID, sensorPrefixHGXChassis) && strings.Contains(sensorID, sensorInfixTotalGPUPower) {
 			// Backward-compatible total GPU power metric (replaces chassis collector)
 			totalGPUPower = value
+			totalGPUPowerChassisID = chassisIDFromPath
 			hasTotalGPUPower = true
 		} else if strings.HasPrefix(sensorID, sensorPrefixProcessorModule) && strings.Contains(sensorID, sensorInfixCPU) {
 			t.parseCPUSensorMetric(sensorID, value, cpuMetrics)
@@ -1675,7 +1696,17 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 
 	// Emit grouped metrics for each component
 	for gpuID, metrics := range gpuMetrics {
-		t.emitPlatformGPUMetrics(ch, systemID, gpuID, metrics)
+		t.emitPlatformGPUMetrics(ch, systemID, gpuID, platformGPUFamilies, metrics)
+	}
+
+	for gpuID, metrics := range moduleMetrics {
+		// Readings were filed under the module's number as GPU_<n>; label them SXM_<n>.
+		moduleID := "SXM_" + strings.TrimPrefix(gpuID, "GPU_")
+		renamed := make(map[string]float64, len(metrics))
+		for key, value := range metrics {
+			renamed[strings.Replace(key, gpuID+"_DRAM_", moduleID+"_DRAM_", 1)] = value
+		}
+		t.emitPlatformGPUMetrics(ch, systemID, moduleID, platformGPUModuleFamilies, renamed)
 	}
 
 	for cpuID, metrics := range cpuMetrics {
@@ -1702,7 +1733,7 @@ func (t *TelemetryCollector) collectPlatformEnvironmentMetrics(ch chan<- prometh
 			t.metrics["chassis_gpu_total_power_watts"].desc,
 			prometheus.GaugeValue,
 			totalGPUPower,
-			"chassis", chassisID,
+			"chassis", totalGPUPowerChassisID,
 		)
 	}
 
@@ -1729,6 +1760,19 @@ func parseSensorPath(sensorPath string) (chassisID string, sensorID string) {
 	}
 
 	return chassisID, sensorID
+}
+
+// reportHasOwnGPUSensors reports whether any sensor in the report is named for a GPU
+// itself (HGX_GPU_0_Power_0) rather than for its module (HGX_GPU_SXM_1_Power_0).
+func reportHasOwnGPUSensors(values []schemas.MetricValue) bool {
+	for i := range values {
+		chassisID, sensorID := parseSensorPath(values[i].MetricProperty)
+		rest, ok := strings.CutPrefix(sensorID, sensorPrefixHGXGPU)
+		if chassisID != "" && ok && rest != "" && rest[0] >= '0' && rest[0] <= '9' {
+			return true
+		}
+	}
+	return false
 }
 
 // parseGPUSensorMetric parses GPU sensor IDs to extract GPU identifier and metric type.
@@ -1983,14 +2027,26 @@ func (t *TelemetryCollector) parseAmbientSensorMetric(sensorID string, value flo
 	ambientMetrics[locationID][sensorSpecificID][storageKey] = value
 }
 
+// gpuFamilies names the metric families one set of GPU environment readings is emitted under.
+type gpuFamilies struct {
+	energy, power, temperature, tlimit, memoryPower, memoryTemperature string
+}
+
+var (
+	platformGPUFamilies = gpuFamilies{"telemetry_gpu_energy_joules_total", "telemetry_gpu_power_watts", "telemetry_gpu_temperature_celsius",
+		"gpu_temperature_tlimit_celsius", "gpu_memory_power_watts", "telemetry_gpu_memory_temperature_celsius"}
+	platformGPUModuleFamilies = gpuFamilies{"telemetry_gpu_module_energy_joules_total", "telemetry_gpu_module_power_watts", "telemetry_gpu_module_temperature_celsius",
+		"telemetry_gpu_module_temperature_tlimit_celsius", "telemetry_gpu_module_memory_power_watts", "telemetry_gpu_module_memory_temperature_celsius"}
+)
+
 // emitPlatformGPUMetrics emits GPU environment metrics
-func (t *TelemetryCollector) emitPlatformGPUMetrics(ch chan<- prometheus.Metric, systemID, gpuID string, metrics map[string]float64) {
+func (t *TelemetryCollector) emitPlatformGPUMetrics(ch chan<- prometheus.Metric, systemID, gpuID string, families gpuFamilies, metrics map[string]float64) {
 	baseLabels := []string{systemID, gpuID}
 
 	// Energy (telemetry_ prefixed)
 	if val, ok := metrics["energy"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_gpu_energy_joules_total"].desc,
+			t.metrics[families.energy].desc,
 			prometheus.CounterValue,
 			val,
 			baseLabels...,
@@ -2000,7 +2056,7 @@ func (t *TelemetryCollector) emitPlatformGPUMetrics(ch chan<- prometheus.Metric,
 	// Power (telemetry_ prefixed)
 	if val, ok := metrics["power"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_gpu_power_watts"].desc,
+			t.metrics[families.power].desc,
 			prometheus.GaugeValue,
 			val,
 			baseLabels...,
@@ -2010,7 +2066,7 @@ func (t *TelemetryCollector) emitPlatformGPUMetrics(ch chan<- prometheus.Metric,
 	// Core temperature (telemetry_ prefixed)
 	if val, ok := metrics["temp_core"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["telemetry_gpu_temperature_celsius"].desc,
+			t.metrics[families.temperature].desc,
 			prometheus.GaugeValue,
 			val,
 			baseLabels...,
@@ -2020,7 +2076,7 @@ func (t *TelemetryCollector) emitPlatformGPUMetrics(ch chan<- prometheus.Metric,
 	// TLIMIT temperature (backward-compatible metric name in gpu subsystem)
 	if val, ok := metrics["temp_tlimit"]; ok {
 		ch <- prometheus.MustNewConstMetric(
-			t.metrics["gpu_temperature_tlimit_celsius"].desc,
+			t.metrics[families.tlimit].desc,
 			prometheus.GaugeValue,
 			val,
 			baseLabels...,
@@ -2039,7 +2095,7 @@ func (t *TelemetryCollector) emitPlatformGPUMetrics(ch chan<- prometheus.Metric,
 			memoryLabels := []string{systemID, gpuID, memoryID}
 
 			ch <- prometheus.MustNewConstMetric(
-				t.metrics["gpu_memory_power_watts"].desc,
+				t.metrics[families.memoryPower].desc,
 				prometheus.GaugeValue,
 				value,
 				memoryLabels...,
@@ -2049,7 +2105,7 @@ func (t *TelemetryCollector) emitPlatformGPUMetrics(ch chan<- prometheus.Metric,
 			memoryLabels := []string{systemID, gpuID, memoryID}
 
 			ch <- prometheus.MustNewConstMetric(
-				t.metrics["telemetry_gpu_memory_temperature_celsius"].desc,
+				t.metrics[families.memoryTemperature].desc,
 				prometheus.GaugeValue,
 				value,
 				memoryLabels...,
