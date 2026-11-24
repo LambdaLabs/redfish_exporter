@@ -2,8 +2,10 @@ package collector
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stmcginnis/gofish"
@@ -20,7 +22,7 @@ var (
 	SystemMemoryLabelNames            = []string{"resource", "memory", "memory_id"}
 	SystemProcessorLabelNames         = []string{"resource", "processor", "processor_id"}
 	SystemVolumeLabelNames            = []string{"resource", "volume", "volume_id"}
-	SystemDriveLabelNames             = []string{"resource", "drive", "drive_id", "storage_controller_id"}
+	SystemDriveLabelNames             = []string{"resource", "drive", "drive_id", "drive_path", "storage_controller_id", "location_ordinal"}
 	SystemStorageControllerLabelNames = []string{"resource", "storage_controller", "storage_controller_id"}
 	SystemPCIeDeviceLabelNames        = []string{"resource", "pcie_device", "pcie_device_id", "pcie_device_partnumber", "pcie_device_type", "pcie_serial_number"}
 	SystemNetworkInterfaceLabelNames  = []string{"resource", "network_interface", "network_interface_id"}
@@ -167,7 +169,7 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 		// each label set. Drive/volume labels carry no system dimension, so
 		// track across systems.
 		seenVolumes := make(map[string]struct{})
-		seenDrives := make(map[string]struct{})
+		seenDrives := make(map[[4]string]struct{})
 		for _, system := range systems {
 			if ctx.Err() != nil {
 				s.logger.With("error", ctx.Err(), "collector", "system").Debug("skipping further collection")
@@ -286,7 +288,7 @@ func (s *SystemCollector) collect(ctx context.Context, ch chan<- prometheus.Metr
 						systemLogger.Info("no drive data found", slog.String("operation", "system.Drives()"), slog.String("storage", storage.ID))
 					} else {
 						for _, drive := range drives {
-							driveKey := drive.Name + "\x00" + drive.ID + "\x00" + storageID
+							driveKey := [4]string{drive.Name, drive.ID, drive.ODataID, storageID}
 							if _, dup := seenDrives[driveKey]; dup {
 								systemLogger.Debug("skipping duplicate drive listing", slog.String("storage", storageID), slog.String("drive", drive.ID))
 								continue
@@ -416,6 +418,8 @@ func parseProcessor(ch chan<- prometheus.Metric, processor *schemas.Processor, l
 	if err != nil {
 		logger.Error("error getting processor metrics", slog.String("processor", processorID), slog.Any("error", err))
 	} else if processorMetrics != nil {
+		// TODO: a counter the BMC does not expose is emitted as 0 today. In the future don't emit at all.
+
 		// Emit PCIe error metrics
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_l0_to_recovery_count"].desc, prometheus.GaugeValue, float64(gofish.Deref(processorMetrics.PCIeErrors.L0ToRecoveryCount)), systemProcessorLabelValues...)
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_processor_pcie_errors_correctable_count"].desc, prometheus.GaugeValue, float64(gofish.Deref(processorMetrics.PCIeErrors.CorrectableErrorCount)), systemProcessorLabelValues...)
@@ -448,13 +452,35 @@ func parseVolume(ch chan<- prometheus.Metric, volume *schemas.Volume) {
 	ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_volume_capacity"].desc, prometheus.GaugeValue, float64(volumeCapacityBytes), systemVolumeLabelValues...)
 }
 
+func driveLocationOrdinal(drive *schemas.Drive) string {
+	ordinal := drive.PhysicalLocation.PartLocation.LocationOrdinalValue
+	if ordinal == nil {
+		return ""
+	}
+	if *ordinal == 0 {
+		// GoFish also decodes omitted and null ordinals as zero when
+		// PartLocation is present. Only publish zero if the BMC supplied it.
+		var raw struct {
+			PhysicalLocation struct {
+				PartLocation struct {
+					LocationOrdinalValue *json.RawMessage
+				}
+			}
+		}
+		if err := json.Unmarshal(drive.RawData, &raw); err != nil || raw.PhysicalLocation.PartLocation.LocationOrdinalValue == nil {
+			return ""
+		}
+	}
+	return strconv.Itoa(*ordinal)
+}
+
 func parseDrive(ch chan<- prometheus.Metric, drive *schemas.Drive, storageControllerID string) {
 	driveName := drive.Name
-	driveID := drive.ID
 	driveCapacityBytes := gofish.Deref(drive.CapacityBytes)
 	driveState := drive.Status.State
 	driveHealthState := drive.Status.Health
-	systemdriveLabelValues := []string{"drive", driveName, driveID, storageControllerID}
+	locationOrdinal := driveLocationOrdinal(drive)
+	systemdriveLabelValues := []string{"drive", driveName, drive.ID, drive.ODataID, storageControllerID, locationOrdinal}
 	if driveStateValue, ok := parseCommonStatusState(driveState); ok {
 		ch <- prometheus.MustNewConstMetric(systemMetrics["system_storage_drive_state"].desc, prometheus.GaugeValue, driveStateValue, systemdriveLabelValues...)
 	}
@@ -503,7 +529,7 @@ func parseEthernetInterface(ch chan<- prometheus.Metric, ethernetInterface *sche
 	ethernetInterfaceID := ethernetInterface.ID
 	ethernetInterfaceLinkStatus := ethernetInterface.LinkStatus
 	ethernetInterfaceEnabled := ethernetInterface.InterfaceEnabled
-	ethernetInterfaceSpeed := fmt.Sprintf("%d Mbps", ethernetInterface.SpeedMbps)
+	ethernetInterfaceSpeed := fmt.Sprintf("%d Mbps", gofish.Deref(ethernetInterface.SpeedMbps))
 	ethernetInterfaceState := ethernetInterface.Status.State
 	ethernetInterfaceHealthState := ethernetInterface.Status.Health
 	systemEthernetInterfaceLabelValues := []string{"ethernet_interface", ethernetInterfaceName, ethernetInterfaceID, ethernetInterfaceSpeed}

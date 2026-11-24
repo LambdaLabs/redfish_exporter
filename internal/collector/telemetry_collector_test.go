@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"math"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -291,7 +292,7 @@ func TestTelemetryMetricCount(t *testing.T) {
 		"reset":                8,  // conventional entry/exit, fundamental entry/exit, irot exit, pf_flr entry/exit, last_reset_type
 		"port":                 23, // port metrics (speed, rx/tx bytes/frames/errors, link down counts, OEM metrics)
 		"nvidia_gpm":           22, // GPU Performance Monitoring: 11 compute + 2 aggregate media + 2 instance media + 5 network + 2 PCIe
-		"platform_environment": 18, // Platform environment metrics: 3 backward-compat + 4 GPU + 8 CPU + 2 ambient + 1 BMC
+		"platform_environment": 24, // 3 backward-compat + 4 GPU + 6 GPU module + 8 CPU + 2 ambient + 1 BMC
 		"info":                 1,  // GPU Info series
 		"scrape_status":        1,  // collector status
 	}
@@ -725,6 +726,82 @@ func TestParseAmbientSensorMetric(t *testing.T) {
 			if sensorID != tt.expectedSensorID {
 				t.Errorf("Expected sensor ID %q, got %q", tt.expectedSensorID, sensorID)
 			}
+		})
+	}
+}
+
+func TestTelemetryCollector_GPUAndModuleSensors(t *testing.T) {
+	const gpu = "/redfish/v1/Chassis/HGX_GPU_1/Sensors/HGX_GPU_1_"
+	const module = "/redfish/v1/Chassis/HGX_GPU_SXM_1/Sensors/HGX_GPU_SXM_1_"
+	type reading struct {
+		property, family, idLabel, id, memoryID string
+		value                                   int
+	}
+	mixed := []reading{
+		{module + "Power_0#/Reading", "telemetry_gpu_module_power_watts", "module_id", "SXM_1", "", 181},
+		{gpu + "Power_0#/Reading", "telemetry_gpu_power_watts", "gpu_id", "GPU_1", "", 239},
+		{gpu + "TEMP_0", "telemetry_gpu_temperature_celsius", "gpu_id", "GPU_1", "", 30},
+		{module + "TEMP_0", "telemetry_gpu_module_temperature_celsius", "module_id", "SXM_1", "", 33},
+		{module + "Energy_0", "telemetry_gpu_module_energy_joules_total", "module_id", "SXM_1", "", 400},
+		{module + "DRAM_0_Temp_0", "telemetry_gpu_module_memory_temperature_celsius", "module_id", "SXM_1", "SXM_1_DRAM_0", 44},
+		{gpu + "DRAM_0_Power_0", "gpu_memory_power_watts", "gpu_id", "GPU_1", "GPU_1_DRAM_0", 11},
+		{module + "DRAM_0_Power_0", "telemetry_gpu_module_memory_power_watts", "module_id", "SXM_1", "SXM_1_DRAM_0", 14},
+		{gpu + "TEMP_1", "gpu_temperature_tlimit_celsius", "gpu_id", "GPU_1", "", 22},
+		{module + "TEMP_1", "telemetry_gpu_module_temperature_tlimit_celsius", "module_id", "SXM_1", "", 20},
+	}
+	for name, readings := range map[string][]reading{
+		"mixed": mixed,
+		"module only": {
+			{module + "Power_0#/Reading", "telemetry_gpu_power_watts", "gpu_id", "GPU_1", "", 183},
+			{module + "DRAM_0_Temp_0", "telemetry_gpu_memory_temperature_celsius", "gpu_id", "GPU_1", "GPU_1_DRAM_0", 32},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tc := &TelemetryCollector{logger: slog.Default(), metrics: createTelemetryMetricMap()}
+			report := &schemas.MetricReport{}
+			want := make(map[string]reading)
+			for _, r := range readings {
+				report.MetricValues = append(report.MetricValues, schemas.MetricValue{
+					MetricProperty: r.property, MetricValue: strconv.Itoa(r.value),
+				})
+				want[r.property] = r
+			}
+			ch := make(chan prometheus.Metric, len(readings)*2+1)
+			tc.collectPlatformEnvironmentMetrics(ch, report, nil)
+			close(ch)
+			for sample := range ch {
+				if sample.Desc() == tc.metrics["telemetry_collection_stale_reports_last"].desc {
+					continue
+				}
+				var m dto.Metric
+				require.NoError(t, sample.Write(&m))
+				labels := map[string]string{}
+				for _, label := range m.GetLabel() {
+					labels[label.GetName()] = label.GetValue()
+				}
+				var r reading
+				ok := false
+				for _, candidate := range want {
+					if tc.metrics[candidate.family].desc == sample.Desc() && labels[candidate.idLabel] == candidate.id && labels["memory_id"] == candidate.memoryID {
+						r, ok = candidate, true
+						break
+					}
+				}
+				require.True(t, ok, "unexpected or duplicate source: %v", labels)
+				delete(want, r.property)
+				assert.Same(t, tc.metrics[r.family].desc, sample.Desc())
+				expected := map[string]string{"system_id": "HGX_Baseboard_0", r.idLabel: r.id}
+				if r.memoryID != "" {
+					expected["memory_id"] = r.memoryID
+				}
+				assert.Equal(t, expected, labels)
+				if strings.HasSuffix(r.family, "_total") {
+					assert.Equal(t, float64(r.value), m.GetCounter().GetValue())
+				} else {
+					assert.Equal(t, float64(r.value), m.GetGauge().GetValue())
+				}
+			}
+			assert.Empty(t, want, "missing readings")
 		})
 	}
 }

@@ -79,6 +79,12 @@ func createChassisMetricMap() map[string]Metric {
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "temperature_sensor_state", fmt.Sprintf("status state of temperature on this chassis component,%s", CommonStateHelp), ChassisTemperatureLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "temperature_sensor_health", fmt.Sprintf("status health of temperature on this chassis component,%s", CommonHealthHelp), ChassisTemperatureLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "temperature_celsius", "celsius of temperature on this chassis component", ChassisTemperatureLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "temperature_celsius_lower_threshold_non_critical", "threshold below the normal range of temperature, but not critical, on this chassis component", ChassisTemperatureLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "temperature_celsius_lower_threshold_critical", "threshold below the normal range of temperature, but not fatal, on this chassis component", ChassisTemperatureLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "temperature_celsius_lower_threshold_fatal", "threshold below the normal range of temperature, and is fatal, on this chassis component", ChassisTemperatureLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "temperature_celsius_upper_threshold_non_critical", "threshold above the normal range of temperature, but not critical, on this chassis component", ChassisTemperatureLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "temperature_celsius_upper_threshold_critical", "threshold above the normal range of temperature, but not fatal, on this chassis component", ChassisTemperatureLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "temperature_celsius_upper_threshold_fatal", "threshold above the normal range of temperature, and is fatal, on this chassis component", ChassisTemperatureLabelNames)
 
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "fan_health", fmt.Sprintf("fan health on this chassis component,%s", CommonHealthHelp), ChassisFanLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "fan_state", fmt.Sprintf("fan state on this chassis component,%s", CommonStateHelp), ChassisFanLabelNames)
@@ -107,6 +113,13 @@ func createChassisMetricMap() map[string]Metric {
 
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "power_voltage_state", fmt.Sprintf("power voltage state of chassis component,%s", CommonStateHelp), ChassisPowerVoltageLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "power_voltage_volts", "power voltage volts number of chassis component", ChassisPowerVoltageLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "power_voltage_health", fmt.Sprintf("power voltage health of chassis component,%s", CommonHealthHelp), ChassisPowerVoltageLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "power_voltage_volts_lower_threshold_non_critical", "threshold below the normal range of voltage, but not critical, on this chassis component", ChassisPowerVoltageLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "power_voltage_volts_lower_threshold_critical", "threshold below the normal range of voltage, but not fatal, on this chassis component", ChassisPowerVoltageLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "power_voltage_volts_lower_threshold_fatal", "threshold below the normal range of voltage, and is fatal, on this chassis component", ChassisPowerVoltageLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "power_voltage_volts_upper_threshold_non_critical", "threshold above the normal range of voltage, but not critical, on this chassis component", ChassisPowerVoltageLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "power_voltage_volts_upper_threshold_critical", "threshold above the normal range of voltage, but not fatal, on this chassis component", ChassisPowerVoltageLabelNames)
+	addToMetricMap(chassisMetrics, ChassisSubsystem, "power_voltage_volts_upper_threshold_fatal", "threshold above the normal range of voltage, and is fatal, on this chassis component", ChassisPowerVoltageLabelNames)
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "power_average_consumed_watts", "power wattage watts number of chassis component", ChassisPowerVoltageLabelNames)
 
 	addToMetricMap(chassisMetrics, ChassisSubsystem, "power_powersupply_state", fmt.Sprintf("powersupply state of chassis component,%s", CommonStateHelp), ChassisPowerSupplyLabelNames)
