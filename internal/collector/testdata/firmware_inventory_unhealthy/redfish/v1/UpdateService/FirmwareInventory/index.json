@@ -1,0 +1,11 @@
+{
+  "@odata.type": "#SoftwareInventoryCollection.SoftwareInventoryCollection",
+  "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory",
+  "Name": "Firmware Inventory Collection",
+  "Members@odata.count": 3,
+  "Members": [
+    {"@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/WARNING_FW"},
+    {"@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/CRITICAL_FW"},
+    {"@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/PROTECTED_FW"}
+  ]
+}
